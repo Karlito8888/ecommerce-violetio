@@ -1,4 +1,4 @@
-/** @type {import('eslint').Linter.Config} */
+/** @type {import('eslint').Linter.FlatConfig} */
 export default {
   rules: {
     "no-console": "warn",

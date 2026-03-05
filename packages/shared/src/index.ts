@@ -1,3 +1,4 @@
-// @ecommerce/shared - shared business logic
-// Content will be added in Story 1.2
-export {};
+// @ecommerce/shared — shared business logic, types, and adapters
+export * from "./types/index.js";
+export * from "./utils/index.js";
+export * from "./adapters/index.js";
