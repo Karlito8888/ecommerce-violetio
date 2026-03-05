@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.output/
+.expo/
+.vinxi/
+bun.lock
+_bmad/
+_bmad-output/
+*.gen.ts

@@ -1,0 +1,41 @@
+/* ─── About Page ─── */
+
+.about {
+  padding: 3rem 1rem;
+}
+
+.about__section {
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .about__section {
+    padding: 2rem;
+  }
+}
+
+.about__kicker {
+  margin-bottom: 0.5rem;
+}
+
+.about__title {
+  margin: 0 0 0.75rem;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--sea-ink);
+}
+
+@media (min-width: 640px) {
+  .about__title {
+    font-size: 3rem;
+  }
+}
+
+.about__text {
+  margin: 0;
+  max-width: 48rem;
+  font-size: 1rem;
+  line-height: 2;
+  color: var(--sea-ink-soft);
+}

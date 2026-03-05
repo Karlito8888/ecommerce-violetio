@@ -1,6 +1,6 @@
 # Story 1.1: Monorepo Initialization & Workspace Configuration
 
-Status: in-progress
+Status: done
 
 ## Story
 
@@ -90,7 +90,7 @@ So that I can start building features on both platforms from a single codebase.
 
 ## Review Follow-ups (AI)
 
-- [ ] [AI-Review][HIGH] H2 — Tailwind CSS installed but architecture mandates Vanilla CSS + BEM. All web components use Tailwind utility classes. Requires full UI rewrite to comply with architecture or formal architecture amendment. [apps/web/package.json, apps/web/src/styles.css, apps/web/src/routes/index.tsx, apps/web/src/components/Header.tsx, apps/web/src/components/Footer.tsx, apps/web/src/components/ThemeToggle.tsx]
+- [x] [AI-Review][HIGH] H2 — Tailwind CSS removed, all components rewritten to Vanilla CSS + BEM per architecture spec. [apps/web/package.json, apps/web/vite.config.ts, apps/web/src/styles.css, apps/web/src/routes/index.tsx, apps/web/src/routes/about.tsx, apps/web/src/routes/__root.tsx, apps/web/src/components/Header.tsx, apps/web/src/components/Footer.tsx, apps/web/src/components/ThemeToggle.tsx]
 - [ ] [AI-Review][MEDIUM] M3 — `packages/config/tsconfig.base.json` is an exact copy of root `tsconfig.base.json`. Risk of silent configuration drift. Consider making one reference the other or removing the duplicate.
 - [ ] [AI-Review][MEDIUM] M4 — `.gitignore` missing `bun.lock` entry (decide: commit or ignore) and minor discrepancies with the documented template in Dev Notes.
 - [ ] [AI-Review][LOW] L1 — `packages/config/eslint.base.js` uses `Linter.Config` type but should use `Linter.FlatConfig` for ESLint v9+ flat config format.

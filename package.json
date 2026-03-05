@@ -1,6 +1,7 @@
 {
   "name": "ecommerce-monorepo",
   "private": true,
+  "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -9,6 +10,17 @@
     "dev": "bun --cwd=apps/web run dev",
     "dev:mobile": "bun --cwd=apps/mobile run start",
     "build": "bun --cwd=apps/web run build",
-    "typecheck": "bun --cwd=apps/web run typecheck && bun --cwd=apps/mobile run typecheck"
+    "typecheck": "bun --cwd=apps/web run typecheck && bun --cwd=apps/mobile run typecheck",
+    "lint": "eslint apps/ packages/ --max-warnings 0",
+    "lint:fix": "eslint apps/ packages/ --fix",
+    "format": "prettier --check \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\"",
+    "format:fix": "prettier --write \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\"",
+    "fix-all": "bun run format:fix && bun run lint:fix && bun run typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.2",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.56.1"
   }
 }

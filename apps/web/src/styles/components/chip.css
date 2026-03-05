@@ -1,0 +1,30 @@
+/* ─── Chip ───
+ * Small pill-shaped label/link (used in header brand, tags, etc.)
+ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--chip-line);
+  background: var(--chip-bg);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--sea-ink);
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(30, 90, 72, 0.08);
+}
+
+@media (min-width: 640px) {
+  .chip {
+    padding: 0.5rem 1rem;
+  }
+}
+
+.chip__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #56c6be, #7ed3bf);
+}

@@ -1,0 +1,36 @@
+/* ─── Site Footer ─── */
+
+.site-footer {
+  margin-top: 5rem;
+  border-top: 1px solid var(--line);
+  padding: 2.5rem 1rem 3.5rem;
+  color: var(--sea-ink-soft);
+}
+
+.site-footer__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .site-footer__inner {
+    flex-direction: row;
+    text-align: left;
+  }
+}
+
+.site-footer__copy {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.site-footer__social {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}

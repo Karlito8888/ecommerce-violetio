@@ -1,0 +1,21 @@
+/* ─── Icon Link ───
+ * Rounded icon button used for social links, actions, etc.
+ */
+
+.icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  color: var(--sea-ink-soft);
+  text-decoration: none;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.icon-link:hover {
+  background: var(--link-bg-hover);
+  color: var(--sea-ink);
+}

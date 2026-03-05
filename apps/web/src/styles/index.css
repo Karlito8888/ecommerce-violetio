@@ -1,0 +1,25 @@
+/* ─── Main Stylesheet Entry Point ───
+ * Import order matters: tokens → base → utilities → components → pages
+ */
+
+/* 1. Design tokens (custom properties, fonts, themes) */
+@import "./tokens.css";
+
+/* 2. Base styles (reset, body, typography) */
+@import "./base.css";
+
+/* 3. Utilities (sr-only, page-wrap, animations) */
+@import "./utilities.css";
+
+/* 4. Shared components */
+@import "./components/island.css";
+@import "./components/chip.css";
+@import "./components/icon-link.css";
+@import "./components/nav-link.css";
+@import "./components/header.css";
+@import "./components/footer.css";
+@import "./components/theme-toggle.css";
+
+/* 5. Page-specific styles */
+@import "./pages/home.css";
+@import "./pages/about.css";
