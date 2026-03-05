@@ -2,9 +2,9 @@
 
 .site-footer {
   margin-top: 5rem;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid rgba(213, 206, 198, 0.5);
   padding: 2.5rem 1rem 3.5rem;
-  color: var(--sea-ink-soft);
+  color: var(--color-charcoal);
 }
 
 .site-footer__inner {

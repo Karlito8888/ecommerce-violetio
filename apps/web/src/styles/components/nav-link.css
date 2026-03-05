@@ -7,7 +7,7 @@
   display: inline-flex;
   align-items: center;
   text-decoration: none;
-  color: var(--sea-ink-soft);
+  color: var(--color-charcoal);
 }
 
 .nav-link::after {
@@ -19,13 +19,13 @@
   height: 2px;
   transform: scaleX(0);
   transform-origin: left;
-  background: linear-gradient(90deg, var(--lagoon), #7ed3bf);
+  background: linear-gradient(90deg, var(--color-gold), var(--color-amber));
   transition: transform 170ms ease;
 }
 
 .nav-link:hover,
 .nav-link.is-active {
-  color: var(--sea-ink);
+  color: var(--color-ink);
 }
 
 .nav-link:hover::after,

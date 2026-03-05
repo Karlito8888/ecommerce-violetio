@@ -26,13 +26,13 @@
 .hero__glow--top {
   top: -6rem;
   left: -5rem;
-  background: radial-gradient(circle, rgba(79, 184, 178, 0.32), transparent 66%);
+  background: radial-gradient(circle, rgba(201, 169, 110, 0.32), transparent 66%);
 }
 
 .hero__glow--bottom {
   bottom: -5rem;
   right: -5rem;
-  background: radial-gradient(circle, rgba(47, 106, 74, 0.18), transparent 66%);
+  background: radial-gradient(circle, rgba(139, 115, 85, 0.18), transparent 66%);
 }
 
 .hero__kicker {
@@ -46,7 +46,7 @@
   line-height: 1.02;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--sea-ink);
+  color: var(--color-ink);
 }
 
 @media (min-width: 640px) {
@@ -59,7 +59,7 @@
   max-width: 42rem;
   margin: 0 0 2rem;
   font-size: 1rem;
-  color: var(--sea-ink-soft);
+  color: var(--color-charcoal);
 }
 
 @media (min-width: 640px) {
@@ -92,25 +92,25 @@
 }
 
 .hero__btn--primary {
-  border: 1px solid rgba(50, 143, 151, 0.3);
-  background: rgba(79, 184, 178, 0.14);
-  color: var(--lagoon-deep);
+  border: 1px solid rgba(166, 139, 75, 0.3);
+  background: rgba(201, 169, 110, 0.14);
+  color: var(--color-amber);
 }
 
 .hero__btn--primary:hover {
-  background: rgba(79, 184, 178, 0.24);
-  color: var(--lagoon-deep);
+  background: rgba(201, 169, 110, 0.24);
+  color: var(--color-amber);
 }
 
 .hero__btn--secondary {
-  border: 1px solid rgba(23, 58, 64, 0.2);
-  background: rgba(255, 255, 255, 0.5);
-  color: var(--sea-ink);
+  border: 1px solid rgba(26, 26, 26, 0.2);
+  background: rgba(250, 250, 248, 0.5);
+  color: var(--color-ink);
 }
 
 .hero__btn--secondary:hover {
-  border-color: rgba(23, 58, 64, 0.35);
-  color: var(--sea-ink);
+  border-color: rgba(26, 26, 26, 0.35);
+  color: var(--color-ink);
 }
 
 /* Features Grid */
@@ -138,13 +138,13 @@
   padding: 1.25rem;
   background: linear-gradient(
     165deg,
-    color-mix(in oklab, var(--surface-strong) 93%, white 7%),
-    var(--surface)
+    color-mix(in oklab, rgba(250, 250, 248, 0.9) 93%, white 7%),
+    rgba(250, 250, 248, 0.74)
   );
   box-shadow:
-    0 1px 0 var(--inset-glint) inset,
-    0 18px 34px rgba(30, 90, 72, 0.1),
-    0 4px 14px rgba(23, 58, 64, 0.06);
+    0 1px 0 rgba(255, 255, 255, 0.82) inset,
+    0 18px 34px rgba(26, 26, 26, 0.08),
+    0 4px 14px rgba(26, 26, 26, 0.05);
   transition:
     transform 180ms ease,
     border-color 180ms ease;
@@ -152,20 +152,20 @@
 
 .features__card:hover {
   transform: translateY(-2px);
-  border-color: color-mix(in oklab, var(--lagoon-deep) 35%, var(--line));
+  border-color: color-mix(in oklab, var(--color-amber) 35%, rgba(213, 206, 198, 0.5));
 }
 
 .features__title {
   margin: 0 0 0.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--sea-ink);
+  color: var(--color-ink);
 }
 
 .features__desc {
   margin: 0;
   font-size: 0.875rem;
-  color: var(--sea-ink-soft);
+  color: var(--color-charcoal);
 }
 
 /* Quick Start */
@@ -185,7 +185,7 @@
   padding-left: 1.25rem;
   list-style: disc;
   font-size: 0.875rem;
-  color: var(--sea-ink-soft);
+  color: var(--color-charcoal);
 }
 
 .quick-start__list li + li {

@@ -4,8 +4,8 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid var(--line);
-  background: var(--header-bg);
+  border-bottom: 1px solid rgba(213, 206, 198, 0.5);
+  background: rgba(250, 250, 248, 0.84);
   padding: 0 1rem;
   backdrop-filter: blur(12px);
 }

@@ -1,77 +1,106 @@
 /* ─── Design Tokens ───
  * Single source of truth for all visual properties.
- * Mirrored in packages/ui for React Native (Story 1.3).
+ * Mirrored in packages/ui/src/tokens/ for React Native (Story 1.3).
+ * CSS values MUST stay in sync with packages/ui/src/tokens/*.ts manually.
+ *
+ * BEM naming convention: .block__element--modifier
+ * CSS custom property naming: --category-name (e.g., --color-ivory, --space-4)
  */
 
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap");
 
 :root {
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", Georgia, serif;
+  /* ── Warm Neutral Base ── */
+  --color-ivory: #fafaf8;
+  --color-linen: #f0eeeb;
+  --color-sand: #e8e4df;
+  --color-stone: #d5cec6;
+  --color-taupe: #b8a28f;
+  --color-sienna: #8b7355;
 
-  --sea-ink: #173a40;
-  --sea-ink-soft: #416166;
-  --lagoon: #4fb8b2;
-  --lagoon-deep: #328f97;
-  --palm: #2f6a4a;
-  --sand: #e7f0e8;
-  --foam: #f3faf5;
-  --surface: rgba(255, 255, 255, 0.74);
-  --surface-strong: rgba(255, 255, 255, 0.9);
-  --line: rgba(23, 58, 64, 0.14);
-  --inset-glint: rgba(255, 255, 255, 0.82);
-  --kicker: rgba(47, 106, 74, 0.9);
-  --bg-base: #e7f3ec;
-  --header-bg: rgba(251, 255, 248, 0.84);
-  --chip-bg: rgba(255, 255, 255, 0.8);
-  --chip-line: rgba(47, 106, 74, 0.18);
-  --link-bg-hover: rgba(255, 255, 255, 0.9);
-  --hero-a: rgba(79, 184, 178, 0.36);
-  --hero-b: rgba(47, 106, 74, 0.2);
+  /* ── Midnight Gold Accents ── */
+  --color-gold: #c9a96e;
+  --color-amber: #a68b4b;
+  --color-midnight: #2c2c2c;
+
+  /* ── Text Scale ── */
+  --color-ink: #1a1a1a;
+  --color-charcoal: #3d3d3d;
+  --color-steel: #5a5a5a;
+  --color-silver: #999999;
+
+  /* ── Semantic ── */
+  --color-success: #5a7a4a;
+  --color-warning: #c17a2a;
+  --color-error: #b54a4a;
+  --color-info: #4a6a8a;
+
+  /* ── Typography ── */
+  --font-display: "Cormorant Garamond", "Georgia", "Times New Roman", serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* ── Spacing (4px base scale) ── */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ── Shadows (warm-tinted) ── */
+  --shadow-sm: 0 1px 2px rgba(26, 26, 26, 0.06);
+  --shadow-md: 0 4px 6px rgba(26, 26, 26, 0.08);
+  --shadow-lg: 0 10px 15px rgba(26, 26, 26, 0.1);
+
+  /* ── Border Radius ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* ── Breakpoints (reference only — use values directly in media queries) ── */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+  --bp-2xl: 1440px;
+
+  /* ── Transitions ── */
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
 }
 
-:root[data-theme="dark"] {
-  --sea-ink: #d7ece8;
-  --sea-ink-soft: #afcdc8;
-  --lagoon: #60d7cf;
-  --lagoon-deep: #8de5db;
-  --palm: #6ec89a;
-  --sand: #0f1a1e;
-  --foam: #101d22;
-  --surface: rgba(16, 30, 34, 0.8);
-  --surface-strong: rgba(15, 27, 31, 0.92);
-  --line: rgba(141, 229, 219, 0.18);
-  --inset-glint: rgba(194, 247, 238, 0.14);
-  --kicker: #b8efe5;
-  --bg-base: #0a1418;
-  --header-bg: rgba(10, 20, 24, 0.8);
-  --chip-bg: rgba(13, 28, 32, 0.9);
-  --chip-line: rgba(141, 229, 219, 0.24);
-  --link-bg-hover: rgba(24, 44, 49, 0.8);
-  --hero-a: rgba(96, 215, 207, 0.18);
-  --hero-b: rgba(110, 200, 154, 0.12);
+/* ── Dark Theme ──
+ * Neutrals inverted (ivory ↔ midnight for bg/text).
+ * Gold/amber accents preserved — gold on midnight is 7.2:1 (AAA).
+ */
+[data-theme="dark"] {
+  --color-ivory: #2c2c2c;
+  --color-linen: #333333;
+  --color-sand: #3d3d3d;
+  --color-stone: #4a4a4a;
+  --color-ink: #fafaf8;
+  --color-charcoal: #e8e4df;
+  --color-steel: #d5cec6;
+  --color-silver: #b8a28f;
+  --color-midnight: #fafaf8;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --sea-ink: #d7ece8;
-    --sea-ink-soft: #afcdc8;
-    --lagoon: #60d7cf;
-    --lagoon-deep: #8de5db;
-    --palm: #6ec89a;
-    --sand: #0f1a1e;
-    --foam: #101d22;
-    --surface: rgba(16, 30, 34, 0.8);
-    --surface-strong: rgba(15, 27, 31, 0.92);
-    --line: rgba(141, 229, 219, 0.18);
-    --inset-glint: rgba(194, 247, 238, 0.14);
-    --kicker: #b8efe5;
-    --bg-base: #0a1418;
-    --header-bg: rgba(10, 20, 24, 0.8);
-    --chip-bg: rgba(13, 28, 32, 0.9);
-    --chip-line: rgba(141, 229, 219, 0.24);
-    --link-bg-hover: rgba(24, 44, 49, 0.8);
-    --hero-a: rgba(96, 215, 207, 0.18);
-    --hero-b: rgba(110, 200, 154, 0.12);
+    --color-ivory: #2c2c2c;
+    --color-linen: #333333;
+    --color-sand: #3d3d3d;
+    --color-stone: #4a4a4a;
+    --color-ink: #fafaf8;
+    --color-charcoal: #e8e4df;
+    --color-steel: #d5cec6;
+    --color-silver: #b8a28f;
+    --color-midnight: #fafaf8;
   }
 }

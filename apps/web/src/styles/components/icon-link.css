@@ -8,7 +8,7 @@
   justify-content: center;
   padding: 0.5rem;
   border-radius: 0.75rem;
-  color: var(--sea-ink-soft);
+  color: var(--color-charcoal);
   text-decoration: none;
   transition:
     background-color 180ms ease,
@@ -16,6 +16,6 @@
 }
 
 .icon-link:hover {
-  background: var(--link-bg-hover);
-  color: var(--sea-ink);
+  background: rgba(250, 250, 248, 0.9);
+  color: var(--color-ink);
 }
