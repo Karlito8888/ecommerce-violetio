@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+.output/
+.vinxi/
+
+# Expo
+.expo/
+apps/mobile/dist/
+expo-env.d.ts
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+
+# CLI agents
+.claude/
+.cursor/
+.windsurf/

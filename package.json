@@ -1,0 +1,14 @@
+{
+  "name": "ecommerce-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun --cwd=apps/web run dev",
+    "dev:mobile": "bun --cwd=apps/mobile run start",
+    "build": "bun --cwd=apps/web run build",
+    "typecheck": "bun --cwd=apps/web run typecheck && bun --cwd=apps/mobile run typecheck"
+  }
+}
