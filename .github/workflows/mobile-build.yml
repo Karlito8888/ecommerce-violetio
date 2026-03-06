@@ -19,6 +19,8 @@ jobs:
   build:
     name: EAS Build
     runs-on: ubuntu-latest
+    env:
+      HAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
 
     steps:
       - name: Checkout repository
@@ -46,13 +48,13 @@ jobs:
         run: bun run typecheck
 
       - name: Setup Expo and EAS
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.EXPO_TOKEN != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.HAS_EXPO_TOKEN == 'true'
         uses: expo/expo-github-action@v8
         with:
           eas-version: "16.x"
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Trigger EAS Build
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.EXPO_TOKEN != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.HAS_EXPO_TOKEN == 'true'
         working-directory: apps/mobile
         run: eas build --platform all --non-interactive --no-wait
