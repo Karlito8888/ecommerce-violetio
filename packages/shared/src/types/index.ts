@@ -4,3 +4,4 @@ export type { Cart, Bag, CartItem, CartItemInput } from "./cart.types.js";
 export type { Order, BagStatus, WebhookEvent, PaymentIntent } from "./order.types.js";
 export type { SearchResult, SearchFilters } from "./search.types.js";
 export type { User, AuthState } from "./user.types.js";
+export type { Session, SupabaseUser, AuthSession } from "./auth.types.js";

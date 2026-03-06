@@ -1,4 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import type { SupportedStorage } from "@supabase/supabase-js";
+
+export type { SupportedStorage };
 
 export const LOCAL_SUPABASE_URL = "http://localhost:54321";
 
@@ -28,14 +31,39 @@ export function requireEnvVar(name: string): string {
   return value;
 }
 
+export interface SupabaseBrowserConfig {
+  /** Custom storage adapter — use SecureStore on mobile, defaults to localStorage on web. */
+  storage?: SupportedStorage;
+  /** Whether to detect session tokens from URL (set false on mobile). Defaults to true. */
+  detectSessionInUrl?: boolean;
+}
+
 let _supabaseClient: SupabaseClient | null = null;
 
-export function createSupabaseClient(): SupabaseClient {
+/**
+ * Returns the shared Supabase browser client (singleton).
+ * Pass `config` on first call to customize auth storage or URL detection.
+ * On mobile: call this once at startup with a SecureStore adapter.
+ */
+export function createSupabaseClient(config?: SupabaseBrowserConfig): SupabaseClient {
   if (_supabaseClient) return _supabaseClient;
 
   const url = getEnvVar("SUPABASE_URL") || LOCAL_SUPABASE_URL;
   const key = requireEnvVar("SUPABASE_ANON_KEY");
 
-  _supabaseClient = createClient(url, key);
+  _supabaseClient = createClient(url, key, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: config?.detectSessionInUrl ?? true,
+      ...(config?.storage ? { storage: config.storage } : {}),
+    },
+  });
+
   return _supabaseClient;
+}
+
+/** Reset the singleton — use only in tests. */
+export function _resetSupabaseClient(): void {
+  _supabaseClient = null;
 }
