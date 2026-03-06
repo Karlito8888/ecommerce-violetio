@@ -39,6 +39,7 @@ export const Route = createRootRoute({
 function RootDocument({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     initAnonymousSession(getSupabaseBrowserClient()).catch((err) => {
+      // eslint-disable-next-line no-console
       console.warn("[auth] initAnonymousSession error:", err);
     });
   }, []);

@@ -24,6 +24,7 @@ export function useAuthSession(): AuthSession {
 
     // Initialize anonymous session on first load, then subscribe to changes
     initAnonymousSession(supabase).catch((err) => {
+      // eslint-disable-next-line no-console
       console.warn("[auth] initAnonymousSession error:", err);
     });
 

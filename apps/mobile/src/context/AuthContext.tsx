@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     initAnonymousSession().catch((err) => {
+      // eslint-disable-next-line no-console
       console.warn("[auth] initAnonymousSession error:", err);
       setState((prev) => ({ ...prev, isLoading: false }));
     });

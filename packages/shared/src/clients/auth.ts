@@ -19,6 +19,7 @@ export async function initAnonymousSession(client?: SupabaseClient) {
   } = await supabase.auth.getSession();
 
   if (sessionError) {
+    // eslint-disable-next-line no-console
     console.warn("[auth] Failed to read existing session:", sessionError.message);
   }
 
@@ -29,6 +30,7 @@ export async function initAnonymousSession(client?: SupabaseClient) {
   const { data, error } = await supabase.auth.signInAnonymously();
 
   if (error) {
+    // eslint-disable-next-line no-console
     console.error("[auth] Failed to create anonymous session:", error.message);
     return { session: null, isNew: false };
   }
