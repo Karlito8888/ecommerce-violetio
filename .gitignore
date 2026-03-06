@@ -15,7 +15,7 @@ dist/
 # Expo
 .expo/
 apps/mobile/dist/
-expo-env.d.ts
+# expo-env.d.ts — committed for CI typecheck (provides CSS module types)
 
 # OS
 .DS_Store
