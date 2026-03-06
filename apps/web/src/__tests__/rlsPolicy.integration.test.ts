@@ -8,7 +8,7 @@
  * These tests create real anonymous users via the Auth API and verify that
  * Postgres RLS policies enforce row-level isolation on user_profiles.
  *
- * Skip condition: tests are skipped if Supabase is not reachable.
+ * Skip condition: entire file is skipped if Supabase is not reachable.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -16,7 +16,14 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const SUPABASE_URL = "http://127.0.0.1:54321";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
-let supabaseRunning = false;
+
+// Check reachability synchronously at module load via top-level await
+const supabaseRunning = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+  headers: { apikey: SUPABASE_ANON_KEY },
+  signal: AbortSignal.timeout(2000),
+})
+  .then((r) => r.ok)
+  .catch(() => false);
 
 // Two anonymous user clients for cross-user isolation testing
 let userAClient: SupabaseClient;
@@ -24,50 +31,35 @@ let userBClient: SupabaseClient;
 let userAId: string;
 let userBId: string;
 
-async function isSupabaseReachable(): Promise<boolean> {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/`, {
-      headers: { apikey: SUPABASE_ANON_KEY },
-      signal: AbortSignal.timeout(3000),
+describe.skipIf(!supabaseRunning)("user_profiles RLS integration", () => {
+  beforeAll(async () => {
+    // Create two anonymous users
+    const clientA = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: dataA, error: errA } = await clientA.auth.signInAnonymously();
+    if (errA) throw new Error(`Failed to create anonymous user A: ${errA.message}`);
+    userAId = dataA.user!.id;
+    userAClient = clientA;
+
+    const clientB = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false },
     });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+    const { data: dataB, error: errB } = await clientB.auth.signInAnonymously();
+    if (errB) throw new Error(`Failed to create anonymous user B: ${errB.message}`);
+    userBId = dataB.user!.id;
+    userBClient = clientB;
 
-beforeAll(async () => {
-  supabaseRunning = await isSupabaseReachable();
-  if (!supabaseRunning) return;
+    // Each user inserts their own profile (allowed by RLS USING + WITH CHECK)
+    const { error: insertErrA } = await userAClient
+      .from("user_profiles")
+      .insert({ user_id: userAId });
+    if (insertErrA) throw new Error(`User A profile insert failed: ${insertErrA.message}`);
 
-  // Create two anonymous users
-  const clientA = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const { data: dataA, error: errA } = await clientA.auth.signInAnonymously();
-  if (errA) throw new Error(`Failed to create anonymous user A: ${errA.message}`);
-  userAId = dataA.user!.id;
-  userAClient = clientA;
-
-  const clientB = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false },
+    const { error: insertErrB } = await userBClient
+      .from("user_profiles")
+      .insert({ user_id: userBId });
+    if (insertErrB) throw new Error(`User B profile insert failed: ${insertErrB.message}`);
   });
-  const { data: dataB, error: errB } = await clientB.auth.signInAnonymously();
-  if (errB) throw new Error(`Failed to create anonymous user B: ${errB.message}`);
-  userBId = dataB.user!.id;
-  userBClient = clientB;
 
-  // Each user inserts their own profile (allowed by RLS USING + WITH CHECK)
-  const { error: insertErrA } = await userAClient
-    .from("user_profiles")
-    .insert({ user_id: userAId });
-  if (insertErrA) throw new Error(`User A profile insert failed: ${insertErrA.message}`);
-
-  const { error: insertErrB } = await userBClient
-    .from("user_profiles")
-    .insert({ user_id: userBId });
-  if (insertErrB) throw new Error(`User B profile insert failed: ${insertErrB.message}`);
-});
-
-describe.runIf(() => supabaseRunning)("user_profiles RLS integration", () => {
   it("anonymous user A can read their own profile", async () => {
     const { data, error } = await userAClient
       .from("user_profiles")

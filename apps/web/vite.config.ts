@@ -8,11 +8,11 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 
 import viteReact from "@vitejs/plugin-react";
 
-// Resolve react and react-dom to absolute symlink paths so Bun/Vite uses a single
+// Resolve react and react-dom to absolute paths so Bun/Vite uses a single
 // module instance in tests (avoids the react@version vs react-dom@version+hash split).
+// Only applied during tests — in CI builds, node_modules/react may be hoisted to root.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const reactAlias = path.resolve(__dirname, "node_modules/react");
-const reactDomAlias = path.resolve(__dirname, "node_modules/react-dom");
+const isTest = !!process.env.VITEST;
 
 const config = defineConfig({
   plugins: [
@@ -23,10 +23,14 @@ const config = defineConfig({
   ],
   resolve: {
     dedupe: ["react", "react-dom"],
-    alias: {
-      react: reactAlias,
-      "react-dom": reactDomAlias,
-    },
+    ...(isTest
+      ? {
+          alias: {
+            react: path.resolve(__dirname, "node_modules/react"),
+            "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+          },
+        }
+      : {}),
   },
   test: {
     environment: "jsdom",
