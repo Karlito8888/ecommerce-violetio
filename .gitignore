@@ -31,3 +31,6 @@ Thumbs.db
 .claude/
 .cursor/
 .windsurf/
+
+# Supabase local development volumes
+supabase/.supabase/
