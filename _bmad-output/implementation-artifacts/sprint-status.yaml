@@ -52,7 +52,7 @@ development_status:
   # Epic 2: User Authentication & Anonymous Sessions
   epic-2: in-progress
   2-1-anonymous-session-supabase-auth-setup: done
-  2-2-user-registration-login: backlog
+  2-2-user-registration-login: done
   2-3-violet-api-token-management: backlog
   2-4-biometric-authentication: backlog
   2-5-layout-shell-navigation: backlog

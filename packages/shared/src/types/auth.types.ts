@@ -1,4 +1,4 @@
-import type { Session, User } from "@supabase/supabase-js";
+import type { AuthError as SupabaseAuthError, Session, User } from "@supabase/supabase-js";
 
 export type { Session, User as SupabaseUser };
 
@@ -10,3 +10,6 @@ export interface AuthSession {
   /** True when the user has no email/password — anonymous Supabase session. */
   isAnonymous: boolean;
 }
+
+/** Re-export Supabase AuthError for typed error handling in consumers. */
+export type AuthError = SupabaseAuthError;
