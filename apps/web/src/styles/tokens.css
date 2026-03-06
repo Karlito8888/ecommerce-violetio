@@ -60,6 +60,8 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 32px;
   --radius-full: 9999px;
 
   /* ── Breakpoints (reference only — use values directly in media queries) ── */
@@ -84,6 +86,7 @@
   --border-accent: rgba(201, 169, 110, 0.18);
   --glint-inset: rgba(255, 255, 255, 0.82);
   --kicker-color: rgba(139, 115, 85, 0.9);
+  --selection-bg: rgba(201, 169, 110, 0.24);
 }
 
 /* ── Dark Theme ──
@@ -109,8 +112,16 @@
   --surface-muted: rgba(44, 44, 44, 0.5);
   --border-subtle: rgba(74, 74, 74, 0.5);
   --border-accent: rgba(201, 169, 110, 0.28);
+  --color-success: #7aad5a;
+  --color-warning: #d4943a;
+  --color-error: #d46a6a;
+  --color-info: #6a9aba;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
   --glint-inset: rgba(255, 255, 255, 0.06);
   --kicker-color: rgba(201, 169, 110, 0.9);
+  --selection-bg: rgba(201, 169, 110, 0.32);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -133,7 +144,15 @@
     --surface-muted: rgba(44, 44, 44, 0.5);
     --border-subtle: rgba(74, 74, 74, 0.5);
     --border-accent: rgba(201, 169, 110, 0.28);
+    --color-success: #7aad5a;
+    --color-warning: #d4943a;
+    --color-error: #d46a6a;
+    --color-info: #6a9aba;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.25);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
     --glint-inset: rgba(255, 255, 255, 0.06);
     --kicker-color: rgba(201, 169, 110, 0.9);
+    --selection-bg: rgba(201, 169, 110, 0.32);
   }
 }

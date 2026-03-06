@@ -30,7 +30,10 @@ Thumbs.db
 # CLI agents
 .claude/
 .cursor/
+.serena/
 .windsurf/
 
 # Supabase local development volumes
 supabase/.supabase/
+supabase/.branches/
+supabase/.temp/

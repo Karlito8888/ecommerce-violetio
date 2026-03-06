@@ -16,39 +16,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Deploy Supabase Edge Functions
+  quality:
+    name: Lint & Typecheck
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.2.4"
+          cache: true
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
+
+  deploy:
+    name: Deploy Supabase Edge Functions
+    needs: quality
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.4"
+          cache: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: "2.76.8"
 
-      # Deploy to production on push to main
       - name: Deploy Edge Functions (production)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-
-      # Placeholder: staging deployment on pull requests
-      # Configure SUPABASE_STAGING_PROJECT_REF secret to enable
-      - name: Deploy Edge Functions (staging — placeholder)
-        if: github.event_name == 'pull_request'
-        run: echo "Staging Edge Functions deployment placeholder — configure SUPABASE_STAGING_PROJECT_REF to enable"
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

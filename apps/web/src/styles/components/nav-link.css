@@ -14,7 +14,7 @@
   content: "";
   position: absolute;
   left: 0;
-  bottom: -6px;
+  bottom: -4px;
   width: 100%;
   height: 2px;
   transform: scaleX(0);
@@ -33,8 +33,8 @@
   transform: scaleX(1);
 }
 
-@media (max-width: 640px) {
+@media (min-width: 640px) {
   .nav-link::after {
-    bottom: -4px;
+    bottom: -6px;
   }
 }

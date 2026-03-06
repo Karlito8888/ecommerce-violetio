@@ -1,6 +1,7 @@
 {
   "name": "ecommerce-monorepo",
   "private": true,
+  "packageManager": "bun@1.2.4",
   "type": "module",
   "workspaces": [
     "apps/*",

@@ -8,7 +8,9 @@ import type { Product } from "./product.types.js";
 /** Filters that can be applied to a product search. */
 export interface SearchFilters {
   category?: string;
+  /** Minimum price filter in integer cents */
   minPrice?: number;
+  /** Maximum price filter in integer cents */
   maxPrice?: number;
   merchantId?: string;
 }

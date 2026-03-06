@@ -15,7 +15,7 @@ export function formatPrice(
   locale: string = "en-US",
 ): string {
   if (!Number.isFinite(cents)) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency }).format(0);
+    throw new RangeError(`formatPrice: expected finite integer cents, got ${cents}`);
   }
   return new Intl.NumberFormat(locale, {
     style: "currency",

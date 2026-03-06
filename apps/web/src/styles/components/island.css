@@ -7,8 +7,8 @@
   background: linear-gradient(165deg, var(--surface-elevated), var(--surface-glass));
   box-shadow:
     0 1px 0 var(--glint-inset) inset,
-    0 22px 44px rgba(26, 26, 26, 0.08),
-    0 6px 18px rgba(26, 26, 26, 0.06);
+    0 22px 44px var(--shadow-md),
+    0 6px 18px var(--shadow-sm);
   backdrop-filter: blur(4px);
 }
 

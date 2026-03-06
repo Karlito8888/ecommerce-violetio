@@ -5,6 +5,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: "mobile",
   slug: "mobile",
   version: "1.0.0",
+  sdkVersion: "55.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "mobile",
@@ -44,6 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   extra: {
     supabaseUrl: process.env.SUPABASE_URL ?? "http://localhost:54321",
+    // Set via .env.local — empty in dev is OK, required for production
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   },
 });

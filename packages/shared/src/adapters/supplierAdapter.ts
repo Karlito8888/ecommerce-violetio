@@ -1,4 +1,5 @@
 import type {
+  ApiResponse,
   Product,
   ProductQuery,
   PaginatedResult,
@@ -24,26 +25,26 @@ import type {
  */
 export interface SupplierAdapter {
   // Catalog
-  getProducts(params: ProductQuery): Promise<PaginatedResult<Product>>;
-  getProduct(id: string): Promise<Product>;
+  getProducts(params: ProductQuery): Promise<ApiResponse<PaginatedResult<Product>>>;
+  getProduct(id: string): Promise<ApiResponse<Product>>;
 
   // Search (AI)
-  searchProducts(query: string, filters?: SearchFilters): Promise<SearchResult>;
+  searchProducts(query: string, filters?: SearchFilters): Promise<ApiResponse<SearchResult>>;
 
   // Cart
-  createCart(userId: string): Promise<Cart>;
-  addToCart(cartId: string, item: CartItemInput): Promise<Cart>;
-  removeFromCart(cartId: string, itemId: string): Promise<Cart>;
+  createCart(userId: string): Promise<ApiResponse<Cart>>;
+  addToCart(cartId: string, item: CartItemInput): Promise<ApiResponse<Cart>>;
+  removeFromCart(cartId: string, itemId: string): Promise<ApiResponse<Cart>>;
 
   // Checkout
-  getPaymentIntent(cartId: string): Promise<PaymentIntent>;
-  submitOrder(cartId: string): Promise<Order>;
+  getPaymentIntent(cartId: string): Promise<ApiResponse<PaymentIntent>>;
+  submitOrder(cartId: string): Promise<ApiResponse<Order>>;
 
   // Orders
-  getOrder(orderId: string): Promise<Order>;
-  getOrders(userId: string): Promise<Order[]>;
+  getOrder(orderId: string): Promise<ApiResponse<Order>>;
+  getOrders(userId: string): Promise<ApiResponse<Order[]>>;
 
   // Webhooks
   validateWebhook(headers: Headers, body: string): boolean;
-  processWebhook(event: WebhookEvent): Promise<void>;
+  processWebhook(event: WebhookEvent): Promise<ApiResponse<void>>;
 }

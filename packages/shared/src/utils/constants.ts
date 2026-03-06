@@ -1,8 +1,10 @@
-import type { SearchFilters } from "../types/index.js";
+import type { ProductQuery, SearchFilters } from "../types/index.js";
 
 /**
  * Base URL for the Violet.io commerce API.
  * Uses VIOLET_API_BASE env var in production, falls back to sandbox for development.
+ *
+ * @internal Server-side only — do not import in browser/mobile code
  */
 export const VIOLET_API_BASE =
   (typeof process !== "undefined" && process.env?.VIOLET_API_BASE) ||
@@ -20,7 +22,7 @@ export const VIOLET_API_BASE =
 export const queryKeys = {
   products: {
     all: () => ["products"] as const,
-    list: (params?: { category?: string; page?: number }) => ["products", "list", params] as const,
+    list: (params?: ProductQuery) => ["products", "list", params] as const,
     detail: (productId: string) => ["products", "detail", productId] as const,
   },
   cart: {
