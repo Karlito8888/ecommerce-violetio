@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: center;
   padding: 0.5rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-lg);
   color: var(--color-charcoal);
   text-decoration: none;
   transition:
@@ -16,6 +16,6 @@
 }
 
 .icon-link:hover {
-  background: rgba(250, 250, 248, 0.9);
+  background: var(--surface-elevated);
   color: var(--color-ink);
 }

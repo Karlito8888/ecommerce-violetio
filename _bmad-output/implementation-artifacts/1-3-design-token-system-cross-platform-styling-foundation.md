@@ -1,6 +1,6 @@
 # Story 1.3: Design Token System & Cross-Platform Styling Foundation
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -445,6 +445,40 @@ Color contrast requirements (WCAG AA minimum):
 - [Source: implementation-artifacts/1-2-shared-packages-setup-types-utils-config.md]
 - [Source: epics.md#Story 1.3: Design Token System & Cross-Platform Styling Foundation]
 
+## Senior Developer Review (AI)
+
+**Reviewer:** Charles (via Claude Opus 4.6)
+**Date:** 2026-03-06
+**Outcome:** Changes Requested → Fixed
+
+### Findings (8 total: 2 High, 3 Medium, 3 Low)
+
+#### Fixed (HIGH + MEDIUM)
+
+- **[H1] Dark theme broken for hardcoded rgba values** — 38 rgba values in 8 CSS files bypassed dark theme overrides. **Fix:** Added 9 composite surface/border CSS custom properties (`--surface-frosted`, `--surface-elevated`, `--surface-glass`, `--surface-chip`, `--surface-muted`, `--border-subtle`, `--border-accent`, `--glint-inset`, `--kicker-color`) with dark theme overrides in tokens.css. Updated header, footer, island, chip, icon-link, theme-toggle, home, and base CSS to use these tokens.
+- **[H2] `--color-sienna` not overridden in dark theme** — Used in `a:hover` (base.css:78), gave 3.5:1 contrast on dark bg (WCAG AA fail). **Fix:** Added `--color-sienna: #b8a28f` and `--color-taupe: #d5cec6` dark overrides in both dark theme blocks.
+- **[M1] `.features__card:hover` border-color without border** — Hover effect was invisible. **Fix:** Added `border: 1px solid transparent` to `.features__card`.
+- **[M2] Token categories defined but never used** — Radius, shadow, transition, spacing tokens all had zero usage. **Fix:** Replaced hardcoded `9999px` → `var(--radius-full)`, `7px` → `var(--radius-md)`, `0.75rem` → `var(--radius-lg)` across chip, theme-toggle, icon-link, hero, and code elements. (Shadow/transition/spacing tokens remain unused — adoption deferred to future stories.)
+- **[M3] `code` element non-token border-radius** — `7px` didn't match any token. **Fix:** Changed to `var(--radius-md)` (8px).
+
+#### Not Fixed (LOW — deferred)
+
+- **[L1]** typography.ts missing font loading strategy comments (AC2 partial)
+- **[L2]** Hex casing mismatch between JS (uppercase) and CSS (lowercase, Prettier)
+- **[L3]** Breakpoint CSS custom properties are unusable in @media queries (CSS limitation)
+
+### Files Changed by Review
+
+- `apps/web/src/styles/tokens.css` — Added composite surface/border tokens + dark overrides for sienna/taupe
+- `apps/web/src/styles/base.css` — code element: `var(--border-subtle)`, `var(--surface-elevated)`, `var(--radius-md)`
+- `apps/web/src/styles/components/header.css` — `var(--border-subtle)`, `var(--surface-frosted)`
+- `apps/web/src/styles/components/footer.css` — `var(--border-subtle)`
+- `apps/web/src/styles/components/island.css` — `var(--border-subtle)`, `var(--surface-elevated)`, `var(--surface-glass)`, `var(--glint-inset)`, `var(--kicker-color)`
+- `apps/web/src/styles/components/chip.css` — `var(--radius-full)`, `var(--border-accent)`, `var(--surface-chip)`
+- `apps/web/src/styles/components/icon-link.css` — `var(--surface-elevated)`, `var(--radius-lg)`
+- `apps/web/src/styles/components/theme-toggle.css` — `var(--radius-full)`, `var(--border-accent)`, `var(--surface-chip)`
+- `apps/web/src/styles/pages/home.css` — `var(--radius-full)`, `var(--surface-muted)`, `var(--surface-elevated)`, `var(--surface-glass)`, `var(--glint-inset)`, `var(--border-subtle)`, `border: 1px solid transparent`
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -485,3 +519,7 @@ apps/web/src/styles/pages/home.css (modified)
 apps/web/src/styles/pages/about.css (modified)
 _bmad-output/implementation-artifacts/sprint-status.yaml (modified)
 _bmad-output/implementation-artifacts/1-3-design-token-system-cross-platform-styling-foundation.md (modified)
+
+### Review Fix Change Log
+
+- 2026-03-06: Code review by Claude Opus 4.6 — Fixed 5 issues (2 HIGH, 3 MEDIUM). Added composite surface/border tokens with dark theme support. Replaced hardcoded rgba values and magic numbers with CSS custom properties across 9 files.
