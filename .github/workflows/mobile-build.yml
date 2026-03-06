@@ -46,13 +46,13 @@ jobs:
         run: bun run typecheck
 
       - name: Setup Expo and EAS
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.EXPO_TOKEN != ''
         uses: expo/expo-github-action@v8
         with:
           eas-version: "16.x"
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Trigger EAS Build
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.EXPO_TOKEN != ''
         working-directory: apps/mobile
         run: eas build --platform all --non-interactive --no-wait
