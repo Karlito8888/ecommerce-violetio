@@ -19,6 +19,8 @@
 @import "./components/header.css";
 @import "./components/footer.css";
 @import "./components/theme-toggle.css";
+@import "./components/skeleton.css";
+@import "./components/app-banner.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";

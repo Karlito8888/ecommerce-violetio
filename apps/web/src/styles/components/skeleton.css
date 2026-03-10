@@ -1,0 +1,41 @@
+/* ─── Skeleton Loading ─── */
+
+.skeleton {
+  background: var(--color-sand);
+  border-radius: var(--radius-md);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton--text {
+  height: 1em;
+  width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton--image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.skeleton--card {
+  width: 100%;
+  min-height: 200px;
+  border-radius: var(--radius-lg);
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    opacity: 0.7;
+  }
+}

@@ -1,0 +1,48 @@
+/* ─── App Download Banner ─── */
+
+.app-banner {
+  background: var(--color-midnight);
+  color: var(--color-ivory);
+  padding: var(--space-3) var(--space-4);
+}
+
+.app-banner__inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.app-banner__text {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.app-banner__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-ivory);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.app-banner__dismiss:hover {
+  opacity: 0.7;
+}
+
+/* Responsive: full-width on mobile, constrained on desktop */
+@media (min-width: 768px) {
+  .app-banner__inner {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}

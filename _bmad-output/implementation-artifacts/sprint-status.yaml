@@ -50,12 +50,12 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: User Authentication & Anonymous Sessions
-  epic-2: in-progress
+  epic-2: done
   2-1-anonymous-session-supabase-auth-setup: done
   2-2-user-registration-login: done
   2-3-violet-api-token-management: done
   2-4-biometric-authentication: done
-  2-5-layout-shell-navigation: backlog
+  2-5-layout-shell-navigation: done
   epic-2-retrospective: optional
 
   # Epic 3: Product Discovery & Browsing

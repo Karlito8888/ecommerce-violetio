@@ -1,36 +1,117 @@
 /* ─── Site Footer ─── */
 
 .site-footer {
-  margin-top: 5rem;
+  margin-top: var(--space-16);
   border-top: 1px solid var(--border-subtle);
-  padding: 2.5rem 1rem 3.5rem;
+  padding: var(--space-10) var(--space-4) var(--space-8);
   color: var(--color-charcoal);
 }
+
+/* ── Inner layout ── */
 
 .site-footer__inner {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  text-align: center;
+  gap: var(--space-8);
 }
 
-@media (min-width: 640px) {
-  .site-footer__inner {
-    flex-direction: row;
-    text-align: left;
+/* ── Column grid ── */
+
+.site-footer__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-8) var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .site-footer__columns {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
-.site-footer__copy {
-  margin: 0;
-  font-size: 0.875rem;
+/* ── Section ── */
+
+.site-footer__heading {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-ink);
 }
 
-.site-footer__social {
-  margin-top: 1rem;
+.site-footer__links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.site-footer__link {
+  font-size: 0.875rem;
+  color: var(--color-steel);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.site-footer__link:hover {
+  color: var(--color-ink);
+}
+
+/* ── Social links ── */
+
+.site-footer__social {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.site-footer__social-link {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  gap: 1rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-steel);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.site-footer__social-link:hover {
+  color: var(--color-ink);
+  background-color: var(--surface-muted);
+}
+
+/* ── Affiliate disclosure ── */
+
+.site-footer__disclosure {
+  margin-top: var(--space-8);
+  padding: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+.site-footer__disclosure p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-silver);
+  line-height: 1.5;
+}
+
+/* ── Bottom bar ── */
+
+.site-footer__bottom {
+  margin-top: var(--space-4);
+  text-align: center;
+}
+
+.site-footer__copyright {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-silver);
 }

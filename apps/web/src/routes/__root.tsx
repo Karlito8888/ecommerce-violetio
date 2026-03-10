@@ -2,8 +2,10 @@ import { useEffect } from "react";
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
+import AppBanner from "../components/AppBanner";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
+import { AppBannerContext, useAppBannerProvider } from "../hooks/useAppBanner";
 import { initAnonymousSession } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../utils/supabase";
 
@@ -23,7 +25,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "Maison Émile — Curated Shopping",
       },
     ],
     links: [
@@ -37,6 +39,8 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const appBanner = useAppBannerProvider();
+
   useEffect(() => {
     initAnonymousSession(getSupabaseBrowserClient()).catch((err) => {
       // eslint-disable-next-line no-console
@@ -51,9 +55,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <Header />
-        {children}
-        <Footer />
+        <AppBannerContext.Provider value={appBanner}>
+          <a href="#main-content" className="sr-only sr-only--focusable">
+            Skip to content
+          </a>
+          <AppBanner />
+          <Header />
+          <main id="main-content">{children}</main>
+          <Footer />
+        </AppBannerContext.Provider>
         <TanStackDevtools
           config={{
             position: "bottom-right",

@@ -1,36 +1,105 @@
+import { Link } from "@tanstack/react-router";
+
+const FOOTER_SECTIONS: { heading: string; links: { to: string; label: string }[] }[] = [
+  {
+    heading: "Shop",
+    links: [
+      { to: "/", label: "New Arrivals" },
+      { to: "/", label: "Collections" },
+      { to: "/", label: "Gifts" },
+      { to: "/", label: "Sale" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { to: "/about", label: "About" },
+      { to: "/about", label: "Contact" },
+    ],
+  },
+  {
+    heading: "Support",
+    links: [
+      { to: "/", label: "FAQ" },
+      { to: "/", label: "Returns & Exchanges" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { to: "/", label: "Privacy Policy" },
+      { to: "/", label: "Terms of Service" },
+    ],
+  },
+];
+
 export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
     <footer className="site-footer">
       <div className="page-wrap site-footer__inner">
-        <p className="site-footer__copy">&copy; {year} Your name here. All rights reserved.</p>
-        <p className="island-kicker">Built with TanStack Start</p>
+        <div className="site-footer__columns">
+          {FOOTER_SECTIONS.map(({ heading, links }) => (
+            <div key={heading} className="site-footer__section">
+              <h3 className="site-footer__heading">{heading}</h3>
+              <ul className="site-footer__links">
+                {links.map(({ to, label }) => (
+                  <li key={label}>
+                    <Link to={to} className="site-footer__link">
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <nav className="site-footer__social" aria-label="Social media">
+          <a
+            href="https://instagram.com"
+            target="_blank"
+            rel="noreferrer"
+            className="site-footer__social-link"
+            aria-label="Follow us on Instagram"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="2" width="20" height="20" rx="5" />
+              <circle cx="12" cy="12" r="5" />
+              <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
+            </svg>
+          </a>
+          <a
+            href="https://pinterest.com"
+            target="_blank"
+            rel="noreferrer"
+            className="site-footer__social-link"
+            aria-label="Follow us on Pinterest"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.15 9.42 7.6 11.18-.1-.94-.2-2.38.04-3.4.22-.92 1.4-5.94 1.4-5.94s-.36-.72-.36-1.78c0-1.66.97-2.9 2.17-2.9 1.02 0 1.52.77 1.52 1.7 0 1.03-.66 2.58-1 4.01-.28 1.2.6 2.17 1.78 2.17 2.14 0 3.78-2.26 3.78-5.5 0-2.88-2.07-4.89-5.02-4.89-3.42 0-5.43 2.57-5.43 5.22 0 1.03.4 2.14.9 2.74.1.12.11.22.08.34-.09.38-.3 1.2-.34 1.36-.06.22-.18.27-.42.16-1.56-.73-2.54-3.01-2.54-4.85 0-3.94 2.87-7.56 8.27-7.56 4.34 0 7.71 3.1 7.71 7.23 0 4.32-2.72 7.79-6.5 7.79-1.27 0-2.46-.66-2.87-1.44l-.78 2.98c-.28 1.1-1.05 2.47-1.56 3.31C9.58 23.78 10.76 24 12 24c6.63 0 12-5.37 12-12S18.63 0 12 0z" />
+            </svg>
+          </a>
+        </nav>
       </div>
-      <div className="site-footer__social">
-        <a href="https://x.com/tan_stack" target="_blank" rel="noreferrer" className="icon-link">
-          <span className="sr-only">Follow TanStack on X</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32">
-            <path
-              fill="currentColor"
-              d="M12.6 1h2.2L10 6.48 15.64 15h-4.41L7.78 9.82 3.23 15H1l5.14-5.84L.72 1h4.52l3.12 4.73L12.6 1zm-.77 12.67h1.22L4.57 2.26H3.26l8.57 11.41z"
-            />
-          </svg>
-        </a>
-        <a
-          href="https://github.com/TanStack"
-          target="_blank"
-          rel="noreferrer"
-          className="icon-link"
-        >
-          <span className="sr-only">Go to TanStack GitHub</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32">
-            <path
-              fill="currentColor"
-              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"
-            />
-          </svg>
-        </a>
+
+      <div className="site-footer__disclosure">
+        <p>We earn commissions on purchases made through our links. Prices are not affected.</p>
+      </div>
+
+      <div className="page-wrap site-footer__bottom">
+        <p className="site-footer__copyright">&copy; {year} Maison Émile. All rights reserved.</p>
       </div>
     </footer>
   );
