@@ -9,3 +9,4 @@ export {
   signInWithEmail,
   signOut,
 } from "./auth.js";
+export { violetLogin, violetRefreshToken, VioletTokenManager } from "./violetAuth.js";
