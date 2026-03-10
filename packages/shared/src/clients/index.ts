@@ -10,3 +10,4 @@ export {
   signOut,
 } from "./auth.js";
 export { violetLogin, violetRefreshToken, VioletTokenManager } from "./violetAuth.js";
+export { getBiometricPreference, setBiometricPreference } from "./biometricAuth.js";

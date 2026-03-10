@@ -11,3 +11,10 @@ export type {
   VioletLoginResponse,
   VioletAuthHeaders,
 } from "./violet.types.js";
+export type {
+  BiometricStatus,
+  BiometricEnrollResult,
+  BiometricAuthResult,
+  BiometricErrorCode,
+} from "./biometric.types.js";
+export { BiometricType } from "./biometric.types.js";

@@ -30,6 +30,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-router",
     "expo-secure-store",
     [
+      "expo-local-authentication",
+      {
+        faceIDPermission: "Allow $(PRODUCT_NAME) to use Face ID for quick login.",
+      },
+    ],
+    [
       "expo-splash-screen",
       {
         backgroundColor: "#208AEF",

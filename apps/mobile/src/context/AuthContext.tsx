@@ -1,16 +1,39 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { createSupabaseClient } from "@ecommerce/shared";
-import type { AuthSession } from "@ecommerce/shared";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createSupabaseClient, getBiometricPreference } from "@ecommerce/shared";
+import type { AuthSession, BiometricStatus, BiometricAuthResult } from "@ecommerce/shared";
 import { initAnonymousSession } from "../utils/authInit";
+import {
+  checkBiometricAvailability,
+  attemptBiometricLogin as attemptBiometricLoginService,
+  enrollBiometric,
+  disableBiometric as disableBiometricService,
+  hasBiometricCredentials,
+} from "../services/biometricService";
 
-const AuthContext = createContext<AuthSession>({
+/** Extended auth context with biometric state and actions. */
+interface BiometricAuthSession extends AuthSession {
+  biometricStatus: BiometricStatus | null;
+  biometricEnabled: boolean;
+  attemptBiometricLogin: () => Promise<BiometricAuthResult>;
+  enableBiometric: () => Promise<{ success: boolean; error?: string }>;
+  disableBiometric: () => Promise<void>;
+}
+
+const defaultBiometricSession: BiometricAuthSession = {
   user: null,
   session: null,
   isLoading: true,
   isAnonymous: false,
-});
+  biometricStatus: null,
+  biometricEnabled: false,
+  attemptBiometricLogin: async () => ({ success: false }),
+  enableBiometric: async () => ({ success: false }),
+  disableBiometric: async () => {},
+};
 
-/** Provides auth state to the entire app. Wrap your root layout with this. */
+const AuthContext = createContext<BiometricAuthSession>(defaultBiometricSession);
+
+/** Provides auth state (including biometric) to the entire app. */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthSession>({
     user: null,
@@ -18,20 +41,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
     isAnonymous: false,
   });
+  const [biometricStatus, setBiometricStatus] = useState<BiometricStatus | null>(null);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   useEffect(() => {
     const supabase = createSupabaseClient();
 
-    // Subscribe to auth state changes first, then initialize anonymous session
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setState({
         user: session?.user ?? null,
         session,
         isLoading: false,
         isAnonymous: session?.user?.is_anonymous ?? false,
       });
+
+      // Check biometric preference when a registered user is detected
+      const user = session?.user;
+      if (user && !user.is_anonymous) {
+        const status = await checkBiometricAvailability();
+        setBiometricStatus(status);
+        const enabled = await getBiometricPreference(user.id);
+        setBiometricEnabled(enabled);
+      } else {
+        setBiometricEnabled(false);
+      }
+    });
+
+    // Check device biometric capability and local credentials on mount
+    checkBiometricAvailability().then(setBiometricStatus);
+    hasBiometricCredentials().then((hasCredentials) => {
+      if (hasCredentials) setBiometricEnabled(true);
     });
 
     initAnonymousSession().catch((err) => {
@@ -45,10 +86,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+  const attemptBiometricLogin = useCallback(async (): Promise<BiometricAuthResult> => {
+    return attemptBiometricLoginService();
+  }, []);
+
+  const enableBiometric = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    const user = state.user;
+    const session = state.session;
+    if (!user || !session?.refresh_token) {
+      return { success: false, error: "BIOMETRIC.AUTH_FAILED" };
+    }
+    const result = await enrollBiometric(user.id, user.email ?? "", session.refresh_token);
+    if (result.success) {
+      setBiometricEnabled(true);
+    }
+    return { success: result.success, error: result.error };
+  }, [state.user, state.session]);
+
+  const disableBiometric = useCallback(async (): Promise<void> => {
+    const user = state.user;
+    if (!user) return;
+    await disableBiometricService(user.id);
+    setBiometricEnabled(false);
+  }, [state.user]);
+
+  const contextValue: BiometricAuthSession = {
+    ...state,
+    biometricStatus,
+    biometricEnabled,
+    attemptBiometricLogin,
+    enableBiometric,
+    disableBiometric,
+  };
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
-/** Access the current auth session anywhere in the app. */
-export function useAuth(): AuthSession {
+/** Access the current auth session (with biometric state) anywhere in the app. */
+export function useAuth(): BiometricAuthSession {
   return useContext(AuthContext);
 }

@@ -8,7 +8,13 @@
     ".": "./src/index.ts",
     "./server": "./src/clients/supabase.server.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
   }
 }

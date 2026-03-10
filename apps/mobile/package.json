@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ecommerce/config": "workspace:*",
@@ -25,6 +26,7 @@
     "expo-glass-effect": "~55.0.7",
     "expo-image": "~55.0.6",
     "expo-linking": "~55.0.7",
+    "expo-local-authentication": "~55.0.8",
     "expo-router": "~55.0.4",
     "expo-secure-store": "^55.0.8",
     "expo-splash-screen": "~55.0.10",
@@ -44,7 +46,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.14",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.18"
   },
   "private": true
 }
