@@ -1,61 +1,78 @@
-import * as Device from "expo-device";
-import { Platform, StyleSheet } from "react-native";
+import { useState } from "react";
+import { ScrollView, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AnimatedIcon } from "@/components/animated-icon";
-import { HintRow } from "@/components/hint-row";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { WebBadge } from "@/components/web-badge";
-import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
+import ProductList from "@/components/product/ProductList";
+import { Colors, Spacing, BottomTabInset, MaxContentWidth } from "@/constants/theme";
+import type { Product } from "@ecommerce/shared";
 
-function getDevMenuHint() {
-  if (Platform.OS === "web") {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === "android" ? "cmd+m (or ctrl+m)" : "cmd+d";
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+/**
+ * Fallback categories matching the web CategoryChips component.
+ * Will be replaced by dynamic fetch from Violet API in a future story.
+ */
+const FALLBACK_CATEGORIES = [
+  { slug: "all", label: "All", filter: undefined as string | undefined },
+  { slug: "home", label: "Home & Living", filter: "Home" },
+  { slug: "fashion", label: "Fashion", filter: "Clothing" },
+  { slug: "gifts", label: "Gifts", filter: "Gifts" },
+  { slug: "beauty", label: "Beauty", filter: "Beauty" },
+  { slug: "accessories", label: "Accessories", filter: "Accessories" },
+];
 
+/**
+ * Home screen — product listing with category browsing.
+ *
+ * Note: Data fetching is placeholder for now. Mobile will use Supabase
+ * Edge Functions to proxy Violet API calls (future story). The UI structure
+ * is ready for integration with TanStack Query + edge function fetch.
+ */
 export default function HomeScreen() {
+  const [activeCategory, setActiveCategory] = useState<string | undefined>(undefined);
+
+  // TODO(Story 3.2-mobile): Wire up actual data fetching via Edge Function
+  const products: Product[] = [];
+  const isLoading = false;
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
+        <ThemedText type="title" style={styles.title}>
+          Products
         </ThemedText>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        {/* Category chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+        >
+          {FALLBACK_CATEGORIES.map(({ slug, label, filter }) => {
+            const isActive = activeCategory === filter || (slug === "all" && !activeCategory);
+            return (
+              <TouchableOpacity
+                key={slug}
+                style={[styles.chip, isActive && styles.chipActive]}
+                onPress={() => setActiveCategory(filter)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <ThemedText style={[styles.chipText, isActive && styles.chipTextActive]}>
+                  {label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
-        {Platform.OS === "web" && <WebBadge />}
+        <ProductList
+          products={products}
+          total={0}
+          hasNext={false}
+          isLoading={isLoading}
+          onLoadMore={() => {}}
+        />
       </SafeAreaView>
     </ThemedView>
   );
@@ -64,35 +81,40 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    flexDirection: "row",
   },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: "center",
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
     maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    alignSelf: "center",
+    width: "100%",
+    paddingBottom: BottomTabInset,
   },
   title: {
-    textAlign: "center",
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.two,
   },
-  code: {
-    textTransform: "uppercase",
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: "stretch",
+  chips: {
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    paddingVertical: Spacing.two,
+    gap: Spacing.two,
+  },
+  chip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.light.backgroundSelected,
+  },
+  chipActive: {
+    backgroundColor: Colors.light.text,
+    borderColor: Colors.light.text,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  chipTextActive: {
+    color: Colors.light.background,
   },
 });

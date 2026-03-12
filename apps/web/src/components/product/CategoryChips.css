@@ -1,0 +1,81 @@
+/* ─── Category Chips ───
+ * BEM block: category-chips
+ * Horizontal scrollable chip bar with fade gradients at edges.
+ * Active state: solid midnight bg with white text.
+ * Inactive state: outlined with subtle border.
+ */
+
+.category-chips {
+  position: relative;
+  margin-bottom: var(--space-6);
+}
+
+/* Fade gradients at scroll edges */
+.category-chips::before,
+.category-chips::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2rem;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.category-chips::before {
+  left: 0;
+  background: linear-gradient(to right, var(--color-ivory), transparent);
+}
+
+.category-chips::after {
+  right: 0;
+  background: linear-gradient(to left, var(--color-ivory), transparent);
+}
+
+.category-chips__list {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: var(--space-2) var(--space-4);
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.category-chips__list::-webkit-scrollbar {
+  display: none;
+}
+
+.category-chips__item {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--color-charcoal);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.category-chips__item:hover {
+  border-color: var(--color-midnight);
+  color: var(--color-ink);
+}
+
+.category-chips__item--active {
+  background: var(--color-midnight);
+  color: var(--color-ivory);
+  border-color: var(--color-midnight);
+}
+
+.category-chips__item--active:hover {
+  background: var(--color-midnight);
+  color: var(--color-ivory);
+}

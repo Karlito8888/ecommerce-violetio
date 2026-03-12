@@ -1,0 +1,120 @@
+/* ─── Product Card ───
+ * BEM block: product-card
+ * Gallery-style card with 3:4 image ratio, serif name, merchant, price.
+ * Hover: subtle image zoom (scale 1.02, 400ms) + shadow-md.
+ * Out-of-stock: desaturated 50% + "Sold Out" overlay badge.
+ */
+
+.product-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-ivory);
+  transition: box-shadow 400ms ease;
+}
+
+.product-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.product-card__link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ── Image ── */
+
+.product-card__image-wrap {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  background: var(--color-linen);
+}
+
+.product-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 400ms ease;
+}
+
+.product-card:hover .product-card__image {
+  transform: scale(1.02);
+}
+
+.product-card__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-8);
+}
+
+.product-card__placeholder svg {
+  width: 100%;
+  height: 100%;
+  max-width: 120px;
+  max-height: 120px;
+}
+
+/* ── Out of Stock ── */
+
+.product-card--out-of-stock .product-card__image {
+  filter: saturate(0.5);
+}
+
+.product-card--out-of-stock .product-card__placeholder {
+  filter: saturate(0.5);
+}
+
+.product-card__badge {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-ivory);
+  background: var(--color-midnight);
+  border-radius: var(--radius-sm);
+}
+
+/* ── Info ── */
+
+.product-card__info {
+  padding: var(--space-4);
+}
+
+.product-card__name {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-1);
+  /* Clamp to 2 lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.product-card__merchant {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-steel);
+  margin: 0 0 var(--space-2);
+}
+
+.product-card__price {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}

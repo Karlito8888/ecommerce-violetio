@@ -21,8 +21,12 @@
 @import "./components/theme-toggle.css";
 @import "./components/skeleton.css";
 @import "./components/app-banner.css";
+@import "./components/product-card.css";
+@import "./components/product-grid.css";
+@import "./components/category-chips.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";
 @import "./pages/about.css";
 @import "./pages/auth.css";
+@import "./pages/products.css";

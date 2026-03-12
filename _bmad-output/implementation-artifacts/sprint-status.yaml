@@ -61,7 +61,7 @@ development_status:
   # Epic 3: Product Discovery & Browsing
   epic-3: in-progress
   3-1-violet-catalog-adapter-product-types: done
-  3-2-product-listing-page-with-category-browsing: backlog
+  3-2-product-listing-page-with-category-browsing: done
   3-3-product-detail-page: backlog
   3-4-product-filtering-sorting: backlog
   3-5-ai-conversational-search-edge-function-embeddings: backlog

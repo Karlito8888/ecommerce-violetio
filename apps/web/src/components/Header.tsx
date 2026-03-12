@@ -2,11 +2,28 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import ThemeToggle from "./ThemeToggle";
 
-const CATEGORY_LINKS: { to: string; label: string }[] = [
-  { to: "/", label: "New" },
-  { to: "/", label: "Collections" },
-  { to: "/", label: "Gifts" },
-  { to: "/", label: "Sale" },
+/**
+ * Header category navigation links.
+ *
+ * ## IMPORTANT: `search.category` values MUST match FALLBACK_CATEGORIES filters
+ *
+ * The `search.category` value is used for two things:
+ * 1. Sent as `source_category_name` to Violet's `POST /catalog/offers/search`
+ * 2. Compared against CategoryChips filters to highlight the active chip
+ *
+ * If these values don't match the chip `filter` values in `getProducts.ts`,
+ * clicking a header link produces a disconnected UI (no chip highlighted).
+ *
+ * "New" intentionally has no category filter — shows all products.
+ *
+ * @see {@link apps/web/src/server/getProducts.ts} FALLBACK_CATEGORIES
+ * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
+ */
+const CATEGORY_LINKS: { to: string; label: string; search?: Record<string, string> }[] = [
+  { to: "/products", label: "New" },
+  { to: "/products", label: "Home & Living", search: { category: "Home" } },
+  { to: "/products", label: "Gifts", search: { category: "Gifts" } },
+  { to: "/products", label: "Fashion", search: { category: "Clothing" } },
   { to: "/about", label: "About" },
 ];
 
@@ -114,10 +131,11 @@ export default function Header() {
         className={`page-wrap site-header__categories${menuOpen ? " site-header__categories--open" : ""}`}
         aria-label="Main navigation"
       >
-        {CATEGORY_LINKS.map(({ to, label }) => (
+        {CATEGORY_LINKS.map(({ to, label, search }) => (
           <Link
             key={label}
             to={to}
+            search={search}
             className="nav-link"
             activeProps={{ className: "is-active" }}
             activeOptions={{ exact: true }}

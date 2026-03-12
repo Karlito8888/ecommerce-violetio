@@ -1,0 +1,27 @@
+/* ─── Product Grid ───
+ * BEM block: product-grid
+ * Responsive CSS Grid: 2 → 3 → 4 columns.
+ * Max-width 1200px centered to maintain comfortable reading width.
+ */
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .product-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+  }
+}
+
+@media (min-width: 1024px) {
+  .product-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-8);
+  }
+}

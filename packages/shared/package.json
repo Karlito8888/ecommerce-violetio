@@ -17,5 +17,8 @@
   },
   "devDependencies": {
     "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.90.21"
   }
 }
