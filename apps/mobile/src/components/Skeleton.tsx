@@ -1,8 +1,13 @@
 import React, { useEffect, useRef } from "react";
-import { AccessibilityInfo, Animated, StyleSheet, type ViewStyle } from "react-native";
+import {
+  AccessibilityInfo,
+  Animated,
+  StyleSheet,
+  useColorScheme,
+  type ViewStyle,
+} from "react-native";
 
 import { Colors } from "@/constants/theme";
-import { useColorScheme } from "react-native";
 
 interface SkeletonProps {
   width?: number;

@@ -1,6 +1,11 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { verifyEmailOtp, setAccountPassword, mapAuthError } from "@ecommerce/shared";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
+import {
+  verifyEmailOtp,
+  setAccountPassword,
+  mapAuthError,
+  sanitizeRedirect,
+} from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
 
 export const Route = createFileRoute("/auth/verify")({
@@ -14,20 +19,18 @@ export const Route = createFileRoute("/auth/verify")({
 function VerifyPage() {
   const { email, redirect } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
+
+  // Password passed via router state (in-memory only, never persisted to storage)
+  const password = (router.state.location.state as { password?: string })?.password ?? "";
 
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [hasPendingPassword, setHasPendingPassword] = useState(false);
 
-  useEffect(() => {
-    setHasPendingPassword(!!sessionStorage.getItem("_signup_pwd"));
-  }, []);
-
-  // Redirect to signup if no email or no pending password
   if (!email) {
     return (
-      <main className="page-wrap auth-page">
+      <section className="page-wrap auth-page">
         <h1 className="auth-page__heading">Verification</h1>
         <p className="auth-page__subheading">
           No email to verify.{" "}
@@ -35,7 +38,7 @@ function VerifyPage() {
             Sign up
           </Link>
         </p>
-      </main>
+      </section>
     );
   }
 
@@ -52,25 +55,23 @@ function VerifyPage() {
     try {
       const supabase = getSupabaseBrowserClient();
 
-      // Step 2: Verify OTP
       const { error: verifyError } = await verifyEmailOtp(email, otp, supabase);
       if (verifyError) {
         setError(mapAuthError(verifyError.message));
         return;
       }
 
-      // Step 3: Set password
-      const pendingPassword = sessionStorage.getItem("_signup_pwd");
-      if (pendingPassword) {
-        const { error: pwError } = await setAccountPassword(pendingPassword, supabase);
+      if (password) {
+        const { error: pwError } = await setAccountPassword(password, supabase);
         if (pwError) {
           setError(mapAuthError(pwError.message));
           return;
         }
-        sessionStorage.removeItem("_signup_pwd");
       }
 
-      // Step 4: Create user_profiles row
+      // Create user_profiles row
+      // Note: user_profiles row is auto-created by DB trigger (on_auth_user_created/on_auth_user_updated).
+      // This upsert is a safety net in case the trigger hasn't fired yet due to race conditions.
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -84,7 +85,7 @@ function VerifyPage() {
         }
       }
 
-      await navigate({ to: redirect });
+      await navigate({ to: sanitizeRedirect(redirect) });
     } catch {
       setError("An unexpected error occurred. Please try again.");
     } finally {
@@ -93,7 +94,7 @@ function VerifyPage() {
   }
 
   return (
-    <main className="page-wrap auth-page">
+    <section className="page-wrap auth-page">
       <h1 className="auth-page__heading">Check Your Email</h1>
       <p className="auth-page__subheading">
         We sent a 6-digit code to <strong>{email}</strong>
@@ -102,7 +103,7 @@ function VerifyPage() {
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         {error && <div className="auth-form__global-error">{error}</div>}
 
-        {!hasPendingPassword && (
+        {!password && (
           <div className="auth-form__global-error">
             Session expired. Please{" "}
             <Link to="/auth/signup" search={{ redirect }}>
@@ -130,11 +131,7 @@ function VerifyPage() {
           />
         </div>
 
-        <button
-          className="auth-form__submit"
-          type="submit"
-          disabled={isLoading || !hasPendingPassword}
-        >
+        <button className="auth-form__submit" type="submit" disabled={isLoading || !password}>
           {isLoading ? "Verifying..." : "Verify & Create Account"}
         </button>
 
@@ -145,6 +142,6 @@ function VerifyPage() {
           </Link>
         </div>
       </form>
-    </main>
+    </section>
   );
 }

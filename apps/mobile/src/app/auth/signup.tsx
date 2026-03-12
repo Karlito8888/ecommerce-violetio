@@ -12,7 +12,7 @@ import {
 import { router, Link } from "expo-router";
 import { signUpWithEmail, createSupabaseClient, mapAuthError } from "@ecommerce/shared";
 import { colors, typography, spacing } from "@ecommerce/ui";
-import { pendingSignup } from "./_pending";
+import { setPendingSignup } from "./_pending";
 
 export default function SignupScreen() {
   const [email, setEmail] = useState("");
@@ -47,8 +47,7 @@ export default function SignupScreen() {
       }
 
       // Store password in memory for after verification
-      pendingSignup.email = email;
-      pendingSignup.password = password;
+      setPendingSignup(email, password);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes not yet regenerated
       router.push("/auth/verify" as any);

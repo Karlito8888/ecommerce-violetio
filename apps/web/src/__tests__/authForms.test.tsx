@@ -58,8 +58,10 @@ describe("mapAuthError", () => {
     expect(mapAuthError("Email not confirmed")).toBe("Please verify your email before signing in");
   });
 
-  it("passes through unknown error messages", () => {
-    expect(mapAuthError("Some unknown error")).toBe("Some unknown error");
+  it("returns generic message for unknown error messages", () => {
+    expect(mapAuthError("Some unknown error")).toBe(
+      "An authentication error occurred. Please try again.",
+    );
   });
 
   it("maps rate limit error", () => {

@@ -1,16 +1,10 @@
 import React, { useState } from "react";
 import { Alert, StyleSheet, Switch, View } from "react-native";
 
-import { BiometricType } from "@ecommerce/shared";
 import { Spacing } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
+import { getBiometricLabel } from "@/utils/biometricLabel";
 import { ThemedText } from "./themed-text";
-
-function getBiometricLabel(supportedTypes: number[]): string {
-  if (supportedTypes.includes(BiometricType.FACIAL_RECOGNITION)) return "Face ID";
-  if (supportedTypes.includes(BiometricType.FINGERPRINT)) return "Fingerprint";
-  return "Biometric Login";
-}
 
 export function BiometricToggle() {
   const { biometricStatus, biometricEnabled, enableBiometric, disableBiometric } = useAuth();

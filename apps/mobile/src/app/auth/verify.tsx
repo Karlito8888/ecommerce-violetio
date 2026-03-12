@@ -17,14 +17,14 @@ import {
   mapAuthError,
 } from "@ecommerce/shared";
 import { colors, typography, spacing } from "@ecommerce/ui";
-import { pendingSignup, clearPendingSignup } from "./_pending";
+import { getPendingSignup, clearPendingSignup } from "./_pending";
 
 export default function VerifyScreen() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const { email, password } = pendingSignup;
+  const { email, password } = getPendingSignup();
 
   if (!email || !password) {
     return (
@@ -69,6 +69,8 @@ export default function VerifyScreen() {
       }
 
       // Step 4: Create user_profiles row
+      // Note: user_profiles row is auto-created by DB trigger (on_auth_user_created/on_auth_user_updated).
+      // This upsert is a safety net in case the trigger hasn't fired yet due to race conditions.
       const {
         data: { user },
       } = await supabase.auth.getUser();

@@ -1,4 +1,33 @@
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { ExpoConfig, ConfigContext } from "expo/config";
+
+/**
+ * Load environment variables from the monorepo root .env.local file.
+ * Expo CLI does not automatically load .env files from parent directories,
+ * so we parse the root .env.local manually for local development.
+ */
+function loadRootEnv(): void {
+  try {
+    const envPath = resolve(__dirname, "../../.env.local");
+    const content = readFileSync(envPath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) continue;
+      const key = trimmed.slice(0, eqIndex).trim();
+      const value = trimmed.slice(eqIndex + 1).trim();
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  } catch {
+    // .env.local may not exist (CI, production) — that's fine
+  }
+}
+
+loadRootEnv();
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,

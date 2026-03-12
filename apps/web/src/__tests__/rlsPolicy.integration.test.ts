@@ -3,10 +3,13 @@
  *
  * Prerequisites:
  *   1. `supabase start` must be running
- *   2. Migration 20260306000000_create_user_profiles.sql must be applied
+ *   2. All migrations applied (create_user_profiles, block_anonymous_writes, auto_create_user_profile)
  *
  * These tests create real anonymous users via the Auth API and verify that
- * Postgres RLS policies enforce row-level isolation on user_profiles.
+ * Postgres RLS policies enforce:
+ *   - Row-level isolation (user A can't see user B's data)
+ *   - Anonymous write blocking (anonymous users cannot INSERT/UPDATE/DELETE)
+ *   - Authenticated user full CRUD on own rows
  *
  * Skip condition: entire file is skipped if Supabase is not reachable.
  */
@@ -16,6 +19,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const SUPABASE_URL = "http://127.0.0.1:54321";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
+const SUPABASE_SERVICE_ROLE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU";
 
 // Check reachability synchronously at module load via top-level await
 const supabaseRunning = await fetch(`${SUPABASE_URL}/rest/v1/`, {
@@ -25,6 +30,9 @@ const supabaseRunning = await fetch(`${SUPABASE_URL}/rest/v1/`, {
   .then((r) => r.ok)
   .catch(() => false);
 
+// Service role client bypasses RLS — used for test setup only
+let adminClient: SupabaseClient;
+
 // Two anonymous user clients for cross-user isolation testing
 let userAClient: SupabaseClient;
 let userBClient: SupabaseClient;
@@ -33,6 +41,11 @@ let userBId: string;
 
 describe.skipIf(!supabaseRunning)("user_profiles RLS integration", () => {
   beforeAll(async () => {
+    // Service role client for test data setup (bypasses RLS)
+    adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
     // Create two anonymous users
     const clientA = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const { data: dataA, error: errA } = await clientA.auth.signInAnonymously();
@@ -48,17 +61,19 @@ describe.skipIf(!supabaseRunning)("user_profiles RLS integration", () => {
     userBId = dataB.user!.id;
     userBClient = clientB;
 
-    // Each user inserts their own profile (allowed by RLS USING + WITH CHECK)
-    const { error: insertErrA } = await userAClient
+    // Insert profiles via service role (bypasses RLS) — anonymous users can't write
+    const { error: insertErrA } = await adminClient
       .from("user_profiles")
       .insert({ user_id: userAId });
-    if (insertErrA) throw new Error(`User A profile insert failed: ${insertErrA.message}`);
+    if (insertErrA) throw new Error(`Admin profile insert for A failed: ${insertErrA.message}`);
 
-    const { error: insertErrB } = await userBClient
+    const { error: insertErrB } = await adminClient
       .from("user_profiles")
       .insert({ user_id: userBId });
-    if (insertErrB) throw new Error(`User B profile insert failed: ${insertErrB.message}`);
+    if (insertErrB) throw new Error(`Admin profile insert for B failed: ${insertErrB.message}`);
   });
+
+  // --- Read isolation tests ---
 
   it("anonymous user A can read their own profile", async () => {
     const { data, error } = await userAClient
@@ -77,7 +92,6 @@ describe.skipIf(!supabaseRunning)("user_profiles RLS integration", () => {
       .select("*")
       .eq("user_id", userBId);
 
-    // RLS silently filters — no error, but no rows returned
     expect(error).toBeNull();
     expect(data).toHaveLength(0);
   });
@@ -101,23 +115,25 @@ describe.skipIf(!supabaseRunning)("user_profiles RLS integration", () => {
     expect(data![0].user_id).toBe(userBId);
   });
 
-  it("anonymous user A cannot insert a profile with user B's user_id (RLS WITH CHECK)", async () => {
-    const { error } = await userAClient.from("user_profiles").insert([{ user_id: userBId }]);
+  // --- Anonymous write blocking tests (block_anonymous_writes policy) ---
+
+  it("anonymous user CANNOT insert a profile (blocked by restrictive policy)", async () => {
+    const { error } = await userAClient.from("user_profiles").insert([{ user_id: userAId }]);
 
     expect(error).not.toBeNull();
     expect(error!.message).toContain("row-level security");
   });
 
-  it("anonymous user A cannot update user B's profile", async () => {
+  it("anonymous user CANNOT update their own profile", async () => {
     const { data, error } = await userAClient
       .from("user_profiles")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("user_id", userBId)
+      .update({ biometric_enabled: true })
+      .eq("user_id", userAId)
       .select();
 
-    // RLS silently filters the update target — 0 rows affected, no error
-    expect(error).toBeNull();
-    expect(data).toHaveLength(0);
+    // Restrictive policy blocks the write — either error or 0 rows affected
+    const blocked = error !== null || (data !== null && data.length === 0);
+    expect(blocked).toBe(true);
   });
 
   it("anonymous user A cannot delete user B's profile", async () => {
@@ -131,8 +147,8 @@ describe.skipIf(!supabaseRunning)("user_profiles RLS integration", () => {
     expect(error).toBeNull();
     expect(data).toHaveLength(0);
 
-    // Verify B's profile still exists (via B's own client, which can see their row)
-    const { data: check } = await userBClient
+    // Verify B's profile still exists (via admin client)
+    const { data: check } = await adminClient
       .from("user_profiles")
       .select("*")
       .eq("user_id", userBId);

@@ -8,6 +8,7 @@ import {
   enrollBiometric,
   disableBiometric as disableBiometricService,
   hasBiometricCredentials,
+  resetBiometricFailCount,
 } from "../services/biometricService";
 
 /** Extended auth context with biometric state and actions. */
@@ -49,7 +50,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Reset biometric fail counter on sign-out
+      if (event === "SIGNED_OUT") {
+        resetBiometricFailCount();
+        setBiometricEnabled(false);
+      }
+
+      // On INITIAL_SESSION with no session, kick off anonymous sign-in and wait
+      if (event === "INITIAL_SESSION" && !session) {
+        initAnonymousSession().catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn("[auth] initAnonymousSession error:", err);
+          setState((prev) => ({ ...prev, isLoading: false }));
+        });
+        return; // Wait for SIGNED_IN from initAnonymousSession
+      }
+
       setState({
         user: session?.user ?? null,
         session,
@@ -64,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBiometricStatus(status);
         const enabled = await getBiometricPreference(user.id);
         setBiometricEnabled(enabled);
-      } else {
+      } else if (event !== "SIGNED_OUT") {
         setBiometricEnabled(false);
       }
     });
@@ -73,12 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkBiometricAvailability().then(setBiometricStatus);
     hasBiometricCredentials().then((hasCredentials) => {
       if (hasCredentials) setBiometricEnabled(true);
-    });
-
-    initAnonymousSession().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn("[auth] initAnonymousSession error:", err);
-      setState((prev) => ({ ...prev, isLoading: false }));
     });
 
     return () => {

@@ -4,7 +4,7 @@ export const Route = createFileRoute("/")({ component: App });
 
 function App() {
   return (
-    <main className="page-wrap" style={{ padding: "3.5rem 1rem 2rem" }}>
+    <section className="page-wrap" style={{ padding: "3.5rem 1rem 2rem" }}>
       <section className="island-shell hero rise-in">
         <div className="hero__glow hero__glow--top" />
         <div className="hero__glow hero__glow--bottom" />
@@ -63,6 +63,6 @@ function App() {
           </li>
         </ul>
       </section>
-    </main>
+    </section>
   );
 }

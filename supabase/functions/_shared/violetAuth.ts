@@ -1,13 +1,12 @@
 /**
  * Violet API token management for Supabase Edge Functions (Deno runtime).
  *
- * SYNC: Core logic (VioletTokenManager, violetLogin, violetRefreshToken) mirrors
- * packages/shared/src/clients/violetAuth.ts — keep both in sync on changes.
+ * SYNC: Core logic (VioletTokenManager, violetLogin, violetRefreshToken) is duplicated
+ * from packages/shared/src/clients/violetAuth.ts. Edge Functions cannot import from
+ * @ecommerce/shared due to the Deno runtime constraint.
  *
- * Adapted for Deno:
- * - Uses Deno.env.get() for config
- * - Module-scoped singleton for warm invocation reuse
- * - Cold start triggers a fresh login
+ * Any changes to the core logic MUST be applied to both files.
+ * TODO(CI): Add a CI check that compares the core logic hash between both files.
  */
 
 interface VioletAuthConfig {

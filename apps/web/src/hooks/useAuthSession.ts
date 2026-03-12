@@ -21,22 +21,35 @@ export function useAuthSession(): AuthSession {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-
-    // Initialize anonymous session on first load, then subscribe to changes
-    initAnonymousSession(supabase).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn("[auth] initAnonymousSession error:", err);
-    });
+    let initialSessionHandled = false;
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState({
-        user: session?.user ?? null,
-        session,
-        isLoading: false,
-        isAnonymous: session?.user?.is_anonymous ?? false,
-      });
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Only transition from loading after the initial session is resolved
+      if (event === "INITIAL_SESSION") {
+        initialSessionHandled = true;
+
+        // If no session exists yet, kick off anonymous sign-in
+        if (!session) {
+          initAnonymousSession(supabase).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.warn("[auth] initAnonymousSession error:", err);
+            setState((prev) => ({ ...prev, isLoading: false }));
+          });
+          return; // Don't set isLoading=false yet — wait for SIGNED_IN event from initAnonymousSession
+        }
+      }
+
+      // For INITIAL_SESSION with a session, or any subsequent event, update state
+      if (initialSessionHandled || event !== "INITIAL_SESSION") {
+        setState({
+          user: session?.user ?? null,
+          session,
+          isLoading: false,
+          isAnonymous: session?.user?.is_anonymous ?? false,
+        });
+      }
     });
 
     return () => {

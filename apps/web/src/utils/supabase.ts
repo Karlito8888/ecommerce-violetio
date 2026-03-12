@@ -8,8 +8,15 @@ import { createBrowserClient } from "@supabase/ssr";
  * document.cookie automatically, making the session visible to the SSR server.
  */
 export function getSupabaseBrowserClient() {
-  return createBrowserClient(
-    import.meta.env.VITE_SUPABASE_URL || "http://localhost:54321",
-    import.meta.env.VITE_SUPABASE_ANON_KEY || "",
-  );
+  const url = import.meta.env.VITE_SUPABASE_URL || "http://localhost:54321";
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!anonKey) {
+    throw new Error(
+      "Missing VITE_SUPABASE_ANON_KEY environment variable. " +
+        "Set it in .env or .env.local for local development.",
+    );
+  }
+
+  return createBrowserClient(url, anonKey);
 }

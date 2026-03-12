@@ -29,7 +29,6 @@ export default function Header() {
             type="search"
             className="site-header__search-input"
             placeholder="What are you looking for?"
-            aria-label="Search products"
           />
         </div>
 

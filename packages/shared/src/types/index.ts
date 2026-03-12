@@ -1,5 +1,20 @@
 export type { ApiResponse, ApiError, PaginatedResult } from "./api.types.js";
-export type { Product, Offer, SKU, ProductQuery } from "./product.types.js";
+export type {
+  Product,
+  Offer,
+  SKU,
+  ProductQuery,
+  OfferStatus,
+  PublishingStatus,
+  ProductType,
+  SkuType,
+  ProductMedia,
+  ProductAlbum,
+  ProductImage,
+  VariantValue,
+  ProductVariant,
+  SkuDimensions,
+} from "./product.types.js";
 export type { Cart, Bag, CartItem, CartItemInput } from "./cart.types.js";
 export type { Order, BagStatus, WebhookEvent, PaymentIntent } from "./order.types.js";
 export type { SearchResult, SearchFilters } from "./search.types.js";
@@ -10,6 +25,14 @@ export type {
   VioletTokenData,
   VioletLoginResponse,
   VioletAuthHeaders,
+  VioletOfferResponse,
+  VioletSkuResponse,
+  VioletPaginatedResponse,
+  VioletMediaResponse,
+  VioletAlbumResponse,
+  VioletVariantValueResponse,
+  VioletVariantResponse,
+  VioletSkuDimensionsResponse,
 } from "./violet.types.js";
 export type {
   BiometricStatus,

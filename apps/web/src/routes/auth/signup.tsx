@@ -46,12 +46,11 @@ function SignupPage() {
         return;
       }
 
-      // Store password securely for after email verification
-      sessionStorage.setItem("_signup_pwd", password);
-
       await navigate({
         to: "/auth/verify",
         search: { email, redirect },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- password passed via in-memory router state
+        state: { password } as any,
       });
     } catch {
       setError("An unexpected error occurred. Please try again.");
@@ -61,7 +60,7 @@ function SignupPage() {
   }
 
   return (
-    <main className="page-wrap auth-page">
+    <section className="page-wrap auth-page">
       <h1 className="auth-page__heading">Create Account</h1>
       <p className="auth-page__subheading">Join us for a curated shopping experience</p>
 
@@ -126,6 +125,6 @@ function SignupPage() {
           </Link>
         </div>
       </form>
-    </main>
+    </section>
   );
 }

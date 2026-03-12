@@ -4,17 +4,12 @@ import { StyleSheet, View, Pressable, Alert, useColorScheme } from "react-native
 import { BiometricType } from "@ecommerce/shared";
 import { Colors, Spacing } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
+import { getBiometricLabel } from "@/utils/biometricLabel";
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 
 interface BiometricPromptProps {
   onFallbackToPassword: () => void;
-}
-
-function getBiometricLabel(supportedTypes: number[]): string {
-  if (supportedTypes.includes(BiometricType.FACIAL_RECOGNITION)) return "Face ID";
-  if (supportedTypes.includes(BiometricType.FINGERPRINT)) return "Fingerprint";
-  return "Biometric";
 }
 
 function getBiometricIcon(supportedTypes: number[]): string {

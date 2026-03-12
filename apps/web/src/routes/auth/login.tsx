@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { signInWithEmail, mapAuthError } from "@ecommerce/shared";
+import { signInWithEmail, mapAuthError, sanitizeRedirect } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
 
 export const Route = createFileRoute("/auth/login")({
@@ -43,7 +43,7 @@ function LoginPage() {
         return;
       }
 
-      await navigate({ to: redirect });
+      await navigate({ to: sanitizeRedirect(redirect) });
     } catch {
       setError("An unexpected error occurred. Please try again.");
     } finally {
@@ -52,7 +52,7 @@ function LoginPage() {
   }
 
   return (
-    <main className="page-wrap auth-page">
+    <section className="page-wrap auth-page">
       <h1 className="auth-page__heading">Welcome Back</h1>
       <p className="auth-page__subheading">Sign in to your account</p>
 
@@ -100,6 +100,6 @@ function LoginPage() {
           </Link>
         </div>
       </form>
-    </main>
+    </section>
   );
 }

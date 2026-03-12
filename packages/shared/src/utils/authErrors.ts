@@ -9,5 +9,11 @@ const AUTH_ERROR_MAP: Record<string, string> = {
 
 /** Maps Supabase auth error messages to user-friendly strings. */
 export function mapAuthError(message: string): string {
-  return AUTH_ERROR_MAP[message] ?? message;
+  return AUTH_ERROR_MAP[message] ?? "An authentication error occurred. Please try again.";
+}
+
+/** Validates a redirect URL to prevent open redirect attacks. Only allows relative paths. */
+export function sanitizeRedirect(redirect: string): string {
+  if (redirect.startsWith("/") && !redirect.includes("://")) return redirect;
+  return "/";
 }

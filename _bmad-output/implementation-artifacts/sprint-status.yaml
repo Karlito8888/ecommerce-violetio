@@ -59,8 +59,8 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Product Discovery & Browsing
-  epic-3: backlog
-  3-1-violet-catalog-adapter-product-types: backlog
+  epic-3: in-progress
+  3-1-violet-catalog-adapter-product-types: done
   3-2-product-listing-page-with-category-browsing: backlog
   3-3-product-detail-page: backlog
   3-4-product-filtering-sorting: backlog

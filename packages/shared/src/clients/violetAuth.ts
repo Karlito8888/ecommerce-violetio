@@ -103,7 +103,9 @@ export async function violetRefreshToken(
  * Web: single long-lived instance per server process.
  * Edge Functions: per-invocation instance (module-scoped for warm reuse).
  */
-// SYNC: keep in sync with supabase/functions/_shared/violetAuth.ts
+// SYNC: This class is duplicated in supabase/functions/_shared/violetAuth.ts (Deno runtime).
+// Edge Functions cannot import from @ecommerce/shared. Any changes here MUST be mirrored there.
+// TODO(CI): Add a CI check that compares the core logic hash between both files.
 export class VioletTokenManager {
   private config: VioletAuthConfig;
   private tokenData: VioletTokenData | null = null;

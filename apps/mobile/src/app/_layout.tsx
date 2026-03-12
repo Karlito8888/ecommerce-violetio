@@ -19,7 +19,16 @@ if (extra) {
     SUPABASE_ANON_KEY: extra.supabaseAnonKey,
   });
 }
-initSupabaseMobile();
+
+// Guard against missing SUPABASE_ANON_KEY (e.g. .env.local not loaded).
+// Without this, the app crashes with a Red Box before even rendering.
+try {
+  initSupabaseMobile();
+} catch (e) {
+  const msg = e instanceof Error ? e.message : String(e);
+  // eslint-disable-next-line no-console
+  console.warn("[Auth] Supabase init failed:", msg);
+}
 
 /** Inner component that consumes AuthContext to conditionally show BiometricPrompt. */
 function AppContent() {
