@@ -1,0 +1,41 @@
+/* ─── Sort Select ───
+ * BEM block: sort-select
+ * Minimal native <select> dropdown for sorting products.
+ * Transparent background, subtle border — blends with toolbar layout.
+ */
+
+.sort-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.sort-select__label {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-steel);
+  white-space: nowrap;
+}
+
+.sort-select__dropdown {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.sort-select__dropdown:hover {
+  border-color: var(--color-midnight);
+}
+
+.sort-select__dropdown:focus-visible {
+  outline: 2px solid var(--color-midnight);
+  outline-offset: 2px;
+}

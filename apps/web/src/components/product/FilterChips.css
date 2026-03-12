@@ -1,0 +1,27 @@
+/* ─── Filter Chips ───
+ * BEM block: filter-chips
+ * Extends the shared `.chip-bar` base component (styles/components/chip-bar.css).
+ *
+ * ## CSS architecture
+ *
+ * Structural chip-bar styles (fade gradients, scrollbar hiding, chip anatomy,
+ * active state) live in the shared `.chip-bar` component to avoid duplicating
+ * ~95% identical CSS across CategoryChips and FilterChips.
+ *
+ * This file contains ONLY filter-chips-specific overrides:
+ * - `margin-bottom` delta (--space-4 vs CategoryChips' --space-6)
+ * - `fieldset` reset (remove default fieldset border/padding)
+ *
+ * The HTML uses both classes: `<fieldset class="chip-bar filter-chips">`.
+ *
+ * @see styles/components/chip-bar.css — shared structural styles
+ * @see CategoryChips.css — sister component (should migrate to chip-bar base too)
+ */
+
+/* Reset fieldset defaults — filter-chips uses <fieldset> for semantics */
+.filter-chips {
+  margin-bottom: var(--space-4);
+  border: none;
+  padding: 0;
+  min-inline-size: 0;
+}

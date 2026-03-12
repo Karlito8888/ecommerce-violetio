@@ -1,0 +1,99 @@
+/* ─── Chip Bar (Shared) ───
+ * BEM block: chip-bar
+ * Reusable structural styles for horizontal scrollable chip bars.
+ *
+ * ## Why this shared component exists
+ *
+ * CategoryChips and FilterChips share ~95% identical CSS: fade gradients
+ * at scroll edges, hidden scrollbars, pill-shaped items, and active state
+ * (midnight bg + ivory text). Rather than duplicate this across colocated
+ * CSS files (violating DRY and risking visual divergence), shared
+ * structural patterns live here.
+ *
+ * ## How to use
+ *
+ * Apply `.chip-bar` alongside the specific BEM block class:
+ *   <div class="chip-bar filter-chips">
+ * Then use the specific BEM block for overrides (margin, spacing deltas).
+ *
+ * ## Maintained by
+ *
+ * Story 3.4 code review — extracted from duplicated CategoryChips/FilterChips CSS.
+ *
+ * @see CategoryChips.css — should migrate to this base (future cleanup)
+ * @see FilterChips.css — uses this as base, adds only delta styles
+ */
+
+.chip-bar {
+  position: relative;
+}
+
+/* Fade gradients at scroll edges — visual cue for horizontal overflow */
+.chip-bar::before,
+.chip-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2rem;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.chip-bar::before {
+  left: 0;
+  background: linear-gradient(to right, var(--color-ivory), transparent);
+}
+
+.chip-bar::after {
+  right: 0;
+  background: linear-gradient(to left, var(--color-ivory), transparent);
+}
+
+.chip-bar__list {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: var(--space-2) var(--space-4);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.chip-bar__list::-webkit-scrollbar {
+  display: none;
+}
+
+.chip-bar__item {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--color-charcoal);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.chip-bar__item:hover {
+  border-color: var(--color-midnight);
+  color: var(--color-ink);
+}
+
+.chip-bar__item--active {
+  background: var(--color-midnight);
+  color: var(--color-ivory);
+  border-color: var(--color-midnight);
+}
+
+.chip-bar__item--active:hover {
+  background: var(--color-midnight);
+  color: var(--color-ivory);
+}

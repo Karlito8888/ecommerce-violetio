@@ -130,10 +130,55 @@ export class VioletAdapter implements SupplierAdapter {
       size: String(size),
     });
 
+    /**
+     * Build the OfferSearchRequest body for Violet's POST /catalog/offers/search.
+     *
+     * Field naming conventions (Violet API):
+     * - **Filter fields** use snake_case: `min_price`, `max_price`, `available`
+     * - **Sort field** `sort_by` expects a **camelCase** Offer property name
+     *   (e.g., `"minPrice"` for price sorting) — NOT snake_case
+     * - `sort_direction`: `"ASC"` or `"DESC"`
+     *
+     * Sort is only supported when `beta=false` (our default). If Violet ignores
+     * sort params, the product listing page applies a client-side fallback sort.
+     *
+     * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
+     */
     const body: Record<string, unknown> = {};
     if (params.query) body.query = params.query;
+    /**
+     * Category filtering — sends `category` to Violet's search endpoint.
+     *
+     * **KNOWN DIVERGENCE**: The Violet OpenAPI spec documents this field as
+     * `source_category_name`, but the sandbox API accepts `category` and
+     * returns correctly filtered results. This was established in Story 3.1
+     * and verified against the sandbox.
+     *
+     * If category filtering stops working in production, rename this field
+     * to `source_category_name` and re-test.
+     *
+     * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
+     * @todo Verify field name against production API (not just sandbox)
+     */
     if (params.category) body.category = params.category;
     if (params.merchantId) body.merchant_id = Number(params.merchantId);
+
+    /* Price range filters — values are integer cents (e.g., 5000 = $50.00) */
+    if (params.minPrice !== undefined) body.min_price = params.minPrice;
+    if (params.maxPrice !== undefined) body.max_price = params.maxPrice;
+
+    /* Availability filter — boolean, NOT the string enum "AVAILABLE" */
+    if (params.inStock === true) body.available = true;
+
+    /*
+     * Sorting — sort_by uses camelCase Offer property names.
+     * "price" in our UI maps to "minPrice" (lowest SKU price) in Violet.
+     * "relevance" (or omitted) = no sort params → Violet's default order.
+     */
+    if (params.sortBy === "price") {
+      body.sort_by = "minPrice";
+      body.sort_direction = params.sortDirection ?? "ASC";
+    }
 
     const result = await this.fetchWithRetry(
       `${this.apiBase}/catalog/offers/search?${queryParams}`,

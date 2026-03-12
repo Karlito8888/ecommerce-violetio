@@ -23,6 +23,7 @@
 @import "./components/app-banner.css";
 @import "./components/product-card.css";
 @import "./components/product-grid.css";
+@import "./components/chip-bar.css";
 @import "./components/category-chips.css";
 
 /* 5. Page-specific styles */

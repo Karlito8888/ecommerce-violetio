@@ -101,6 +101,11 @@ export const getProductsFn = createServerFn({ method: "GET" })
       category: data.category,
       page: data.page ?? 1,
       pageSize: data.pageSize ?? 12,
+      minPrice: data.minPrice,
+      maxPrice: data.maxPrice,
+      inStock: data.inStock,
+      sortBy: data.sortBy,
+      sortDirection: data.sortDirection,
     });
   });
 

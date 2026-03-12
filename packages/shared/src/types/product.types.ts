@@ -158,11 +158,43 @@ export interface Product {
   thumbnailUrl: string | null;
 }
 
-/** Query parameters for listing/filtering products. */
+/**
+ * Query parameters for listing/filtering products.
+ *
+ * Maps to Violet's `POST /catalog/offers/search` request body + query params.
+ *
+ * ## Filter fields (body params → snake_case in Violet)
+ * - `minPrice` / `maxPrice` — integer **cents** (e.g., 5000 = $50.00).
+ *   Sent as `min_price` / `max_price` in the Violet request body.
+ * - `inStock` — boolean; sent as `available: true` in the body.
+ *
+ * ## Sort fields (body params — only when `beta=false`)
+ * - `sortBy` — camelCase Offer property name for Violet's `sort_by`
+ *   (e.g., `"price"` maps to `sort_by: "minPrice"`).
+ * - `sortDirection` — `"ASC"` or `"DESC"`.
+ *
+ * **CRITICAL**: `sort_by` uses camelCase property names (`minPrice`, `name`),
+ * NOT snake_case. `min_price` is for *filtering*, `minPrice` is for *sorting*.
+ *
+ * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
+ */
 export interface ProductQuery {
   category?: string;
   page?: number;
   pageSize?: number;
   merchantId?: string;
   query?: string;
+  /** Minimum price filter in integer cents (e.g., 5000 = $50.00). */
+  minPrice?: number;
+  /** Maximum price filter in integer cents (e.g., 10000 = $100.00). */
+  maxPrice?: number;
+  /** When `true`, only return in-stock products. Sent as `available: true` to Violet. */
+  inStock?: boolean;
+  /**
+   * Sort field. `"price"` maps to Violet's `sort_by: "minPrice"`.
+   * `"relevance"` (or omitted) uses Violet's default ordering.
+   */
+  sortBy?: "relevance" | "price";
+  /** Sort direction. Only meaningful when `sortBy` is set. */
+  sortDirection?: "ASC" | "DESC";
 }

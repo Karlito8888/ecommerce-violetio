@@ -6,6 +6,52 @@ import { getProductsFn, getCategoriesFn } from "../../server/getProducts";
 import ProductGrid from "../../components/product/ProductGrid";
 import ProductGridSkeleton from "../../components/product/ProductGridSkeleton";
 import CategoryChips from "../../components/product/CategoryChips";
+import FilterChips from "../../components/product/FilterChips";
+import type { ActiveFilters } from "../../components/product/FilterChips";
+import SortSelect from "../../components/product/SortSelect";
+
+/**
+ * Typed search params for the /products route.
+ *
+ * All fields are optional — `undefined` means "no filter/sort applied".
+ * TanStack Router uses this type for `navigate({ search })`, so it must
+ * explicitly include `undefined` in union types to allow clearing params.
+ */
+export interface ProductSearchParams {
+  category: string | undefined;
+  minPrice: number | undefined;
+  maxPrice: number | undefined;
+  inStock: boolean | undefined;
+  sortBy: "relevance" | "price" | undefined;
+  sortDirection: "ASC" | "DESC" | undefined;
+}
+
+/** Allowed values for sortBy — validated at runtime, not just TypeScript cast. */
+const VALID_SORT_BY = new Set<string>(["relevance", "price"]);
+
+/** Allowed values for sortDirection. */
+const VALID_SORT_DIRECTION = new Set<string>(["ASC", "DESC"]);
+
+/**
+ * Safely parse a URL search param to a finite number, or return `undefined`.
+ *
+ * ## Why not just `Number(value)`?
+ *
+ * `Number("abc")` returns `NaN`, which is truthy-ish in conditionals but
+ * serializes to `null` in JSON (`JSON.stringify(NaN)` → `"null"`). If passed
+ * to Violet's API as `min_price: null`, behavior is unpredictable.
+ *
+ * This helper returns `undefined` for any non-finite value (NaN, Infinity,
+ * empty string, non-numeric strings), ensuring only valid integers reach
+ * the API layer.
+ *
+ * @see https://docs.violet.io/api-reference/catalog/offers/search-offers — prices are integer cents
+ */
+function parseNumericParam(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
 
 /**
  * Adapts the TanStack Start server function to the shared `ProductsFetchFn` signature.
@@ -62,9 +108,40 @@ const fetchProducts: ProductsFetchFn = (params) => getProductsFn({ data: params 
  * @see https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries
  */
 export const Route = createFileRoute("/products/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    category: (search.category as string) || undefined,
-  }),
+  /**
+   * Parse and **validate** filter/sort state from URL query params.
+   *
+   * All filter state lives in the URL, making it shareable and bookmarkable.
+   * Example: `?category=Home&minPrice=0&maxPrice=5000&inStock=true&sortBy=price&sortDirection=ASC`
+   *
+   * ## Validation strategy (defense-in-depth)
+   *
+   * - **Price params**: parsed via `parseNumericParam()` which rejects NaN/Infinity.
+   *   `?minPrice=abc` → `undefined` (not NaN). Prevents sending `null` to Violet.
+   * - **sortBy**: validated against `VALID_SORT_BY` allowlist. `?sortBy=hacked` → `undefined`.
+   * - **sortDirection**: validated against `VALID_SORT_DIRECTION`. Invalid → `undefined`.
+   * - **inStock**: only `"true"` or boolean `true` → `true`. Anything else → `undefined`.
+   *
+   * Price values are integer cents (matching Violet API convention).
+   *
+   * @see parseNumericParam — safe number parsing that rejects NaN
+   * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
+   */
+  validateSearch: (search: Record<string, unknown>): ProductSearchParams => {
+    const sortByRaw = String(search.sortBy ?? "");
+    const sortDirRaw = String(search.sortDirection ?? "");
+
+    return {
+      category: (search.category as string) || undefined,
+      minPrice: parseNumericParam(search.minPrice),
+      maxPrice: parseNumericParam(search.maxPrice),
+      inStock: search.inStock === "true" || search.inStock === true ? true : undefined,
+      sortBy: VALID_SORT_BY.has(sortByRaw) ? (sortByRaw as "relevance" | "price") : undefined,
+      sortDirection: VALID_SORT_DIRECTION.has(sortDirRaw)
+        ? (sortDirRaw as "ASC" | "DESC")
+        : undefined,
+    };
+  },
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps }) => {
     /**
@@ -79,7 +156,18 @@ export const Route = createFileRoute("/products/")({
      */
     const [, categories] = await Promise.all([
       queryClient.ensureInfiniteQueryData(
-        productsInfiniteQueryOptions({ category: deps.category, pageSize: 12 }, fetchProducts),
+        productsInfiniteQueryOptions(
+          {
+            category: deps.category,
+            pageSize: 12,
+            minPrice: deps.minPrice,
+            maxPrice: deps.maxPrice,
+            inStock: deps.inStock,
+            sortBy: deps.sortBy,
+            sortDirection: deps.sortDirection,
+          },
+          fetchProducts,
+        ),
       ),
       getCategoriesFn(),
     ]);
@@ -95,11 +183,18 @@ export const Route = createFileRoute("/products/")({
   component: ProductListingPage,
 });
 
-/** Pending state shown during route transitions (category changes). */
+/** Pending state shown during route transitions (filter/sort/category changes). */
 function ProductListingPending() {
   return (
     <div className="page-wrap products-page">
       <h1 className="display-title products-page__title">Products</h1>
+      {/* Skeleton placeholders for category chips, filter chips, and toolbar */}
+      <div className="products-page__skeleton-chips" aria-hidden="true">
+        <div className="skeleton skeleton--text" style={{ width: "60%", height: "2rem" }} />
+      </div>
+      <div className="products-page__skeleton-chips" aria-hidden="true">
+        <div className="skeleton skeleton--text" style={{ width: "80%", height: "2rem" }} />
+      </div>
       <ProductGridSkeleton />
     </div>
   );
@@ -114,19 +209,22 @@ function ProductListingPending() {
  */
 function ProductListingPage() {
   const { categories } = Route.useLoaderData();
-  const { category } = Route.useSearch();
+  const { category, minPrice, maxPrice, inStock, sortBy, sortDirection } = Route.useSearch();
   const navigate = useNavigate({ from: "/products/" });
 
   /**
    * Consume the infinite query that was prefetched in the loader.
    *
-   * - `data.pages`: array of page results (each is `ApiResponse<PaginatedResult<Product>>`)
-   * - `fetchNextPage()`: triggers fetch of next page, appends to `data.pages`
-   * - `hasNextPage`: derived from `getNextPageParam` — false when last page reached
-   * - `isFetchingNextPage`: true while "Load more" fetch is in progress
+   * All filter/sort params are included in the query options, which means:
+   * - Query key changes when any filter changes → automatic cache invalidation
+   * - Infinite query restarts from page 1 on filter change (new key = new query)
+   * - Back/forward navigation restores filter state from URL
    */
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useSuspenseInfiniteQuery(
-    productsInfiniteQueryOptions({ category, pageSize: 12 }, fetchProducts),
+    productsInfiniteQueryOptions(
+      { category, pageSize: 12, minPrice, maxPrice, inStock, sortBy, sortDirection },
+      fetchProducts,
+    ),
   );
 
   /**
@@ -136,16 +234,70 @@ function ProductListingPage() {
   const allProducts = data.pages.flatMap((page) => page.data?.data ?? []);
   const total = data.pages[0]?.data?.total ?? 0;
 
+  /**
+   * Category change resets all filters — navigates to a clean URL with only category.
+   * This is intentional: switching categories should show unfiltered results.
+   * All search params must be explicitly set (TanStack Router's typed search requires full object).
+   */
   const handleCategoryChange = (newCategory: string | undefined) => {
-    /**
-     * Category change navigates to a new URL, which triggers the route loader.
-     * The infinite query for the new category starts fresh (page 1 only)
-     * because the query key includes the category param.
-     */
     navigate({
-      search: { category: newCategory },
+      search: {
+        category: newCategory,
+        minPrice: undefined,
+        maxPrice: undefined,
+        inStock: undefined,
+        sortBy: undefined,
+        sortDirection: undefined,
+      },
     });
   };
+
+  /**
+   * Filter chip change preserves category and sort, replaces price/availability filters.
+   */
+  const handleFilterChange = (filters: ActiveFilters) => {
+    navigate({
+      search: {
+        category,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+        inStock: filters.inStock,
+        sortBy,
+        sortDirection,
+      },
+    });
+  };
+
+  /**
+   * Sort change preserves all other params (category, filters).
+   *
+   * ## Contract with SortSelect
+   *
+   * `SortSelect` calls `onSortChange(undefined, undefined)` for "Relevance"
+   * (not `"relevance"` string) and `onSortChange("price", "ASC"|"DESC")` for
+   * price sorting. We normalize: any non-"price" value clears sort from URL,
+   * letting Violet return results in its default relevance order.
+   *
+   * @see SortSelect — sends `undefined` for relevance, `"price"` for price sort
+   */
+  const handleSortChange = (
+    newSortBy: "relevance" | "price" | undefined,
+    newSortDirection?: "ASC" | "DESC",
+  ) => {
+    const isPriceSort = newSortBy === "price";
+    navigate({
+      search: {
+        category,
+        minPrice,
+        maxPrice,
+        inStock,
+        sortBy: isPriceSort ? "price" : undefined,
+        sortDirection: isPriceSort ? newSortDirection : undefined,
+      },
+    });
+  };
+
+  const hasActiveFilters = minPrice !== undefined || maxPrice !== undefined || inStock === true;
 
   if (allProducts.length === 0 && total === 0) {
     return (
@@ -156,7 +308,22 @@ function ProductListingPage() {
           activeCategory={category}
           onCategoryChange={handleCategoryChange}
         />
-        <p className="products-page__empty">No products found in this category.</p>
+        <FilterChips
+          activeFilters={{ minPrice, maxPrice, inStock }}
+          onFilterChange={handleFilterChange}
+        />
+        <div className="products-page__empty">
+          <p>No products match your filters.</p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="products-page__clear-filters"
+              onClick={() => handleFilterChange({})}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -171,12 +338,20 @@ function ProductListingPage() {
         onCategoryChange={handleCategoryChange}
       />
 
+      <FilterChips
+        activeFilters={{ minPrice, maxPrice, inStock }}
+        onFilterChange={handleFilterChange}
+      />
+
       {/**
-       * Live region: screen readers announce count changes when "Load more"
-       * adds products. Shows cumulative count (not per-page).
+       * Toolbar row: product count (left) + sort dropdown (right).
+       * Count uses aria-live="polite" so screen readers announce filter changes.
        */}
-      <div className="products-page__count" aria-live="polite">
-        Showing {allProducts.length} of {total} products
+      <div className="products-page__toolbar">
+        <div className="products-page__count" aria-live="polite">
+          Showing {allProducts.length} of {total} products
+        </div>
+        <SortSelect sortBy={sortBy} sortDirection={sortDirection} onSortChange={handleSortChange} />
       </div>
 
       <ProductGrid products={allProducts} />
