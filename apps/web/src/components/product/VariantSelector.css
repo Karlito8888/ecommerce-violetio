@@ -1,0 +1,62 @@
+/* ─── VariantSelector ─── SKU option picker
+ *
+ * Button-style selectors for product variants (Size, Color, etc.).
+ * Uses radiogroup pattern for accessibility.
+ * BEM block: .variant-selector
+ */
+
+.variant-selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.variant-selector__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.variant-selector__label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-charcoal);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.variant-selector__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.variant-selector__option {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-stone);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.variant-selector__option:hover:not([aria-disabled="true"]) {
+  border-color: var(--color-gold);
+}
+
+.variant-selector__option--active {
+  border-color: var(--color-gold);
+  background: var(--selection-bg);
+  font-weight: 500;
+}
+
+.variant-selector__option--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--color-silver);
+}

@@ -12,11 +12,28 @@
  * - Handles `thumbnailUrl: null` (placeholder image)
  * - Accessibility: article with aria-label "[Name], [Price]"
  */
-import { afterEach, describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { Product } from "@ecommerce/shared";
 import ProductCard from "../ProductCard";
+
+/**
+ * Mock TanStack Router's <Link> component.
+ *
+ * ProductCard uses <Link to="/products/$productId" params={{ productId }}> which
+ * requires a RouterProvider context. In unit tests we render components in isolation
+ * (no router), so we replace <Link> with a plain <a> that renders the resolved href.
+ */
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, params, children, ...rest }: Record<string, unknown>) => {
+    const href =
+      typeof to === "string" && params && typeof params === "object"
+        ? to.replace(/\$(\w+)/g, (_, key: string) => (params as Record<string, string>)[key] ?? "")
+        : to;
+    return React.createElement("a", { href, ...rest }, children as React.ReactNode);
+  },
+}));
 
 function createMockProduct(overrides: Partial<Product> = {}): Product {
   return {

@@ -54,6 +54,7 @@ export default function AppTabs() {
       {/* Hide non-tab routes from the tab bar */}
       <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen name="auth" options={{ href: null }} />
+      <Tabs.Screen name="products" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -3,7 +3,7 @@ import type { ProductQuery, Product, PaginatedResult, ApiResponse } from "../typ
 import { queryKeys } from "../utils/constants.js";
 
 /**
- * Function signature for fetching products.
+ * Function signature for fetching products (list/search).
  *
  * Platform-specific implementations:
  * - **Web**: passes a TanStack Start Server Function (runs server-side, RPC from client)
@@ -15,6 +15,21 @@ import { queryKeys } from "../utils/constants.js";
 export type ProductsFetchFn = (
   params: ProductQuery,
 ) => Promise<ApiResponse<PaginatedResult<Product>>>;
+
+/**
+ * Function signature for fetching a single product by ID.
+ *
+ * Same platform-agnostic pattern as {@link ProductsFetchFn}:
+ * - **Web**: wraps `getProductFn` TanStack Start Server Function
+ * - **Mobile**: will wrap a Supabase Edge Function call (future story)
+ *
+ * Returns `ApiResponse<Product>` — the discriminated union used across
+ * the codebase, where `data` is the product and `error` signals a failure
+ * (e.g., 404 "offer not found" from Violet API).
+ *
+ * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
+ */
+export type ProductDetailFetchFn = (id: string) => Promise<ApiResponse<Product>>;
 
 /**
  * Creates TanStack Query options for a **single page** of product results.
@@ -123,6 +138,50 @@ export function productsInfiniteQueryOptions(
       return lastPage.data.page + 1;
     },
     /** 5 minutes — catalog data doesn't change frequently */
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Creates TanStack Query options for a **single product** detail page.
+ *
+ * ## SSR Integration (Product Detail Page)
+ *
+ * Used with `queryClient.ensureQueryData(...)` in the route loader to prefetch
+ * product data server-side. The dehydrated cache is sent to the client via
+ * `setupRouterSsrQueryIntegration`, so the component renders with data immediately.
+ *
+ * ## Query Key Strategy
+ *
+ * Uses `queryKeys.products.detail(productId)` → `['products', 'detail', productId]`.
+ * This is separate from list queries, so fetching a product detail never collides
+ * with or invalidates the product listing cache.
+ *
+ * ## Violet API Mapping
+ *
+ * Maps to `GET /catalog/offers/{offer_id}` which returns the full Offer object
+ * with variants[], skus[], albums[], and images[] — all data needed for the PDP.
+ *
+ * @param productId - Violet Offer ID (string)
+ * @param fetchFn - Platform-specific fetch function (Server Function on web, Edge Function on mobile)
+ *
+ * @example
+ * ```tsx
+ * // In route loader (SSR prefetch)
+ * await queryClient.ensureQueryData(productDetailQueryOptions(productId, fetchProduct))
+ *
+ * // In component (reads from cache, no re-fetch)
+ * const { data } = useSuspenseQuery(productDetailQueryOptions(productId, fetchProduct))
+ * ```
+ *
+ * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
+ * @see https://tanstack.com/query/latest/docs/framework/react/guides/advanced-ssr
+ */
+export function productDetailQueryOptions(productId: string, fetchFn: ProductDetailFetchFn) {
+  return queryOptions({
+    queryKey: queryKeys.products.detail(productId),
+    queryFn: () => fetchFn(productId),
+    /** 5 minutes — consistent with catalog data staleTime across all product queries */
     staleTime: 5 * 60 * 1000,
   });
 }

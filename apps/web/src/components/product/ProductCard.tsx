@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import type { Product } from "@ecommerce/shared";
 import { formatPrice } from "@ecommerce/shared";
 
@@ -28,8 +29,8 @@ import "./ProductCard.css";
  * - `<article>` with `aria-label="[Product Name], [Price]"`
  * - Image `alt="[Name] by [Merchant]"`
  *
- * Links to `/products/{id}` — route created in Story 3.3 (Product Detail Page).
- * Uses a plain `<a>` tag until that route exists to avoid type errors.
+ * Links to `/products/$productId` via TanStack Router `<Link>` for client-side
+ * navigation with intent-based preloading (configured in router.tsx).
  *
  * @see https://docs.violet.io/prism/catalog/media-transformations — image CDN URLs
  */
@@ -43,8 +44,11 @@ export default function ProductCard({ product }: { product: Product }) {
       className={`product-card${isOutOfStock ? " product-card--out-of-stock" : ""}`}
       aria-label={`${product.name}, ${priceDisplay}`}
     >
-      {/* TODO(Story 3.3): Replace <a> with <Link to="/products/$productId"> when PDP route exists */}
-      <a href={`/products/${product.id}`} className="product-card__link">
+      <Link
+        to="/products/$productId"
+        params={{ productId: product.id }}
+        className="product-card__link"
+      >
         <div className="product-card__image-wrap">
           {product.thumbnailUrl ? (
             <img
@@ -70,7 +74,7 @@ export default function ProductCard({ product }: { product: Product }) {
           <p className="product-card__merchant">{product.seller}</p>
           <p className="product-card__price">{priceDisplay}</p>
         </div>
-      </a>
+      </Link>
     </article>
   );
 }
