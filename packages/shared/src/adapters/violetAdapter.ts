@@ -495,11 +495,42 @@ export class VioletAdapter implements SupplierAdapter {
 
   // ─── Not implemented (future stories) ─────────────────────────────
 
+  /**
+   * Search products via AI semantic search.
+   *
+   * ## M2 code review fix — Why this returns empty results (intentional no-op)
+   *
+   * The actual AI search pipeline is:
+   *   useSearch() hook → supabase.functions.invoke("search-products") → Edge Function
+   *
+   * This adapter method exists to satisfy the SupplierAdapter interface, but the
+   * VioletAdapter cannot perform semantic search because:
+   *
+   * 1. **Violet's API has no semantic search** — their /catalog/offers/search is
+   *    keyword-based. Our AI search uses pgvector embeddings in Supabase, which
+   *    is orthogonal to Violet's catalog API.
+   *
+   * 2. **The adapter doesn't have a SupabaseClient** — it only has Violet API
+   *    credentials. Calling the Edge Function from here would require injecting
+   *    a SupabaseClient, breaking the adapter's single-responsibility.
+   *
+   * 3. **Architecture decision** — Search is a cross-cutting concern (pgvector +
+   *    OpenAI + Violet enrichment) that doesn't fit the single-supplier adapter
+   *    pattern. The useSearch() hook orchestrates this directly.
+   *
+   * If server-side search is needed (e.g., SSR), use `searchQueryOptions()` from
+   * `packages/shared/src/hooks/useSearch.ts` with a server SupabaseClient instead.
+   *
+   * @returns Empty results — use useSearch() hook for actual search functionality
+   */
   async searchProducts(
-    _query: string,
+    query: string,
     _filters?: SearchFilters,
   ): Promise<ApiResponse<SearchResult>> {
-    throw new Error("Not implemented — Story 3.5");
+    return {
+      data: { query, products: [], total: 0, explanations: {} },
+      error: null,
+    };
   }
 
   async createCart(_userId: string): Promise<ApiResponse<Cart>> {

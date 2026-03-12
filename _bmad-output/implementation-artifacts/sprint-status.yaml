@@ -64,7 +64,7 @@ development_status:
   3-2-product-listing-page-with-category-browsing: done
   3-3-product-detail-page: done
   3-4-product-filtering-sorting: done
-  3-5-ai-conversational-search-edge-function-embeddings: backlog
+  3-5-ai-conversational-search-edge-function-embeddings: done
   3-6-ai-conversational-search-ui: backlog
   3-7-product-catalog-sync-via-webhooks: backlog
   3-8-seo-foundation: backlog
