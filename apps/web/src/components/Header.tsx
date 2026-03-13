@@ -22,9 +22,8 @@ import SearchBar from "./search/SearchBar";
  */
 const CATEGORY_LINKS: { to: string; label: string; search?: Record<string, string> }[] = [
   { to: "/products", label: "New" },
-  { to: "/products", label: "Home & Living", search: { category: "Home" } },
-  { to: "/products", label: "Gifts", search: { category: "Gifts" } },
   { to: "/products", label: "Fashion", search: { category: "Clothing" } },
+  { to: "/products", label: "Home & Living", search: { category: "Home" } },
   { to: "/about", label: "About" },
 ];
 

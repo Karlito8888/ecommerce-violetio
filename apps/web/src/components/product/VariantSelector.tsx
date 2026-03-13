@@ -57,7 +57,9 @@ export default function VariantSelector({
         sku.inStock &&
         sku.qtyAvailable > 0 &&
         Object.entries(hypothetical).every(([vName, vValue]) =>
-          sku.variantValues.some((sv) => sv.variant === vName && sv.value === vValue),
+          sku.variantValues.some(
+            (sv) => sv.variant.toLowerCase() === vName.toLowerCase() && sv.value === vValue,
+          ),
         ),
     );
   }
@@ -71,7 +73,9 @@ export default function VariantSelector({
           role="radiogroup"
           aria-label={`Select ${variant.name}`}
         >
-          <span className="variant-selector__label">{variant.name}</span>
+          <span className="variant-selector__label">
+            {variant.name.charAt(0).toUpperCase() + variant.name.slice(1)}
+          </span>
           <div className="variant-selector__options">
             {variant.values.map((value) => {
               const isActive = selectedValues[variant.name] === value;

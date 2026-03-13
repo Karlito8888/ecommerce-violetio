@@ -345,7 +345,8 @@ function ProductListingPage() {
     });
   };
 
-  const hasActiveFilters = minPrice !== undefined || maxPrice !== undefined || inStock === true;
+  const hasActiveFilters =
+    category !== undefined || minPrice !== undefined || maxPrice !== undefined || inStock === true;
 
   if (allProducts.length === 0 && total === 0) {
     return (

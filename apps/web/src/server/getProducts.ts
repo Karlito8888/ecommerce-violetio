@@ -40,11 +40,8 @@ export interface CategoryItem {
  */
 export const FALLBACK_CATEGORIES: CategoryItem[] = [
   { slug: "all", label: "All", filter: undefined },
-  { slug: "home", label: "Home & Living", filter: "Home" },
   { slug: "fashion", label: "Fashion", filter: "Clothing" },
-  { slug: "gifts", label: "Gifts", filter: "Gifts" },
-  { slug: "beauty", label: "Beauty", filter: "Beauty" },
-  { slug: "accessories", label: "Accessories", filter: "Accessories" },
+  { slug: "home", label: "Home & Living", filter: "Home" },
 ];
 
 /* ─── Server Functions ────────────────────────────────────────────────── */

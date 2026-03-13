@@ -355,7 +355,11 @@ export class VioletAdapter implements SupplierAdapter {
    */
   private transformOffer(raw: VioletOfferResponse): Product {
     const albums = (raw.albums ?? []).map((a) => this.transformAlbum(a));
-    const images = this.extractImages(albums);
+    const skuAlbums = (raw.skus ?? []).flatMap((s) =>
+      (s.albums ?? []).map((a) => this.transformAlbum(a)),
+    );
+    const allAlbums = [...albums, ...skuAlbums];
+    const images = this.extractImages(allAlbums);
 
     return {
       id: String(raw.id),
@@ -386,7 +390,7 @@ export class VioletAdapter implements SupplierAdapter {
       skus: (raw.skus ?? []).map((s) => this.transformSku(s)),
       albums,
       images,
-      thumbnailUrl: this.extractThumbnail(albums),
+      thumbnailUrl: this.extractThumbnail(allAlbums),
     };
   }
 
@@ -453,15 +457,17 @@ export class VioletAdapter implements SupplierAdapter {
   }
 
   private extractImages(albums: ProductAlbum[]): ProductImage[] {
+    const seen = new Set<string>();
     return albums
       .flatMap((album) => album.media)
       .sort((a, b) => a.displayOrder - b.displayOrder)
-      .map((m) => ({
-        id: m.id,
-        url: m.url,
-        displayOrder: m.displayOrder,
-        primary: m.primary,
-      }));
+      .reduce<ProductImage[]>((acc, m) => {
+        if (!seen.has(m.url)) {
+          seen.add(m.url);
+          acc.push({ id: m.id, url: m.url, displayOrder: m.displayOrder, primary: m.primary });
+        }
+        return acc;
+      }, []);
   }
 
   /**

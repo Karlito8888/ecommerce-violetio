@@ -70,7 +70,9 @@ export default function ProductDetail({ product }: { product: Product }) {
     return (
       product.skus.find((sku) =>
         entries.every(([vName, vValue]) =>
-          sku.variantValues.some((sv) => sv.variant === vName && sv.value === vValue),
+          sku.variantValues.some(
+            (sv) => sv.variant.toLowerCase() === vName.toLowerCase() && sv.value === vValue,
+          ),
         ),
       ) ?? null
     );
