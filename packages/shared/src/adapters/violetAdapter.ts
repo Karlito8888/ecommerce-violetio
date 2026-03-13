@@ -196,6 +196,17 @@ export class VioletAdapter implements SupplierAdapter {
     }
 
     const violet = parsed.data;
+
+    /**
+     * Demo Mode fallback — Violet's POST /catalog/offers/search returns 0 results
+     * for DEMO merchants because they are not indexed in the search engine.
+     * When search returns empty, fetch offers via GET /catalog/offers/merchants/{id}
+     * for each connected merchant and paginate client-side.
+     */
+    if (violet.content.length === 0 && violet.total_elements === 0) {
+      return this.getProductsFromMerchants(params);
+    }
+
     return {
       data: {
         data: violet.content.map((offer) => this.transformOffer(offer)),
@@ -203,6 +214,106 @@ export class VioletAdapter implements SupplierAdapter {
         page: violet.number + 1, // Violet 0-based → internal 1-based
         pageSize: violet.size,
         hasNext: !violet.last,
+      },
+      error: null,
+    };
+  }
+
+  /**
+   * Fallback product fetching for Violet Demo Mode.
+   *
+   * Demo merchants' products are not in Violet's search index, so we:
+   * 1. Fetch the list of connected merchants via GET /merchants
+   * 2. Fetch all offers from each merchant via GET /catalog/offers/merchants/{id}
+   * 3. Combine, filter, sort, and paginate the results client-side
+   *
+   * This is only called when the search endpoint returns 0 results.
+   * In production (with real merchants), the search endpoint works and this is never hit.
+   */
+  private async getProductsFromMerchants(
+    params: ProductQuery,
+  ): Promise<ApiResponse<PaginatedResult<Product>>> {
+    const page = params.page ?? 1;
+    const size = params.pageSize ?? 20;
+
+    // Step 1: Get connected merchants
+    const merchantsResult = await this.fetchWithRetry(`${this.apiBase}/merchants?page=1&size=50`, {
+      method: "GET",
+    });
+    if (merchantsResult.error) return { data: null, error: merchantsResult.error };
+
+    const merchantsData = merchantsResult.data as {
+      content: Array<{ id: number; connection_status?: string }>;
+    };
+    const merchantIds = merchantsData.content.map((m) => m.id);
+
+    if (merchantIds.length === 0) {
+      return { data: { data: [], total: 0, page, pageSize: size, hasNext: false }, error: null };
+    }
+
+    // Step 2: Fetch offers from all merchants in parallel
+    const offerPromises = merchantIds.map(async (merchantId) => {
+      const res = await this.fetchWithRetry(
+        `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100`,
+        { method: "GET" },
+      );
+      if (res.error || !res.data) return [];
+      const data = res.data as { content?: unknown[] };
+      return data.content ?? [];
+    });
+
+    const allOfferArrays = await Promise.all(offerPromises);
+    const allRawOffers = allOfferArrays.flat();
+
+    // Step 3: Filter raw offers before transformation (saves processing)
+    let filteredRaw = allRawOffers;
+    if (params.category) {
+      const cat = params.category.toLowerCase();
+      filteredRaw = filteredRaw.filter((raw) => {
+        const r = raw as Record<string, unknown>;
+        const sourceCat = (r.source_category_name as string) ?? "";
+        return sourceCat.toLowerCase().includes(cat);
+      });
+    }
+
+    // Step 4: Validate and transform each offer
+    let products: Product[] = [];
+    for (const raw of filteredRaw) {
+      const parsed = violetOfferSchema.safeParse(raw);
+      if (parsed.success) {
+        products.push(this.transformOffer(parsed.data));
+      }
+    }
+
+    // Step 5: Apply remaining filters on transformed data
+    if (params.inStock) {
+      products = products.filter((p) => p.available);
+    }
+    if (params.minPrice !== undefined) {
+      products = products.filter((p) => p.minPrice >= params.minPrice!);
+    }
+    if (params.maxPrice !== undefined) {
+      products = products.filter((p) => p.minPrice <= params.maxPrice!);
+    }
+
+    // Step 6: Sort
+    if (params.sortBy === "price") {
+      const dir = params.sortDirection === "DESC" ? -1 : 1;
+      products.sort((a, b) => dir * (a.minPrice - b.minPrice));
+    }
+
+    // Step 7: Paginate
+    const total = products.length;
+    const startIndex = (page - 1) * size;
+    const pageData = products.slice(startIndex, startIndex + size);
+
+    return {
+      data: {
+        data: pageData,
+        total,
+        page,
+        pageSize: size,
+        hasNext: startIndex + size < total,
       },
       error: null,
     };

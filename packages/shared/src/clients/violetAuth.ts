@@ -21,15 +21,47 @@ function appHeaders(config: VioletAuthConfig): Record<string, string> {
 }
 
 /**
+ * Escape non-ASCII and special characters to Unicode escape sequences.
+ *
+ * Violet's login API has a server-side bug: certain ASCII characters like `!`
+ * in the JSON body cause a 500 Internal Server Error. The same characters work
+ * when encoded as `\u0021`. Standard `JSON.stringify` produces valid JSON with
+ * literal `!`, but Violet's parser chokes on it.
+ *
+ * This function post-processes the JSON string to replace any non-alphanumeric
+ * characters in string values with their `\uXXXX` equivalents, which Violet
+ * handles correctly.
+ */
+function escapePasswordForViolet(password: string): string {
+  return password
+    .split("")
+    .map((ch) => {
+      const code = ch.charCodeAt(0);
+      // Keep letters, digits, and common safe chars; escape everything else
+      if (
+        (code >= 0x30 && code <= 0x39) ||
+        (code >= 0x41 && code <= 0x5a) ||
+        (code >= 0x61 && code <= 0x7a)
+      ) {
+        return ch;
+      }
+      return `\\u${code.toString(16).padStart(4, "0")}`;
+    })
+    .join("");
+}
+
+/**
  * Authenticate with the Violet API via POST /login.
  * Returns token data on success or an ApiResponse error.
  */
 export async function violetLogin(config: VioletAuthConfig): Promise<ApiResponse<VioletTokenData>> {
   try {
+    const escapedPassword = escapePasswordForViolet(config.password);
+    const requestBody = `{"username":"${config.username}","password":"${escapedPassword}"}`;
     const res = await fetch(`${config.apiBase}/login`, {
       method: "POST",
       headers: appHeaders(config),
-      body: JSON.stringify({ username: config.username, password: config.password }),
+      body: requestBody,
     });
 
     if (!res.ok) {
@@ -37,11 +69,11 @@ export async function violetLogin(config: VioletAuthConfig): Promise<ApiResponse
       return { data: null, error: { code, message: `Violet login failed (${res.status})` } };
     }
 
-    const body = (await res.json()) as VioletLoginResponse;
+    const responseBody = (await res.json()) as VioletLoginResponse;
     return {
       data: {
-        token: body.token,
-        refreshToken: body.refresh_token,
+        token: responseBody.token,
+        refreshToken: responseBody.refresh_token,
         loginTimestamp: Date.now(),
       },
       error: null,

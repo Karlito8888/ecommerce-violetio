@@ -78,11 +78,34 @@ export const violetVariantValueSchema = z
     message: "Either 'variant' or 'name' must be present in variant_values",
   });
 
-/** Schema for variant definitions on an offer (option dimensions like "Size", "Color"). */
-export const violetVariantSchema = z.object({
-  name: z.string(),
-  values: z.array(z.string()).optional().default([]),
-});
+/**
+ * Schema for variant definitions on an offer (option dimensions like "Size", "Color").
+ *
+ * ## Two response formats from Violet
+ *
+ * - **Search endpoint** (`POST /catalog/offers/search`): returns `values` as `string[]`
+ *   e.g., `{ name: "Size", values: ["S", "M", "L"] }`
+ *
+ * - **Merchant endpoint** (`GET /catalog/offers/merchants/{id}`): returns `values` as
+ *   objects with `{ id, name, external_id, sku_ids, display_order }`
+ *   e.g., `{ name: "Size", values: [{ name: "S", ... }, { name: "M", ... }] }`
+ *
+ * We accept both via a union and normalize objects to their `name` field.
+ */
+const violetVariantValueItemSchema = z.union([
+  z.string(),
+  z.object({ name: z.string() }).passthrough(),
+]);
+
+export const violetVariantSchema = z
+  .object({
+    name: z.string(),
+    values: z.array(violetVariantValueItemSchema).optional().default([]),
+  })
+  .transform((v) => ({
+    name: v.name,
+    values: v.values.map((val) => (typeof val === "string" ? val : val.name)),
+  }));
 
 /** Schema for SKU dimensions (weight/shipping info). */
 export const violetSkuDimensionsSchema = z.object({

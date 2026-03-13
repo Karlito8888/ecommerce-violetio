@@ -47,12 +47,36 @@ function appHeaders(config: VioletAuthConfig): Record<string, string> {
   };
 }
 
+/**
+ * Escape non-ASCII and special characters to Unicode escape sequences.
+ * Workaround for Violet API bug: `!` and other special chars in passwords
+ * cause a 500 when sent as literal characters, but work as `\uXXXX`.
+ */
+function escapePasswordForViolet(password: string): string {
+  return password
+    .split("")
+    .map((ch) => {
+      const code = ch.charCodeAt(0);
+      if (
+        (code >= 0x30 && code <= 0x39) ||
+        (code >= 0x41 && code <= 0x5a) ||
+        (code >= 0x61 && code <= 0x7a)
+      ) {
+        return ch;
+      }
+      return `\\u${code.toString(16).padStart(4, "0")}`;
+    })
+    .join("");
+}
+
 async function violetLogin(config: VioletAuthConfig): Promise<ApiResponse<VioletTokenData>> {
   try {
+    const escapedPassword = escapePasswordForViolet(config.password);
+    const body = `{"username":"${config.username}","password":"${escapedPassword}"}`;
     const res = await fetch(`${config.apiBase}/login`, {
       method: "POST",
       headers: appHeaders(config),
-      body: JSON.stringify({ username: config.username, password: config.password }),
+      body,
     });
 
     if (!res.ok) {

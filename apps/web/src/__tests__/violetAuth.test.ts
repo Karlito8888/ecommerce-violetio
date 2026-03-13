@@ -63,10 +63,7 @@ describe("violetLogin", () => {
           "X-Violet-App-Secret": "test-secret",
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify({
-          username: "owner@example.com",
-          password: "test-password",
-        }),
+        body: '{"username":"owner@example.com","password":"test\\u002dpassword"}',
       }),
     );
   });
