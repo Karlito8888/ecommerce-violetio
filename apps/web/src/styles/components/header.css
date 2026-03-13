@@ -47,7 +47,7 @@
   }
 }
 
-/* ── Search bar ── */
+/* ── Search bar (desktop — uses SearchBar component) ── */
 
 .site-header__search {
   display: none;
@@ -69,26 +69,32 @@
   }
 }
 
-.site-header__search-input {
-  width: 100%;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-full);
-  background: var(--surface-elevated);
+/* ── Search icon (mobile only — navigates to /search) ── */
+
+.site-header__search-mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-charcoal);
+  text-decoration: none;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.site-header__search-mobile:hover {
   color: var(--color-ink);
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  transition: border-color var(--transition-fast);
+  background-color: var(--surface-muted);
 }
 
-.site-header__search-input::placeholder {
-  color: var(--color-silver);
-}
-
-.site-header__search-input:focus {
-  outline: 2px solid var(--color-gold);
-  outline-offset: 2px;
-  border-color: var(--color-gold);
+@media (min-width: 640px) {
+  .site-header__search-mobile {
+    display: none;
+  }
 }
 
 /* ── Actions (account, cart, theme) ── */

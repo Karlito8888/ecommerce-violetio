@@ -25,9 +25,12 @@
 @import "./components/product-grid.css";
 @import "./components/chip-bar.css";
 @import "./components/category-chips.css";
+@import "./components/search-bar.css";
+@import "./components/search-results.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";
 @import "./pages/about.css";
 @import "./pages/auth.css";
 @import "./pages/products.css";
+@import "./pages/search.css";

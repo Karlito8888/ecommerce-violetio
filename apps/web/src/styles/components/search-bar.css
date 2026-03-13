@@ -1,0 +1,172 @@
+/* ─── Search Bar ─── */
+
+.search-bar {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Form ── */
+
+.search-bar__form {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Input ── */
+
+.search-bar__input {
+  width: 100%;
+  padding: var(--space-2) var(--space-10) var(--space-2) var(--space-10);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--surface-elevated);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.search-bar__input::placeholder {
+  color: var(--color-silver);
+}
+
+.search-bar__input:focus {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+  border-color: var(--color-gold);
+}
+
+/* ── Icon (search magnifying glass) ── */
+
+.search-bar__icon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-silver);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Clear button ── */
+
+.search-bar__clear {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-silver);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.search-bar__clear:hover {
+  color: var(--color-ink);
+  background-color: var(--surface-muted);
+}
+
+/* ── Compact variant (header) ── */
+
+.search-bar--compact {
+  max-width: 400px;
+}
+
+/*
+ * M5 code-review fix — removed duplicate padding override.
+ * The compact input inherits the base .search-bar__input padding (--space-2 / --space-10)
+ * which is already identical, so only font rules are needed here.
+ */
+.search-bar--compact .search-bar__input {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+}
+
+/* ── Hero variant (homepage) ── */
+
+.search-bar--hero {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.search-bar--hero .search-bar__input {
+  padding: var(--space-6) var(--space-12) var(--space-6) var(--space-12);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  border-radius: var(--radius-2xl);
+  background: var(--surface-frosted);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-md);
+}
+
+.search-bar--hero .search-bar__input:focus {
+  box-shadow: var(--shadow-lg);
+}
+
+.search-bar--hero .search-bar__icon {
+  left: var(--space-4);
+}
+
+.search-bar--hero .search-bar__clear {
+  right: var(--space-4);
+  width: 36px;
+  height: 36px;
+}
+
+@media (min-width: 768px) {
+  .search-bar--hero .search-bar__input {
+    font-size: 1.25rem;
+  }
+}
+
+/* ── Placeholder animation (hero only) ── */
+
+.search-bar--hero .search-bar__input::placeholder {
+  font-family: var(--font-display);
+}
+
+/* ── Suggestions (hero only) ── */
+
+.search-bar__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+}
+
+.search-bar__suggestions-label {
+  font-weight: 500;
+}
+
+.search-bar__suggestion {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-sienna);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: var(--font-body);
+  transition: color var(--transition-fast);
+}
+
+.search-bar__suggestion:hover {
+  color: var(--color-gold);
+}

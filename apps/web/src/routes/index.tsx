@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import SearchBar from "../components/search/SearchBar";
 
 export const Route = createFileRoute("/")({ component: App });
 
@@ -8,24 +9,37 @@ function App() {
       <section className="island-shell hero rise-in">
         <div className="hero__glow hero__glow--top" />
         <div className="hero__glow hero__glow--bottom" />
-        <p className="island-kicker hero__kicker">TanStack Start Base Template</p>
-        <h1 className="display-title hero__title">Start simple, ship quickly.</h1>
+        <p className="island-kicker hero__kicker">Curated Shopping, Reimagined</p>
+        <h1 className="display-title hero__title">Find exactly what you&apos;re looking for.</h1>
         <p className="hero__desc">
-          This base starter intentionally keeps things light: two routes, clean structure, and the
-          essentials you need to build from scratch.
+          Discover unique products from curated merchants — powered by AI search.
         </p>
+        <SearchBar variant="hero" />
+        {/*
+         * M2 code-review fix — use <Link> for SPA navigation.
+         *
+         * Raw <a href> causes a full page reload, discarding the React tree,
+         * TanStack Query cache, and scroll position. <Link> from
+         * @tanstack/react-router performs client-side navigation instead.
+         */}
         <div className="hero__actions">
-          <a href="/about" className="hero__btn hero__btn--primary">
-            About This Starter
-          </a>
-          <a
-            href="https://tanstack.com/router"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hero__btn hero__btn--secondary"
+          <Link
+            to="/products"
+            search={{
+              category: undefined,
+              minPrice: undefined,
+              maxPrice: undefined,
+              inStock: undefined,
+              sortBy: undefined,
+              sortDirection: undefined,
+            }}
+            className="hero__btn hero__btn--primary"
           >
-            Router Guide
-          </a>
+            Browse Products
+          </Link>
+          <Link to="/about" className="hero__btn hero__btn--secondary">
+            About Us
+          </Link>
         </div>
       </section>
 

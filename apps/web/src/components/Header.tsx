@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import ThemeToggle from "./ThemeToggle";
+import SearchBar from "./search/SearchBar";
 
 /**
  * Header category navigation links.
@@ -38,16 +39,36 @@ export default function Header() {
         </Link>
 
         <div className="site-header__search">
-          <label htmlFor="header-search" className="sr-only">
-            Search
-          </label>
-          <input
-            id="header-search"
-            type="search"
-            className="site-header__search-input"
-            placeholder="What are you looking for?"
-          />
+          <SearchBar variant="compact" />
         </div>
+
+        <Link
+          to="/search"
+          search={{
+            q: undefined,
+            category: undefined,
+            minPrice: undefined,
+            maxPrice: undefined,
+            inStock: undefined,
+          }}
+          className="site-header__search-mobile"
+          aria-label="Search"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="24"
+            height="24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+        </Link>
 
         <nav className="site-header__actions" aria-label="Account actions">
           <Link
