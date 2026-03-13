@@ -25,26 +25,37 @@ const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getIte
  * The context value is provided by `getRouter()` in `router.tsx` via
  * `createTanStackRouter({ context: { queryClient } })`.
  */
+/**
+ * Root route — HTML shell with global defaults.
+ *
+ * ## SEO Meta Strategy (Story 3.8)
+ *
+ * TanStack Start **merges** child `head()` meta with root meta (child `title`
+ * overrides, other tags accumulate). To avoid duplicate OG/Twitter tags:
+ *
+ * - Root sets **site-wide invariants only**: charset, viewport, og:site_name,
+ *   og:locale. These never change per-page.
+ * - Root does NOT set og:type or twitter:card — those come from each child
+ *   route via `buildPageMeta()`, which generates the full tag set per page.
+ * - Default title and description act as fallbacks for routes that don't
+ *   override them (e.g., 404 or future routes without explicit head()).
+ */
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: "Maison Émile — Curated Shopping" },
       {
-        charSet: "utf-8",
+        name: "description",
+        content:
+          "Discover unique products from curated merchants — powered by AI search. Maison Émile brings you a handpicked shopping experience.",
       },
-      {
-        name: "viewport",
-        content: "width=device-width, initial-scale=1",
-      },
-      {
-        title: "Maison Émile — Curated Shopping",
-      },
+      // Site-wide OG invariants (child routes add og:title, og:type, etc. via buildPageMeta)
+      { property: "og:site_name", content: "Maison Émile" },
+      { property: "og:locale", content: "en_US" },
     ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
+    links: [{ rel: "stylesheet", href: appCss }],
   }),
   shellComponent: RootDocument,
 });

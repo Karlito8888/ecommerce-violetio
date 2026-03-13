@@ -1,9 +1,28 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { signUpWithEmail, mapAuthError } from "@ecommerce/shared";
+import { signUpWithEmail, mapAuthError, buildPageMeta } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
 
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
+/**
+ * /auth/signup route — Account creation page.
+ *
+ * ## SEO (Story 3.8)
+ *
+ * Uses `buildPageMeta({ noindex: true })` — consistent with all auth routes.
+ * @see /auth/login for rationale on using buildPageMeta on noindex pages.
+ */
 export const Route = createFileRoute("/auth/signup")({
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Create Account | Maison Émile",
+      description: "Create a Maison Émile account for a curated shopping experience.",
+      url: "/auth/signup",
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
   validateSearch: (search: Record<string, unknown>) => ({
     redirect: (search.redirect as string) || "/",
   }),

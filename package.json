@@ -16,7 +16,9 @@
     "lint:fix": "eslint apps/ packages/ --fix",
     "format": "prettier --check \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\"",
     "format:fix": "prettier --write \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\"",
-    "fix-all": "bun run format:fix && bun run lint:fix && bun run typecheck"
+    "test": "bun --cwd=apps/web run test && bun --cwd=packages/shared run test",
+    "fix-all": "bun run format:fix && bun run lint:fix && bun run typecheck",
+    "generate:sitemap": "bun run scripts/generate-sitemap.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

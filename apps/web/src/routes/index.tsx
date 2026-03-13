@@ -1,7 +1,39 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { buildPageMeta, buildWebSiteJsonLd } from "@ecommerce/shared";
 import SearchBar from "../components/search/SearchBar";
 
-export const Route = createFileRoute("/")({ component: App });
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
+/**
+ * Homepage route — entry point for the platform.
+ *
+ * ## SEO (Story 3.8)
+ *
+ * - **WebSite JSON-LD** with SearchAction: tells Google this site has a search
+ *   feature, enabling the sitelinks searchbox in SERPs.
+ * - **Canonical**: Points to the bare SITE_URL (no trailing slash) — matches
+ *   the sitemap `<loc>` and robots.txt domain.
+ * - **Meta**: Full OG + Twitter Card set via `buildPageMeta()`.
+ */
+export const Route = createFileRoute("/")({
+  component: App,
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Maison Émile — Curated Shopping",
+      description:
+        "Discover unique products from curated merchants — powered by AI search. Maison Émile brings you a handpicked shopping experience.",
+      url: "/",
+      siteUrl: SITE_URL,
+    }),
+    links: [{ rel: "canonical", href: SITE_URL }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify(buildWebSiteJsonLd(SITE_URL)),
+      },
+    ],
+  }),
+});
 
 function App() {
   return (

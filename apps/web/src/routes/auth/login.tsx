@@ -1,9 +1,30 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { signInWithEmail, mapAuthError, sanitizeRedirect } from "@ecommerce/shared";
+import { signInWithEmail, mapAuthError, sanitizeRedirect, buildPageMeta } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
 
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
+/**
+ * /auth/login route — Sign in page.
+ *
+ * ## SEO (Story 3.8)
+ *
+ * Auth pages use `buildPageMeta({ noindex: true })` for consistency with
+ * the centralized SEO utility. Even though noindex pages aren't ranked,
+ * `buildPageMeta` ensures OG tags and description are present — useful when
+ * users share login links on social media (the preview card still renders).
+ */
 export const Route = createFileRoute("/auth/login")({
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Sign In | Maison Émile",
+      description: "Sign in to your Maison Émile account.",
+      url: "/auth/login",
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
   validateSearch: (search: Record<string, unknown>) => ({
     redirect: (search.redirect as string) || "/",
   }),

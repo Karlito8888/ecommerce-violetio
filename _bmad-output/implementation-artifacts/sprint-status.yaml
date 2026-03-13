@@ -66,8 +66,8 @@ development_status:
   3-4-product-filtering-sorting: done
   3-5-ai-conversational-search-edge-function-embeddings: done
   3-6-ai-conversational-search-ui: done
-  3-7-product-catalog-sync-via-webhooks: review
-  3-8-seo-foundation: backlog
+  3-7-product-catalog-sync-via-webhooks: done
+  3-8-seo-foundation: done
   epic-3-retrospective: optional
 
   # Epic 4: Shopping Cart & Unified Checkout

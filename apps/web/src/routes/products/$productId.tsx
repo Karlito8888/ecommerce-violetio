@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { productDetailQueryOptions, stripHtml } from "@ecommerce/shared";
-import type { ProductDetailFetchFn, Product } from "@ecommerce/shared";
+import {
+  productDetailQueryOptions,
+  stripHtml,
+  buildPageMeta,
+  buildProductJsonLd,
+} from "@ecommerce/shared";
+import type { ProductDetailFetchFn } from "@ecommerce/shared";
 import { getProductFn } from "../../server/getProduct";
 import ProductDetail from "../../components/product/ProductDetail";
 import ProductDetailSkeleton from "../../components/product/ProductDetailSkeleton";
@@ -28,75 +33,6 @@ const fetchProduct: ProductDetailFetchFn = (id) => getProductFn({ data: id });
  * canonical domain (e.g., "https://www.maisonemile.com").
  */
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
-
-/**
- * Build JSON-LD structured data for a Product (schema.org).
- *
- * ## SEO Best Practices (Violet.io + Schema.org)
- *
- * - SSR is critical: Google crawlers need full HTML without JS execution
- * - JSON-LD Product schema increases rich result eligibility in Google Search
- * - `availability` uses schema.org enum values: InStock, OutOfStock
- * - `brand` maps to Violet's `vendor` field (manufacturer/brand name)
- * - `offers.seller` references the merchant (the store selling the product)
- * - Price is in decimal format (not cents) per schema.org spec
- *
- * ## AggregateOffer vs Offer (Google Structured Data Guidelines)
- *
- * When a product has multiple SKUs with different prices (`minPrice !== maxPrice`),
- * we use `AggregateOffer` with `lowPrice`/`highPrice` instead of a single `Offer`.
- * This accurately represents the price range and improves rich result eligibility.
- *
- * When all SKUs share the same price (or there's only one SKU), a simple `Offer`
- * with `price` is used — this is what Google expects for single-price products.
- *
- * @see https://schema.org/Product
- * @see https://schema.org/AggregateOffer
- * @see https://developers.google.com/search/docs/appearance/structured-data/product
- */
-function buildProductJsonLd(product: Product) {
-  const hasPriceRange = product.minPrice !== product.maxPrice;
-
-  const offers = hasPriceRange
-    ? {
-        "@type": "AggregateOffer",
-        lowPrice: (product.minPrice / 100).toFixed(2),
-        highPrice: (product.maxPrice / 100).toFixed(2),
-        priceCurrency: product.currency,
-        availability: product.available
-          ? "https://schema.org/InStock"
-          : "https://schema.org/OutOfStock",
-        seller: {
-          "@type": "Organization",
-          name: product.seller,
-        },
-      }
-    : {
-        "@type": "Offer",
-        price: (product.minPrice / 100).toFixed(2),
-        priceCurrency: product.currency,
-        availability: product.available
-          ? "https://schema.org/InStock"
-          : "https://schema.org/OutOfStock",
-        seller: {
-          "@type": "Organization",
-          name: product.seller,
-        },
-      };
-
-  return {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: product.name,
-    description: stripHtml(product.htmlDescription ?? product.description).slice(0, 5000),
-    image: product.thumbnailUrl ?? undefined,
-    brand: {
-      "@type": "Brand",
-      name: product.vendor,
-    },
-    offers,
-  };
-}
 
 /**
  * /products/$productId route — Server-side rendered Product Detail Page.
@@ -143,21 +79,22 @@ export const Route = createFileRoute("/products/$productId")({
     }
 
     const description = stripHtml(product.htmlDescription ?? product.description).slice(0, 160);
+    const productUrl = `${SITE_URL}/products/${product.id}`;
 
     return {
-      meta: [
-        { title: `${product.name} — ${product.seller} | Maison Émile` },
-        { name: "description", content: description },
-        { property: "og:title", content: product.name },
-        { property: "og:description", content: description },
-        { property: "og:image", content: product.thumbnailUrl ?? "" },
-        { property: "og:type", content: "product" },
-        { property: "og:url", content: `${SITE_URL}/products/${product.id}` },
-      ],
+      meta: buildPageMeta({
+        title: `${product.name} — ${product.seller} | Maison Émile`,
+        description,
+        url: productUrl,
+        siteUrl: SITE_URL,
+        image: product.thumbnailUrl ?? undefined,
+        type: "product",
+      }),
+      links: [{ rel: "canonical", href: productUrl }],
       scripts: [
         {
           type: "application/ld+json",
-          children: JSON.stringify(buildProductJsonLd(product)),
+          children: JSON.stringify(buildProductJsonLd(product, SITE_URL)),
         },
       ],
     };

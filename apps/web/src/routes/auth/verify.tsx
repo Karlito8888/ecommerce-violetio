@@ -5,10 +5,30 @@ import {
   setAccountPassword,
   mapAuthError,
   sanitizeRedirect,
+  buildPageMeta,
 } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
 
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
+/**
+ * /auth/verify route — Email OTP verification page.
+ *
+ * ## SEO (Story 3.8)
+ *
+ * Uses `buildPageMeta({ noindex: true })` — consistent with all auth routes.
+ * @see /auth/login for rationale on using buildPageMeta on noindex pages.
+ */
 export const Route = createFileRoute("/auth/verify")({
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Verify Email | Maison Émile",
+      description: "Verify your email address to complete Maison Émile account creation.",
+      url: "/auth/verify",
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
   validateSearch: (search: Record<string, unknown>) => ({
     email: (search.email as string) || "",
     redirect: (search.redirect as string) || "/",

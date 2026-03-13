@@ -1,6 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
-import { productsInfiniteQueryOptions } from "@ecommerce/shared";
+import {
+  productsInfiniteQueryOptions,
+  buildPageMeta,
+  buildItemListJsonLd,
+} from "@ecommerce/shared";
 import type { ProductsFetchFn } from "@ecommerce/shared";
 import { getProductsFn, getCategoriesFn } from "../../server/getProducts";
 import ProductGrid from "../../components/product/ProductGrid";
@@ -68,6 +72,8 @@ function parseNumericParam(value: unknown): number | undefined {
  * know about TanStack Start's calling convention.
  */
 const fetchProducts: ProductsFetchFn = (params) => getProductsFn({ data: params });
+
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
 /**
  * /products route — Server-side rendered product listing with "Load more" pagination.
@@ -154,7 +160,14 @@ export const Route = createFileRoute("/products/")({
      * Categories are loaded separately via their own server function because
      * the VioletAdapter doesn't yet expose a `getCategories()` method.
      */
-    const [, categories] = await Promise.all([
+    /**
+     * Prefetch products (page 1) and categories in parallel.
+     *
+     * We capture the infinite query result here (not just the side-effect)
+     * so that `head()` can access the first page of products for ItemList
+     * JSON-LD structured data (Story 3.8 — SEO foundation).
+     */
+    const [productsResult, categories] = await Promise.all([
       queryClient.ensureInfiniteQueryData(
         productsInfiniteQueryOptions(
           {
@@ -172,7 +185,10 @@ export const Route = createFileRoute("/products/")({
       getCategoriesFn(),
     ]);
 
-    return { categories };
+    /** First page of products for head() JSON-LD (only need { id } per item). */
+    const products = productsResult?.pages?.[0]?.data?.data ?? [];
+
+    return { categories, products };
   },
   /**
    * Shown during client-side navigation while the loader is fetching.
@@ -181,6 +197,38 @@ export const Route = createFileRoute("/products/")({
    */
   pendingComponent: ProductListingPending,
   component: ProductListingPage,
+  /**
+   * SEO head — product listing page (Story 3.8).
+   *
+   * Includes ItemList JSON-LD structured data (schema.org/ItemList) built from
+   * the first page of products returned by the loader. This helps search engines
+   * understand the listing as an ordered collection of products.
+   *
+   * Note: `loaderData.products` is the first page only (12 items). This is
+   * intentional — JSON-LD should reflect the server-rendered content, not the
+   * full paginated dataset (which requires JS "Load more" interaction).
+   *
+   * Canonical URL strips filter/sort params — `/products` is the single
+   * canonical URL for the listing regardless of applied filters.
+   */
+  head: ({ loaderData }) => ({
+    meta: buildPageMeta({
+      title: "Products | Maison Émile",
+      description: "Browse curated products from handpicked merchants at Maison Émile.",
+      url: "/products",
+      siteUrl: SITE_URL,
+    }),
+    links: [{ rel: "canonical", href: `${SITE_URL}/products` }],
+    scripts:
+      loaderData?.products && loaderData.products.length > 0
+        ? [
+            {
+              type: "application/ld+json",
+              children: JSON.stringify(buildItemListJsonLd(loaderData.products, SITE_URL)),
+            },
+          ]
+        : [],
+  }),
 });
 
 /** Pending state shown during route transitions (filter/sort/category changes). */

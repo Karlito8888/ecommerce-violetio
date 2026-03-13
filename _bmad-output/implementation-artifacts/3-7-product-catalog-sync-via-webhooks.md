@@ -1,6 +1,6 @@
 # Story 3.7: Product Catalog Sync via Webhooks
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -58,7 +58,7 @@ so that product data stays current without manual intervention.
   - [x] 5.1 Create `supabase/functions/handle-webhook/index.ts`
   - [x] 5.2 Follow existing Edge Function pattern (Deno.serve, _shared imports, `{ data, error }`)
   - [x] 5.3 Full request flow implemented (CORS, POST-only, raw body, headers, HMAC, idempotency, insert, parse, process)
-  - [x] 5.4 Returns 200 quickly — DB insert + 200 before processing
+  - [x] 5.4 Processes inline then returns 200 (H1: Deno has no waitUntil — idempotency mitigates timeout risk)
   - [x] 5.5 Error handling: all errors logged to `webhook_events.error_message`, only HMAC failure returns non-2xx
   - [x] 5.6 Minimal CORS headers kept for consistency
 
@@ -91,7 +91,7 @@ so that product data stays current without manual intervention.
   - [x] 9.5 OFFER_ADDED/UPDATED processor calls `generate-embeddings` (unit logic verified)
   - [x] 9.6 Invalid HMAC → 401 (Edge Function logic, tested via schema validation)
   - [x] 9.7 Malformed payload → logged as failed, returns 200 (Edge Function logic)
-  - [x] 9.8 No regressions: 276 tests pass (150 web + 126 shared), up from 212. (M2 fix: count updated after code review fixes)
+  - [x] 9.8 No regressions: 288 tests pass (150 web + 138 shared), up from 212. 76 new tests total.
 
 - [x] Task 10: Quality checks (AC: all)
   - [x] 10.1 `bun run fix-all` passes (Prettier + ESLint + TypeScript)
@@ -408,17 +408,20 @@ Claude Opus 4.6
 
 ### Completion Notes List
 
-- All 10 tasks completed. 259 tests pass (150 web + 109 shared), 36 new tests added, 0 regressions.
+- All 10 tasks completed. 288 tests pass (150 web + 138 shared), 76 new tests added, 0 regressions.
 - Used Web Crypto API `crypto.subtle.verify()` for constant-time HMAC comparison (Deno-native, no npm deps).
-- Webhook schemas duplicated in both `packages/shared/` and `supabase/functions/_shared/` (Deno/Node boundary).
-- Edge Function returns 200 to Violet before processing; errors logged to `webhook_events.error_message`.
+- Webhook schemas duplicated in both `packages/shared/` and `supabase/functions/_shared/` (Deno/Node boundary). Both copies annotated with ⚠️ SYNC WARNING JSDoc.
+- Edge Function processes inline then returns 200 (Deno has no `waitUntil()`). Idempotency check mitigates timeout risk. See H1 known limitation in `handle-webhook/index.ts` JSDoc.
+- Two-phase header validation: unknown event types (e.g., ORDER_* before Story 5.2) return 200 gracefully instead of 400, preventing Violet from disabling the webhook endpoint.
+- `processOfferAdded` restores `available = true` after embedding generation, ensuring re-listed products become searchable again.
 - Manual testing steps (10.3–10.6) deferred — require running Supabase instance with env vars.
 - Official Supabase and Zod docs consulted via context7 for best practices.
-- All files documented with JSDoc explaining architectural decisions.
+- All files documented with JSDoc explaining architectural decisions and code review fixes.
 
 ### Change Log
 
 - 2026-03-13: Story 3.7 implementation complete — webhook infrastructure, HMAC auth, processors, types, schemas, tests.
+- 2026-03-13: Code review — 9 issues found (2H, 4M, 3L). All fixed: two-phase header validation, availability restore on re-list, category mapping fix, schema sync docs, processor tests, consolidated helpers. 288 tests pass.
 
 ### File List
 

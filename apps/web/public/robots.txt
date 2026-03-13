@@ -1,3 +1,20 @@
 # https://www.robotstxt.org/robotstxt.html
+#
+# SEO Foundation (Story 3.8) — Controls crawler access to the site.
+#
+# Rules:
+# - Allow all public pages (products, about, search, homepage)
+# - Block auth routes (login, signup, verify — no indexing value)
+# - Block checkout/cart routes (transactional, user-specific)
+# - Sitemap points to static file (dynamic generation via scripts/generate-sitemap.ts)
+#
+# NOTE: /api/ is NOT blocked — future API routes (e.g., dynamic sitemap)
+# must remain crawlable. Only block routes with no SEO value.
+
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /auth/
+Disallow: /checkout/
+Disallow: /cart/
+
+Sitemap: https://www.maisonemile.com/sitemap.xml

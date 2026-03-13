@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { searchQueryOptions, useSearch } from "@ecommerce/shared";
+import { searchQueryOptions, useSearch, buildPageMeta } from "@ecommerce/shared";
 import type { SearchFilters } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
 import SearchBar from "../../components/search/SearchBar";
@@ -33,6 +33,25 @@ function parseNumericParam(value: unknown): number | undefined {
   return Number.isFinite(num) ? num : undefined;
 }
 
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
+/**
+ * /search route — AI-powered product search.
+ *
+ * ## SEO (Story 3.8)
+ *
+ * - **noindex**: Search results pages are noindexed (`robots: noindex, follow`).
+ *   Search URLs with query params (`/search?q=shoes`) would create near-infinite
+ *   duplicate content if indexed. The `follow` directive still lets crawlers
+ *   discover product links within search results.
+ * - **Canonical**: Points to `/search` (no query params) — all search result
+ *   variations share one canonical URL.
+ * - **No JSON-LD**: Search results don't map to a schema.org type.
+ *
+ * Note: `head()` cannot access `search` params in TanStack Router v1.166.2,
+ * so the title is static ("Search | Maison Émile") rather than dynamic
+ * ("Results for 'shoes' | Maison Émile"). Story 7.3 may revisit this.
+ */
 export const Route = createFileRoute("/search/")({
   validateSearch: (search: Record<string, unknown>): SearchPageParams => ({
     q: typeof search.q === "string" && search.q.length > 0 ? search.q : undefined,
@@ -40,6 +59,16 @@ export const Route = createFileRoute("/search/")({
     minPrice: parseNumericParam(search.minPrice),
     maxPrice: parseNumericParam(search.maxPrice),
     inStock: search.inStock === "true" || search.inStock === true ? true : undefined,
+  }),
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Search | Maison Émile",
+      description: "Search for curated products at Maison Émile using AI-powered search.",
+      url: "/search",
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+    links: [{ rel: "canonical", href: `${SITE_URL}/search` }],
   }),
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps }) => {
