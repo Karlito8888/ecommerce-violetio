@@ -92,6 +92,10 @@
 /* ── Dark Theme ──
  * Neutrals inverted (ivory ↔ midnight for bg/text).
  * Gold/amber accents preserved — gold on midnight is 7.2:1 (AAA).
+ *
+ * JS (init script + ThemeToggle) always resolves the active theme and sets
+ * data-theme="dark" or data-theme="light" on <html>, even in "auto" mode.
+ * This means a single CSS selector is sufficient — no @media duplication needed.
  */
 [data-theme="dark"] {
   --color-ivory: #2c2c2c;
@@ -122,37 +126,4 @@
   --glint-inset: rgba(255, 255, 255, 0.06);
   --kicker-color: rgba(201, 169, 110, 0.9);
   --selection-bg: rgba(201, 169, 110, 0.32);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-ivory: #2c2c2c;
-    --color-linen: #333333;
-    --color-sand: #3d3d3d;
-    --color-stone: #4a4a4a;
-    --color-taupe: #d5cec6;
-    --color-sienna: #b8a28f;
-    --color-ink: #fafaf8;
-    --color-charcoal: #e8e4df;
-    --color-steel: #d5cec6;
-    --color-silver: #b8a28f;
-    --color-midnight: #fafaf8;
-    --surface-frosted: rgba(44, 44, 44, 0.84);
-    --surface-elevated: rgba(44, 44, 44, 0.9);
-    --surface-glass: rgba(44, 44, 44, 0.74);
-    --surface-chip: rgba(44, 44, 44, 0.8);
-    --surface-muted: rgba(44, 44, 44, 0.5);
-    --border-subtle: rgba(74, 74, 74, 0.5);
-    --border-accent: rgba(201, 169, 110, 0.28);
-    --color-success: #7aad5a;
-    --color-warning: #d4943a;
-    --color-error: #d46a6a;
-    --color-info: #6a9aba;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.25);
-    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
-    --glint-inset: rgba(255, 255, 255, 0.06);
-    --kicker-color: rgba(201, 169, 110, 0.9);
-    --selection-bg: rgba(201, 169, 110, 0.32);
-  }
 }

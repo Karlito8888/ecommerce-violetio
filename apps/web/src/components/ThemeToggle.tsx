@@ -21,13 +21,7 @@ function applyThemeMode(mode: ThemeMode) {
 
   document.documentElement.classList.remove("light", "dark");
   document.documentElement.classList.add(resolved);
-
-  if (mode === "auto") {
-    document.documentElement.removeAttribute("data-theme");
-  } else {
-    document.documentElement.setAttribute("data-theme", mode);
-  }
-
+  document.documentElement.setAttribute("data-theme", resolved);
   document.documentElement.style.colorScheme = resolved;
 }
 
