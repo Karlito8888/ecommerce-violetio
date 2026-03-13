@@ -1,36 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createSupplierAdapter } from "@ecommerce/shared";
 import type { ApiResponse, Product } from "@ecommerce/shared";
-
-/* ─── Adapter Factory ─────────────────────────────────────────────────── */
-
-/**
- * Loads Violet config from env vars and creates a SupplierAdapter.
- *
- * Identical to the factory in `getProducts.ts` — extracted as a local helper
- * because TanStack Start server functions are module-scoped and each server
- * module needs its own adapter instance.
- *
- * @returns A configured SupplierAdapter, or throws if env vars are missing
- */
-function getAdapter() {
-  const appId = process.env.VIOLET_APP_ID;
-  const appSecret = process.env.VIOLET_APP_SECRET;
-  const username = process.env.VIOLET_USERNAME;
-  const password = process.env.VIOLET_PASSWORD;
-  const apiBase = process.env.VIOLET_API_BASE ?? "https://sandbox-api.violet.io/v1";
-
-  if (!appId || !appSecret || !username || !password) {
-    throw new Error(
-      "Missing required Violet env vars: VIOLET_APP_ID, VIOLET_APP_SECRET, VIOLET_USERNAME, VIOLET_PASSWORD",
-    );
-  }
-
-  return createSupplierAdapter({
-    supplier: "violet",
-    violet: { appId, appSecret, username, password, apiBase },
-  });
-}
+import { getAdapter } from "./violetAdapter";
 
 /* ─── Server Function ─────────────────────────────────────────────────── */
 

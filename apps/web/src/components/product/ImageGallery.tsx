@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { ProductImage } from "@ecommerce/shared";
 
 import "./ImageGallery.css";
@@ -36,7 +36,18 @@ export default function ImageGallery({
   images: ProductImage[];
   productName: string;
 }) {
-  const sorted = [...images].sort((a, b) => a.displayOrder - b.displayOrder);
+  /**
+   * Epic 3 Review — Fix S3: Memoize sorted images.
+   *
+   * Without useMemo, `[...images].sort()` creates a new array on every render.
+   * While `images` from TanStack Query cache is referentially stable between
+   * renders, the sort still allocates unnecessarily. Memoizing ensures the
+   * sorted array is only recomputed when the `images` prop actually changes.
+   */
+  const sorted = useMemo(
+    () => [...images].sort((a, b) => a.displayOrder - b.displayOrder),
+    [images],
+  );
   const primaryIndex = sorted.findIndex((img) => img.primary);
   const [activeIndex, setActiveIndex] = useState(primaryIndex >= 0 ? primaryIndex : 0);
   const total = sorted.length;

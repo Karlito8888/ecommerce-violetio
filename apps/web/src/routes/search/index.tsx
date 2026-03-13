@@ -80,20 +80,75 @@ export const Route = createFileRoute("/search/")({
     if (maxPrice !== undefined) filters.maxPrice = maxPrice;
     if (inStock !== undefined) filters.inStock = inStock;
 
-    const [, categories] = await Promise.all([
-      q && q.length >= 2
-        ? queryClient.ensureQueryData(
-            searchQueryOptions({ query: q, filters }, getSupabaseBrowserClient()),
-          )
-        : Promise.resolve(null),
-      getCategoriesFn(),
-    ]);
+    /**
+     * Epic 3 Review — Fix C2: SSR search prefetch wrapped in try/catch.
+     *
+     * `getSupabaseBrowserClient()` is designed for the browser — calling it in
+     * the SSR loader creates a client without proper auth context. If the search
+     * Edge Function is down or misconfigured, the unhandled rejection crashes
+     * the entire page and shows the root error boundary instead of the graceful
+     * error state in SearchResults.
+     *
+     * By catching the error here, we let the page render with empty search data.
+     * The client-side `useSearch()` hook retries the query with a proper browser
+     * client, and SearchResults handles loading/error/empty states gracefully.
+     *
+     * A future improvement would be to create a server-side Supabase client for
+     * SSR prefetching, but for search results (which are highly dynamic and
+     * user-specific), client-side fetching is acceptable.
+     */
+    let categories;
+    try {
+      const [, cats] = await Promise.all([
+        q && q.length >= 2
+          ? queryClient.ensureQueryData(
+              searchQueryOptions({ query: q, filters }, getSupabaseBrowserClient()),
+            )
+          : Promise.resolve(null),
+        getCategoriesFn(),
+      ]);
+      categories = cats;
+    } catch {
+      /** Search prefetch failed — page will render, useSearch() retries client-side */
+      categories = (await getCategoriesFn().catch(() => null)) ?? [];
+    }
 
     return { categories };
   },
   pendingComponent: SearchPagePending,
   component: SearchPage,
+  errorComponent: SearchPageError,
 });
+
+/**
+ * Epic 3 Review — Fix C2: Dedicated error boundary for the search route.
+ *
+ * Catches any unhandled error that escapes the loader try/catch (e.g., if
+ * getCategoriesFn itself throws). Shows a user-friendly message with a
+ * "Browse products" CTA instead of the generic root error boundary.
+ *
+ * The SearchResults component handles API-level errors (Edge Function failures).
+ * This error component handles route-level errors (loader crashes, hydration errors).
+ */
+function SearchPageError() {
+  return (
+    <div className="page-wrap search-page">
+      <div className="search-page__header">
+        <h1 className="display-title search-page__title">Search</h1>
+      </div>
+      <div className="search-page__search-bar">
+        <SearchBar variant="compact" />
+      </div>
+      <SearchResults
+        products={[]}
+        explanations={{}}
+        query=""
+        isLoading={false}
+        error={new Error("Search is temporarily unavailable")}
+      />
+    </div>
+  );
+}
 
 function SearchPagePending() {
   return (

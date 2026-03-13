@@ -21,6 +21,11 @@ import "./VariantSelector.css";
  * - `sku.inStock === true` AND `sku.qtyAvailable > 0`
  * Unavailable combinations are visually grayed out with `aria-disabled="true"`.
  *
+ * Epic 3 Review — Fix I6: Uses native `disabled` attribute instead of
+ * `aria-disabled` + onClick guard. Native `disabled` prevents keyboard
+ * activation (Enter/Space), removes the element from tab order, and
+ * communicates disabled state to screen readers — all in one attribute.
+ *
  * ### Display Order
  * Variant `values` array order comes from the merchant — we preserve it as-is.
  *
@@ -78,9 +83,9 @@ export default function VariantSelector({
                   type="button"
                   role="radio"
                   aria-checked={isActive}
-                  aria-disabled={!available}
+                  disabled={!available}
                   className={`variant-selector__option${isActive ? " variant-selector__option--active" : ""}${!available ? " variant-selector__option--disabled" : ""}`}
-                  onClick={() => available && onSelect(variant.name, value)}
+                  onClick={() => onSelect(variant.name, value)}
                 >
                   {value}
                 </button>

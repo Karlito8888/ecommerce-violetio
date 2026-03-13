@@ -28,7 +28,16 @@ export const generateEmbeddingsRequestSchema = z.object({
   category: z.string(),
 });
 
-/** Schema for search-products request body. */
+/**
+ * Schema for search-products request body.
+ *
+ * Epic 3 Review — Fix C3: Aligned with canonical source in
+ * `packages/shared/src/schemas/search.schema.ts`. Changes:
+ * - Added `.int()` to minPrice/maxPrice (prices are integer cents)
+ * - Added `merchantId` filter (consistency with canonical source)
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/search.schema.ts`
+ */
 export const searchQuerySchema = z.object({
   query: z
     .string()
@@ -37,9 +46,10 @@ export const searchQuerySchema = z.object({
   filters: z
     .object({
       category: z.string().optional(),
-      minPrice: z.number().nonnegative().optional(),
-      maxPrice: z.number().nonnegative().optional(),
+      minPrice: z.number().int().nonnegative().optional(),
+      maxPrice: z.number().int().nonnegative().optional(),
       inStock: z.boolean().optional(),
+      merchantId: z.string().optional(),
     })
     .optional(),
   limit: z.number().int().min(1).max(50).optional(),
@@ -135,25 +145,22 @@ export const violetOfferWebhookPayloadSchema = z.object({
   max_price: z.number().optional(),
   currency: z.string().default("USD"),
   /**
-   * L1 code review fix — Added "DISABLED" status.
+   * Offer status from Violet.
    *
-   * Violet's Offer model includes a standalone "DISABLED" status (in addition to
-   * "DISABLED_AVAILABLE" and "DISABLED_UNAVAILABLE"). The OfferStatus type in
-   * `packages/shared/src/types/product.types.ts` already includes it, but this
-   * schema was missing it — causing webhooks for DISABLED offers to be rejected
-   * with a Zod validation error.
+   * Epic 3 Review — Fix I3: Changed from z.enum([...]) to z.string().
    *
-   * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+   * Violet's API documentation lists known statuses (AVAILABLE, UNAVAILABLE,
+   * DISABLED, DISABLED_AVAILABLE, DISABLED_UNAVAILABLE, FOR_DELETION, ARCHIVED),
+   * but the actual API may return undocumented compound statuses. The catalog
+   * adapter (violetAdapter.ts) already uses z.string() for this field defensively.
+   *
+   * Using z.string() here prevents webhook rejection when Violet sends an
+   * unexpected status value. The webhook handler processes all offer events
+   * regardless of status — the `available` boolean field determines searchability.
+   *
+   * ⚠️ SYNC: Must match the other copy (see SYNC WARNING at top of file)
    */
-  status: z.enum([
-    "UNAVAILABLE",
-    "AVAILABLE",
-    "DISABLED",
-    "DISABLED_UNAVAILABLE",
-    "DISABLED_AVAILABLE",
-    "FOR_DELETION",
-    "ARCHIVED",
-  ]),
+  status: z.string(),
   tags: z.array(z.string()).optional(),
   external_url: z.string().optional(),
   skus: z.array(z.unknown()).optional(),

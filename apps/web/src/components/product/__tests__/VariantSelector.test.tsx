@@ -155,7 +155,12 @@ describe("VariantSelector", () => {
     const options = container.querySelectorAll(".variant-selector__option");
     // Size options: S(0), M(1), L(2)
     const lOption = options[2];
-    expect(lOption.getAttribute("aria-disabled")).toBe("true");
+    /**
+     * Epic 3 Review — Fix I6: Changed from aria-disabled to native `disabled`.
+     * Native `disabled` prevents keyboard activation and communicates state to
+     * screen readers, so aria-disabled is no longer needed.
+     */
+    expect((lOption as HTMLButtonElement).disabled).toBe(true);
     expect(lOption.classList.contains("variant-selector__option--disabled")).toBe(true);
   });
 

@@ -1,56 +1,32 @@
-import { Link } from "@tanstack/react-router";
 import type { ProductMatch } from "@ecommerce/shared";
-import { formatPrice } from "@ecommerce/shared";
+import BaseProductCard from "../product/BaseProductCard";
 
 /**
  * Product card adapted for search results.
  *
- * Maps `ProductMatch` (minimal ~11 fields from pgvector search) to a card layout
- * matching the same visual pattern as ProductCard, but without requiring the full
- * `Product` type (~25+ fields). This avoids type lies where fields like `.skus`
- * or `.albums` would be `undefined` at runtime.
+ * Thin wrapper around BaseProductCard that maps `ProductMatch` (minimal ~11 fields
+ * from pgvector search) to the base card's props interface.
+ *
+ * ## Epic 3 Review — Fix S2: Deduplication
+ *
+ * Previously this component duplicated ~50 lines of JSX from ProductCard.
+ * Now both delegate to BaseProductCard, differing only in the merchant name
+ * field: SearchProductCard uses `product.vendor` (from Violet enrichment in
+ * the search Edge Function) while ProductCard uses `product.seller`.
+ *
+ * @see BaseProductCard — shared markup and BEM class documentation
+ * @see ProductCard — catalog listing variant using full Product type
  */
 export default function SearchProductCard({ product }: { product: ProductMatch }) {
-  const isOutOfStock = !product.available;
-  const priceDisplay = formatPrice(product.minPrice, product.currency);
-  const imageAlt = `${product.name} by ${product.vendor}`;
-
   return (
-    <article
-      className={`product-card${isOutOfStock ? " product-card--out-of-stock" : ""}`}
-      aria-label={`${product.name}, ${priceDisplay}`}
-    >
-      <Link
-        to="/products/$productId"
-        params={{ productId: product.id }}
-        className="product-card__link"
-      >
-        <div className="product-card__image-wrap">
-          {product.thumbnailUrl ? (
-            <img
-              src={product.thumbnailUrl}
-              alt={imageAlt}
-              className="product-card__image"
-              loading="lazy"
-            />
-          ) : (
-            <div className="product-card__placeholder" role="img" aria-label={imageAlt}>
-              <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-                <rect width="48" height="48" rx="4" fill="var(--color-sand)" />
-                <path d="M14 34l8-10 6 7 4-5 6 8H14z" fill="var(--color-stone)" />
-                <circle cx="18" cy="18" r="3" fill="var(--color-stone)" />
-              </svg>
-            </div>
-          )}
-          {isOutOfStock && <span className="product-card__badge">Sold Out</span>}
-        </div>
-
-        <div className="product-card__info">
-          <h3 className="product-card__name">{product.name}</h3>
-          <p className="product-card__merchant">{product.vendor}</p>
-          <p className="product-card__price">{priceDisplay}</p>
-        </div>
-      </Link>
-    </article>
+    <BaseProductCard
+      id={product.id}
+      name={product.name}
+      merchantName={product.vendor}
+      thumbnailUrl={product.thumbnailUrl}
+      available={product.available}
+      minPrice={product.minPrice}
+      currency={product.currency}
+    />
   );
 }
