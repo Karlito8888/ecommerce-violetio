@@ -561,11 +561,48 @@ export class VioletAdapter implements SupplierAdapter {
     throw new Error("Not implemented — Story 5.1");
   }
 
-  validateWebhook(_headers: Headers, _body: string): boolean {
-    throw new Error("Not implemented — Story 5.2");
+  /**
+   * Validates a Violet webhook signature (synchronous adapter-level check).
+   *
+   * ## Why this is a simple header-presence check
+   *
+   * The actual HMAC-SHA256 verification is async (Web Crypto API) and runs
+   * in the handle-webhook Edge Function via `validateHmac()` in `_shared/webhookAuth.ts`.
+   *
+   * This adapter method provides a synchronous pre-check for the SupplierAdapter
+   * interface contract. It verifies that required headers are present — the caller
+   * should still perform the full async HMAC validation for actual security.
+   *
+   * @param headers - Request headers containing X-Violet-Hmac and X-Violet-Event-Id
+   * @param _body - Raw request body (unused in sync check; used by async HMAC validation)
+   * @returns true if required webhook headers are present
+   */
+  validateWebhook(headers: Headers, _body: string): boolean {
+    const hmac = headers.get("x-violet-hmac");
+    const eventId = headers.get("x-violet-event-id");
+    const topic = headers.get("x-violet-topic");
+    return Boolean(hmac && eventId && topic);
   }
 
+  /**
+   * Routes a webhook event to the appropriate handler.
+   *
+   * ## Architecture note
+   *
+   * In the primary execution path, the handle-webhook Edge Function processes
+   * events directly via `processors.ts`. This adapter method exists for the
+   * SupplierAdapter interface and can be used in non-Edge contexts (e.g., tests,
+   * server functions) where the caller has a normalized WebhookEvent.
+   *
+   * Offer events (ADDED/UPDATED) would need a Supabase client to invoke
+   * generate-embeddings, which this adapter doesn't have. For now, it
+   * acknowledges the event and returns success — the real processing
+   * happens in the Edge Function.
+   *
+   * @param event - Normalized webhook event
+   * @returns Success response (processing is handled by Edge Function)
+   */
   async processWebhook(_event: WebhookEvent): Promise<ApiResponse<void>> {
-    throw new Error("Not implemented — Story 5.2");
+    return { data: undefined, error: null };
   }
 }

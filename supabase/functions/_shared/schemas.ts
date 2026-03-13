@@ -1,23 +1,19 @@
 /**
  * Zod validation schemas for Supabase Edge Functions.
  *
- * ## Why duplicate schemas here instead of importing from packages/shared? (M1 code review fix)
+ * ## ⚠️ SYNC WARNING — Manual Deno/Node duplication
  *
- * Edge Functions run in Deno and cannot import from the monorepo's `packages/shared/`
- * (Node/Bun workspace packages). These schemas mirror the ones in
- * `packages/shared/src/schemas/search.schema.ts` and MUST be kept in sync.
+ * Edge Functions run in Deno and CANNOT import from the monorepo's `packages/shared/`
+ * (Node/Bun workspace packages). Schemas here are **manual copies** of their canonical
+ * sources in `packages/shared/src/schemas/`.
  *
- * The canonical source of truth is `packages/shared/` — if the schema changes there,
- * update this file too. The Zod validation in useSearch.ts (client-side) acts as a
- * safety net that catches any drift between these two copies.
+ * **If you modify ANY schema here, update the canonical source too (and vice versa).**
  *
- * ## Why Zod validation matters in Edge Functions
+ * Canonical sources → Edge Function copies:
+ * - `packages/shared/src/schemas/search.schema.ts` → search schemas below
+ * - `packages/shared/src/schemas/webhook.schema.ts` → webhook schemas below
  *
- * Manual `typeof` checks can't validate nested structures, ranges, or string lengths
- * as precisely. Zod gives us:
- * - Structured error messages with field paths
- * - Type inference for the validated output
- * - Consistent validation rules between Edge Functions and client-side code
+ * @see M2 code review fix — added sync documentation
  */
 
 import { z } from "npm:zod";
@@ -51,3 +47,136 @@ export const searchQuerySchema = z.object({
 
 export type GenerateEmbeddingsInput = z.infer<typeof generateEmbeddingsRequestSchema>;
 export type SearchQueryInput = z.infer<typeof searchQuerySchema>;
+
+// ─── Webhook Schemas (Story 3.7) ─────────────────────────────────────
+//
+// These schemas validate inbound Violet webhook payloads in the handle-webhook
+// Edge Function. They mirror the TypeScript types in packages/shared/src/types/order.types.ts
+// and MUST be kept in sync (same Deno/Node constraint as the schemas above).
+
+/**
+ * All webhook event types our system currently handles.
+ *
+ * Offer events trigger product embedding updates.
+ * Sync events are logged for monitoring only.
+ *
+ * **Story 5.2 will add ORDER_* event types.** Do NOT add them prematurely —
+ * unhandled types pass header validation but fall through to `default` in
+ * the handler's switch, creating spurious "failed" rows in webhook_events.
+ *
+ * ⚠️ SYNC WARNING: This schema is a manual copy of
+ * `packages/shared/src/schemas/webhook.schema.ts` (Deno cannot import Node workspace
+ * packages). Any change here MUST be mirrored there, and vice versa.
+ *
+ * @see https://docs.violet.io/prism/webhooks — Violet event type reference
+ * @see packages/shared/src/schemas/webhook.schema.ts — Canonical source (Node side)
+ */
+export const webhookEventTypeSchema = z.enum([
+  "OFFER_ADDED",
+  "OFFER_UPDATED",
+  "OFFER_REMOVED",
+  "OFFER_DELETED",
+  "PRODUCT_SYNC_STARTED",
+  "PRODUCT_SYNC_COMPLETED",
+  "PRODUCT_SYNC_FAILED",
+]);
+
+/**
+ * Validates required Violet webhook headers (extracted values, not raw header names).
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+ */
+export const violetWebhookHeadersSchema = z.object({
+  hmac: z.string().min(1, "X-Violet-Hmac header is required"),
+  eventId: z.string().min(1, "X-Violet-Event-Id header is required"),
+  eventType: webhookEventTypeSchema,
+});
+
+/**
+ * H2 code review fix — Required transport headers WITHOUT eventType enum validation.
+ *
+ * Used in Phase 1 of two-phase header validation in handle-webhook/index.ts.
+ * Validates that hmac, eventId, and eventType are present as non-empty strings,
+ * but does NOT validate eventType against the known enum. This allows the handler
+ * to accept unknown event types gracefully (200) instead of rejecting them (400),
+ * preventing Violet from disabling the webhook endpoint when it sends event types
+ * we haven't implemented yet (e.g., ORDER_* before Story 5.2).
+ *
+ * Phase 2 validation (in index.ts) then checks eventType against webhookEventTypeSchema
+ * and returns 200 + log for unknown types.
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+ *
+ * @see handle-webhook/index.ts — Two-phase validation implementation
+ */
+export const violetRequiredHeadersSchema = z.object({
+  hmac: z.string().min(1, "X-Violet-Hmac header is required"),
+  eventId: z.string().min(1, "X-Violet-Event-Id header is required"),
+  eventType: z.string().min(1, "X-Violet-Topic header is required"),
+});
+
+/**
+ * Validates the Violet Offer webhook payload (OFFER_ADDED/UPDATED/REMOVED/DELETED).
+ * Prices are in integer cents (e.g., 2999 = $29.99). Extra fields are stripped by Zod.
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+ */
+export const violetOfferWebhookPayloadSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().optional(),
+  source: z.string(),
+  seller: z.string().optional(),
+  vendor: z.string().optional(),
+  merchant_id: z.number(),
+  available: z.boolean(),
+  visible: z.boolean(),
+  min_price: z.number().optional(),
+  max_price: z.number().optional(),
+  currency: z.string().default("USD"),
+  /**
+   * L1 code review fix — Added "DISABLED" status.
+   *
+   * Violet's Offer model includes a standalone "DISABLED" status (in addition to
+   * "DISABLED_AVAILABLE" and "DISABLED_UNAVAILABLE"). The OfferStatus type in
+   * `packages/shared/src/types/product.types.ts` already includes it, but this
+   * schema was missing it — causing webhooks for DISABLED offers to be rejected
+   * with a Zod validation error.
+   *
+   * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+   */
+  status: z.enum([
+    "UNAVAILABLE",
+    "AVAILABLE",
+    "DISABLED",
+    "DISABLED_UNAVAILABLE",
+    "DISABLED_AVAILABLE",
+    "FOR_DELETION",
+    "ARCHIVED",
+  ]),
+  tags: z.array(z.string()).optional(),
+  external_url: z.string().optional(),
+  skus: z.array(z.unknown()).optional(),
+  albums: z.array(z.unknown()).optional(),
+  date_last_modified: z.string().optional(),
+});
+
+/**
+ * Validates the Violet Sync webhook payload (PRODUCT_SYNC_STARTED/COMPLETED/FAILED).
+ * Monitoring-only — no product-level action taken.
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+ */
+export const violetSyncWebhookPayloadSchema = z.object({
+  id: z.number(),
+  merchant_id: z.number(),
+  status: z.enum(["NOT_STARTED", "PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "ABORTED"]),
+  total_products: z.number(),
+  total_products_synced: z.number().optional(),
+});
+
+export type WebhookEventType = z.infer<typeof webhookEventTypeSchema>;
+export type VioletWebhookHeaders = z.infer<typeof violetWebhookHeadersSchema>;
+export type VioletRequiredHeaders = z.infer<typeof violetRequiredHeadersSchema>;
+export type VioletOfferPayload = z.infer<typeof violetOfferWebhookPayloadSchema>;
+export type VioletSyncPayload = z.infer<typeof violetSyncWebhookPayloadSchema>;

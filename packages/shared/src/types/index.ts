@@ -16,7 +16,15 @@ export type {
   SkuDimensions,
 } from "./product.types.js";
 export type { Cart, Bag, CartItem, CartItemInput } from "./cart.types.js";
-export type { Order, BagStatus, WebhookEvent, PaymentIntent } from "./order.types.js";
+export type {
+  Order,
+  BagStatus,
+  WebhookEvent,
+  WebhookEventType,
+  OfferWebhookPayload,
+  SyncWebhookPayload,
+  PaymentIntent,
+} from "./order.types.js";
 export type {
   SearchResult,
   SearchFilters,
