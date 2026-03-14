@@ -131,6 +131,20 @@
   animation: item-fade-in 150ms ease forwards;
 }
 
+.cart-drawer__item--with-thumbnail {
+  grid-template-columns: 40px 1fr auto;
+}
+
+.cart-drawer__item-thumbnail {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-sand);
+  align-self: start;
+  margin-top: var(--space-1);
+}
+
 .cart-drawer__item--removing {
   animation: item-fade-out 150ms ease forwards;
 }
@@ -237,13 +251,20 @@
   color: var(--color-error);
 }
 
-/* Bag subtotal */
-.cart-drawer__bag-subtotal {
+/* Bag subtotal / tax / shipping rows */
+.cart-drawer__bag-subtotal,
+.cart-drawer__bag-tax,
+.cart-drawer__bag-shipping {
   display: flex;
   justify-content: space-between;
-  padding: var(--space-2) 0;
+  padding: var(--space-1) 0;
   font-size: 0.8125rem;
   color: var(--color-steel);
+}
+
+.cart-drawer__bag-subtotal {
+  padding-top: var(--space-2);
+  font-weight: 500;
 }
 
 /* Footer summary + actions */
@@ -298,6 +319,7 @@
   transform: translateY(-1px);
 }
 
+.cart-drawer__view-cart-link,
 .cart-drawer__continue-link {
   display: block;
   text-align: center;
@@ -307,6 +329,7 @@
   transition: color var(--transition-fast);
 }
 
+.cart-drawer__view-cart-link:hover,
 .cart-drawer__continue-link:hover {
   color: var(--color-ink);
 }

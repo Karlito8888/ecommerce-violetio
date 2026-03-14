@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 
 import { ThemedText } from "@/components/themed-text";
@@ -44,11 +45,12 @@ async function fetchCartFromEdge(violetCartId: string): Promise<Cart | null> {
   if (!token) return null;
 
   try {
+    // No Content-Type on GET — GET requests have no body. Sending it is unnecessary
+    // and inconsistent with the pattern established in VioletAdapter (see M2 fix comment).
     const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
       },
     });
     if (!res.ok) return null;
@@ -111,10 +113,13 @@ function CartItemRow({
   item,
   onUpdateQty,
   onRemove,
+  isUpdating,
 }: {
   item: CartItem;
   onUpdateQty: (skuId: string, qty: number) => void;
   onRemove: (skuId: string) => void;
+  /** When true, disables qty buttons to prevent concurrent in-flight mutations. */
+  isUpdating?: boolean;
 }) {
   const lineTotal = item.unitPrice * item.quantity;
 
@@ -128,7 +133,7 @@ function CartItemRow({
   return (
     <View style={styles.itemRow}>
       <View style={styles.itemInfo}>
-        <ThemedText style={styles.itemName}>SKU {item.skuId}</ThemedText>
+        <ThemedText style={styles.itemName}>{item.name ?? `SKU ${item.skuId}`}</ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.itemPrice}>
           {formatCents(item.unitPrice)} × {item.quantity} = {formatCents(lineTotal)}
         </ThemedText>
@@ -137,7 +142,7 @@ function CartItemRow({
         <View style={styles.qtyControls}>
           <TouchableOpacity
             onPress={() => onUpdateQty(item.skuId, item.quantity - 1)}
-            disabled={item.quantity <= 1}
+            disabled={item.quantity <= 1 || isUpdating}
             style={styles.qtyBtn}
             accessibilityLabel="Decrease quantity"
           >
@@ -146,13 +151,14 @@ function CartItemRow({
           <ThemedText style={styles.qtyValue}>{item.quantity}</ThemedText>
           <TouchableOpacity
             onPress={() => onUpdateQty(item.skuId, item.quantity + 1)}
+            disabled={isUpdating}
             style={styles.qtyBtn}
             accessibilityLabel="Increase quantity"
           >
             <ThemedText>+</ThemedText>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleRemove}>
+        <TouchableOpacity onPress={handleRemove} disabled={isUpdating}>
           <ThemedText themeColor="textSecondary" style={styles.removeBtn}>
             Remove
           </ThemedText>
@@ -166,10 +172,13 @@ function BagSection({
   bag,
   onUpdateQty,
   onRemove,
+  isUpdating,
 }: {
   bag: Bag;
   onUpdateQty: (skuId: string, qty: number) => void;
   onRemove: (skuId: string) => void;
+  /** Propagated from CartScreen — disables qty controls during in-flight mutations. */
+  isUpdating?: boolean;
 }) {
   return (
     <View style={styles.bag}>
@@ -183,11 +192,27 @@ function BagSection({
           </ThemedText>
         ))}
       {bag.items.map((item) => (
-        <CartItemRow key={item.skuId} item={item} onUpdateQty={onUpdateQty} onRemove={onRemove} />
+        <CartItemRow
+          key={item.skuId}
+          item={item}
+          onUpdateQty={onUpdateQty}
+          onRemove={onRemove}
+          isUpdating={isUpdating}
+        />
       ))}
       <View style={styles.bagSubtotal}>
         <ThemedText themeColor="textSecondary">Subtotal</ThemedText>
         <ThemedText themeColor="textSecondary">{formatCents(bag.subtotal)}</ThemedText>
+      </View>
+      <View style={styles.bagSubtotal}>
+        <ThemedText themeColor="textSecondary">Est. Tax</ThemedText>
+        <ThemedText themeColor="textSecondary">{formatCents(bag.tax)}</ThemedText>
+      </View>
+      <View style={styles.bagSubtotal}>
+        <ThemedText themeColor="textSecondary">Est. Shipping</ThemedText>
+        <ThemedText themeColor="textSecondary">
+          {bag.shippingTotal > 0 ? formatCents(bag.shippingTotal) : "Calculated at checkout"}
+        </ThemedText>
       </View>
     </View>
   );
@@ -262,6 +287,13 @@ export default function CartScreen() {
           <View style={styles.empty}>
             <ThemedText style={styles.emptyIcon}>🛍</ThemedText>
             <ThemedText themeColor="textSecondary">Your bag is empty</ThemedText>
+            <TouchableOpacity
+              style={styles.startShoppingBtn}
+              onPress={() => router.push("/")}
+              accessibilityLabel="Start shopping"
+            >
+              <ThemedText style={styles.startShoppingText}>Start Shopping</ThemedText>
+            </TouchableOpacity>
           </View>
         ) : (
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -271,6 +303,7 @@ export default function CartScreen() {
                 bag={bag}
                 onUpdateQty={handleUpdateQty}
                 onRemove={handleRemove}
+                isUpdating={isUpdating}
               />
             ))}
 
@@ -304,6 +337,14 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   empty: { alignItems: "center", marginTop: Spacing.six, gap: Spacing.two },
   emptyIcon: { fontSize: 48, opacity: 0.3 },
+  startShoppingBtn: {
+    backgroundColor: "#2c2c2c",
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.five,
+    borderRadius: 4,
+    marginTop: Spacing.two,
+  },
+  startShoppingText: { color: "#fafaf8", fontWeight: "600", fontSize: 14 },
   bag: {
     marginBottom: Spacing.six,
     borderBottomWidth: 1,

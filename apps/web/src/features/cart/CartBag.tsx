@@ -50,6 +50,16 @@ export default function CartBag({ bag, onUpdateQty, onRemove, isUpdating }: Cart
         <span>Subtotal</span>
         <span>{formatCents(bag.subtotal)}</span>
       </div>
+      <div className="cart-drawer__bag-tax">
+        <span>Est. Tax</span>
+        <span>{formatCents(bag.tax)}</span>
+      </div>
+      <div className="cart-drawer__bag-shipping">
+        <span>Est. Shipping</span>
+        <span>
+          {bag.shippingTotal > 0 ? formatCents(bag.shippingTotal) : "Calculated at checkout"}
+        </span>
+      </div>
     </div>
   );
 }

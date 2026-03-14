@@ -21,6 +21,8 @@ export type AddToCartFn = (input: {
   quantity: number;
   userId?: string | null;
   sessionId?: string | null;
+  productName?: string;
+  thumbnailUrl?: string;
 }) => Promise<ApiResponse<Cart>>;
 
 /** Function signature for updating a cart item quantity. */

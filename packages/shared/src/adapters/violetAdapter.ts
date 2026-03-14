@@ -797,8 +797,10 @@ export class VioletAdapter implements SupplierAdapter {
     const violet = parsed.data;
     const bags = violet.bags.map((bag) => this.transformBag(bag));
 
-    // Aggregate total from all bag subtotals
-    const total = bags.reduce((sum, b) => sum + b.subtotal, 0);
+    // Total = sum of (subtotal + tax + shippingTotal) per bag.
+    // At Story 4.2 stage, shippingTotal is 0 for all bags (shipping selected in 4.3),
+    // but the calculation must be correct for when Story 4.3 adds shipping.
+    const total = bags.reduce((sum, b) => sum + b.subtotal + b.tax + b.shippingTotal, 0);
 
     // Build a partial Cart — id and userId are set by the Server Function
     // after persisting to Supabase. violetCartId is the Violet integer ID.

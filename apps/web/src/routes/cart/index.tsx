@@ -3,7 +3,6 @@ import { useCartContext } from "../../contexts/CartContext";
 import { useCartQuery, getCartItemCount } from "@ecommerce/shared";
 import { getCartFn, updateCartItemFn, removeFromCartFn } from "../../server/cartActions";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
-import CartBag from "../../features/cart/CartBag";
 import CartEmpty from "../../features/cart/CartEmpty";
 import { useUpdateCartItem, useRemoveFromCart } from "@ecommerce/shared";
 
@@ -19,9 +18,8 @@ function formatCents(cents: number): string {
 /**
  * /cart — Full cart page (CSR only — no loader, per architecture.md#SSR strategy).
  *
- * This is the expanded view of the cart with all items, merchant bags,
- * and a prominent checkout CTA. The cart drawer is a quick-access preview;
- * this page is the full cart management experience.
+ * Two-column layout: items grouped by merchant bag (left) + pricing summary sidebar (right).
+ * Uses .cart BEM block (distinct from .cart-drawer used by the drawer panel).
  */
 export const Route = createFileRoute("/cart/")({
   component: CartPage,
@@ -47,39 +45,122 @@ function CartPage() {
     removeMutation.mutate({ violetCartId, skuId });
   };
 
+  // Aggregate totals across all bags for the sidebar summary
+  const subtotalAll = cart?.bags.reduce((sum, b) => sum + b.subtotal, 0) ?? 0;
+  const taxAll = cart?.bags.reduce((sum, b) => sum + b.tax, 0) ?? 0;
+  const shippingAll = cart?.bags.reduce((sum, b) => sum + b.shippingTotal, 0) ?? 0;
+
   return (
     <div className="page-wrap">
-      <div className="cart-page">
-        <h1 className="cart-page__title">Your Bag{itemCount > 0 ? ` (${itemCount})` : ""}</h1>
+      <div className="cart">
+        <h1 className="cart__title">Your Bag{itemCount > 0 ? ` (${itemCount})` : ""}</h1>
 
         {isLoading ? (
           <p>Loading your bag…</p>
         ) : !cart || cart.bags.length === 0 ? (
           <CartEmpty />
         ) : (
-          <div className="cart-page__layout">
-            <div className="cart-page__items">
+          <div className="cart__layout">
+            {/* Left column — items grouped by merchant bag */}
+            <div className="cart__items">
               {cart.bags.map((bag) => (
-                <CartBag
-                  key={bag.id}
-                  bag={bag}
-                  onUpdateQty={handleUpdateQty}
-                  onRemove={handleRemove}
-                  isUpdating={isUpdating}
-                />
+                <div key={bag.id} className="cart__bag">
+                  <p className="cart__bag-merchant">
+                    {bag.merchantName || `Merchant ${bag.merchantId}`}
+                  </p>
+
+                  {bag.items.map((item) => (
+                    <div
+                      key={item.skuId}
+                      className={`cart__item${!item.thumbnailUrl ? " cart__item--no-thumbnail" : ""}`}
+                    >
+                      {item.thumbnailUrl && (
+                        <img
+                          src={item.thumbnailUrl}
+                          alt={item.name ?? `SKU ${item.skuId}`}
+                          className="cart__item-thumbnail"
+                          width={56}
+                          height={56}
+                        />
+                      )}
+                      <div className="cart__item-info">
+                        <p className="cart__item-name">{item.name ?? `SKU ${item.skuId}`}</p>
+                        <p className="cart__item-price">
+                          {formatCents(item.unitPrice)} × {item.quantity} ={" "}
+                          <strong>{formatCents(item.unitPrice * item.quantity)}</strong>
+                        </p>
+                      </div>
+                      <div className="cart__item-controls">
+                        <button
+                          type="button"
+                          disabled={item.quantity <= 1 || isUpdating}
+                          onClick={() => handleUpdateQty(item.skuId, item.quantity - 1)}
+                          aria-label="Decrease quantity"
+                        >
+                          −
+                        </button>
+                        <span>{item.quantity}</span>
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={() => handleUpdateQty(item.skuId, item.quantity + 1)}
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemove(item.skuId)}
+                          aria-label={`Remove ${item.name ?? item.skuId} from cart`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Per-bag pricing breakdown (AC: #3, #4, #5) */}
+                  <div className="cart__bag-pricing">
+                    <div className="cart__bag-row cart__bag-row--subtotal">
+                      <span>Subtotal</span>
+                      <span>{formatCents(bag.subtotal)}</span>
+                    </div>
+                    <div className="cart__bag-row">
+                      <span>Est. Tax</span>
+                      <span>{formatCents(bag.tax)}</span>
+                    </div>
+                    <div className="cart__bag-row">
+                      <span>Est. Shipping</span>
+                      <span>
+                        {bag.shippingTotal > 0
+                          ? formatCents(bag.shippingTotal)
+                          : "Calculated at checkout"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
 
-            <div className="cart-page__summary">
-              <div className="cart-page__total">
-                <span>Total</span>
-                <strong>{formatCents(cart.total)}</strong>
+            {/* Right sidebar — aggregated pricing summary */}
+            <div className="cart__summary">
+              <div className="cart__summary-row">
+                <span>Subtotal</span>
+                <span>{formatCents(subtotalAll)}</span>
               </div>
-              <Link
-                to="/"
-                className="cart-page__checkout-btn"
-                style={{ display: "block", textAlign: "center", textDecoration: "none" }}
-              >
+              <div className="cart__summary-row">
+                <span>Est. Tax</span>
+                <span>{formatCents(taxAll)}</span>
+              </div>
+              <div className="cart__summary-row">
+                <span>Est. Shipping</span>
+                <span>{shippingAll > 0 ? formatCents(shippingAll) : "Calculated at checkout"}</span>
+              </div>
+              <div className="cart__summary-total">
+                <span>Total</span>
+                <span>{formatCents(cart.total)}</span>
+              </div>
+              <Link to="/checkout" className="cart__checkout-btn">
                 Proceed to Checkout
               </Link>
               <Link
@@ -92,10 +173,13 @@ function CartPage() {
                   sortBy: undefined,
                   sortDirection: undefined,
                 }}
-                className="cart-page__continue-link"
+                className="cart__continue-link"
               >
                 Continue Shopping
               </Link>
+              <p className="cart__affiliate">
+                We earn a commission on purchases — this doesn&apos;t affect the price you pay.
+              </p>
             </div>
           </div>
         )}

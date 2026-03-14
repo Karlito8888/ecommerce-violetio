@@ -31,9 +31,20 @@ export default function CartItem({ item, onUpdateQty, onRemove, isUpdating }: Ca
   const lineTotal = item.unitPrice * item.quantity;
 
   return (
-    <div className={`cart-drawer__item${isRemoving ? " cart-drawer__item--removing" : ""}`}>
+    <div
+      className={`cart-drawer__item${isRemoving ? " cart-drawer__item--removing" : ""}${item.thumbnailUrl ? " cart-drawer__item--with-thumbnail" : ""}`}
+    >
+      {item.thumbnailUrl && (
+        <img
+          src={item.thumbnailUrl}
+          alt={item.name ?? `SKU ${item.skuId}`}
+          className="cart-drawer__item-thumbnail"
+          width={40}
+          height={40}
+        />
+      )}
       <div className="cart-drawer__item-info">
-        <p className="cart-drawer__item-name">SKU {item.skuId}</p>
+        <p className="cart-drawer__item-name">{item.name ?? `SKU ${item.skuId}`}</p>
         <p className="cart-drawer__item-price">
           {formatCents(item.unitPrice)} × {item.quantity} ={" "}
           <strong>{formatCents(lineTotal)}</strong>

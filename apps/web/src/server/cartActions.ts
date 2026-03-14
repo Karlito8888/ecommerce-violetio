@@ -139,6 +139,7 @@ export const createCartFn = createServerFn({ method: "POST" })
 /**
  * Adds a SKU to an existing cart (or creates a new one if none exists).
  * Reads the violet_cart_id from HttpOnly cookie.
+ * Also upserts product info (name, thumbnail) into cart_items for display.
  */
 export const addToCartFn = createServerFn({ method: "POST" })
   .inputValidator(
@@ -172,11 +173,43 @@ export const addToCartFn = createServerFn({ method: "POST" })
       };
     }
 
+    // Store product info in cart_items for name/thumbnail display at get-cart time.
+    // Find the unit_price from the returned cart (Violet assigns prices server-side).
+    const addedItem = result.data.bags.flatMap((b) => b.items).find((i) => i.skuId === item.skuId);
+
+    // Persist product info (name, thumbnail) for display at get-cart time.
+    // Violet's GET /checkout/cart/{id} returns only sku_id + price — no product metadata.
+    // We store it here and look it up in getCartFn via a secondary Supabase query.
+    const supabase = getSupabaseServer();
+    const { error: itemUpsertError } = await supabase.from("cart_items").upsert(
+      {
+        cart_id: supabaseCartId,
+        sku_id: item.skuId,
+        quantity: item.quantity,
+        unit_price: addedItem?.unitPrice ?? 0,
+        product_name: item.productName ?? null,
+        thumbnail_url: item.thumbnailUrl ?? null,
+      },
+      { onConflict: "cart_id, sku_id" },
+    );
+    // Non-fatal: product name/thumbnail won't display but cart still works.
+    // Most likely cause: migration 20260315000000_cart_items_product_info.sql not applied.
+    if (itemUpsertError) {
+      console.warn(
+        "[cart_items] upsert failed — product info will not display:",
+        itemUpsertError.message,
+      );
+    }
+
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
   });
 
 /**
  * Updates the quantity of a cart item.
+ *
+ * Also syncs the new quantity to Supabase `cart_items` to prevent stale data.
+ * Without this sync, if a user updates qty and then re-adds the same SKU on another
+ * device, the old quantity would overwrite the correct one during the upsert.
  */
 export const updateCartItemFn = createServerFn({ method: "POST" })
   .inputValidator((input: { violetCartId: string; skuId: string; quantity: number }) => input)
@@ -193,11 +226,24 @@ export const updateCartItemFn = createServerFn({ method: "POST" })
       };
     }
 
+    // Sync quantity to cart_items — row may not exist (e.g., added before migration).
+    // update() is a no-op if the row is absent, which is acceptable.
+    const supabase = getSupabaseServer();
+    await supabase
+      .from("cart_items")
+      .update({ quantity: data.quantity })
+      .eq("cart_id", supabaseCartId)
+      .eq("sku_id", data.skuId);
+
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
   });
 
 /**
  * Removes a SKU from the cart.
+ *
+ * Also deletes the corresponding `cart_items` row to prevent orphan accumulation.
+ * Without this cleanup, removed items linger in cart_items indefinitely — the table
+ * grows unbounded and Supabase bandwidth is wasted on every getCartFn query.
  */
 export const removeFromCartFn = createServerFn({ method: "POST" })
   .inputValidator((input: { violetCartId: string; skuId: string }) => input)
@@ -214,11 +260,22 @@ export const removeFromCartFn = createServerFn({ method: "POST" })
       };
     }
 
+    // Clean up product info row — Violet has already removed the item from the cart.
+    // Non-fatal: orphan rows don't cause incorrect display (item absent from Violet cart)
+    // but would cause the cart_items table to grow unbounded.
+    const supabase = getSupabaseServer();
+    await supabase
+      .from("cart_items")
+      .delete()
+      .eq("cart_id", supabaseCartId)
+      .eq("sku_id", data.skuId);
+
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
   });
 
 /**
- * Fetches the current cart state.
+ * Fetches the current cart state, enriched with product names and thumbnails
+ * from Supabase cart_items (stored at add-to-cart time).
  */
 export const getCartFn = createServerFn({ method: "GET" })
   .inputValidator((input: string) => input)
@@ -235,7 +292,35 @@ export const getCartFn = createServerFn({ method: "GET" })
       };
     }
 
-    return { data: withSupabaseId(result.data, supabaseCartId), error: null };
+    // Enrich cart items with product names/thumbnails from Supabase cart_items
+    const supabase = getSupabaseServer();
+    const { data: storedItems } = await supabase
+      .from("cart_items")
+      .select("sku_id, product_name, thumbnail_url")
+      .eq("cart_id", supabaseCartId);
+
+    const productInfoMap: Record<string, { name: string | null; thumbnailUrl: string | null }> = {};
+    for (const row of storedItems ?? []) {
+      productInfoMap[row.sku_id] = {
+        name: row.product_name,
+        thumbnailUrl: row.thumbnail_url,
+      };
+    }
+
+    const enrichedCart: Cart = {
+      ...result.data,
+      id: supabaseCartId,
+      bags: result.data.bags.map((bag) => ({
+        ...bag,
+        items: bag.items.map((item) => ({
+          ...item,
+          name: productInfoMap[item.skuId]?.name ?? undefined,
+          thumbnailUrl: productInfoMap[item.skuId]?.thumbnailUrl ?? undefined,
+        })),
+      })),
+    };
+
+    return { data: enrichedCart, error: null };
   });
 
 /**

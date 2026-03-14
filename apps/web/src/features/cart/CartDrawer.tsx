@@ -192,12 +192,15 @@ export default function CartDrawer({
 
             <div className="cart-drawer__actions">
               <Link
-                to="/cart"
+                to="/checkout"
                 onClick={closeDrawer}
                 className="cart-drawer__checkout-btn"
                 style={{ display: "block", textAlign: "center", textDecoration: "none" }}
               >
                 Proceed to Checkout
+              </Link>
+              <Link to="/cart" onClick={closeDrawer} className="cart-drawer__view-cart-link">
+                View Full Cart
               </Link>
               <button type="button" className="cart-drawer__continue-link" onClick={closeDrawer}>
                 Continue Shopping

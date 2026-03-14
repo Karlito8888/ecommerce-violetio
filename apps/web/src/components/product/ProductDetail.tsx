@@ -174,6 +174,8 @@ export default function ProductDetail({ product }: { product: Product }) {
         quantity: 1,
         userId,
         sessionId,
+        productName: product.name,
+        thumbnailUrl: product.thumbnailUrl ?? undefined,
       });
 
       if (result.data) {

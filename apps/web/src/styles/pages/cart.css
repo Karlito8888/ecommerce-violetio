@@ -1,0 +1,200 @@
+/* ─── Full Cart Page ────────────────────────────────────────────────────────
+ * BEM: .cart (block)
+ * Two-column layout on desktop (items + summary sidebar), stacked on mobile.
+ * Distinct from .cart-drawer which is the slide-in panel.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.cart {
+  padding: var(--space-8) 0;
+}
+
+.cart__title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-8) 0;
+}
+
+/* Two-column grid: items left, summary sidebar right */
+.cart__layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-12);
+  align-items: start;
+}
+
+.cart__items {
+  min-width: 0;
+}
+
+/* Per-merchant bag section */
+.cart__bag {
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+}
+
+.cart__bag-merchant {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-steel);
+  margin: 0 0 var(--space-4) 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Item row — wider than drawer, 56px thumbnail */
+.cart__item {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cart__item--no-thumbnail {
+  grid-template-columns: 1fr auto;
+}
+
+.cart__item-thumbnail {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-sand);
+  align-self: start;
+}
+
+.cart__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cart__item-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+.cart__item-price {
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+  margin: 0;
+}
+
+.cart__item-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+/* Per-bag pricing rows */
+.cart__bag-pricing {
+  margin-top: var(--space-4);
+}
+
+.cart__bag-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+  padding: var(--space-1) 0;
+}
+
+.cart__bag-row--subtotal {
+  font-weight: 500;
+}
+
+/* Right sidebar — sticky, shows grand total + CTA */
+.cart__summary {
+  position: sticky;
+  top: 120px;
+  background: var(--color-ivory);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cart__summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+}
+
+.cart__summary-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.cart__checkout-btn {
+  display: block;
+  width: 100%;
+  padding: var(--space-4);
+  background: var(--color-midnight);
+  color: var(--color-ivory);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.cart__checkout-btn:hover {
+  background: var(--color-charcoal);
+  transform: translateY(-1px);
+}
+
+.cart__continue-link {
+  display: block;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.cart__continue-link:hover {
+  color: var(--color-ink);
+}
+
+.cart__affiliate {
+  font-size: 0.75rem;
+  color: var(--color-silver);
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Responsive: stack layout on mobile */
+@media (max-width: 768px) {
+  .cart__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cart__summary {
+    position: static;
+  }
+}

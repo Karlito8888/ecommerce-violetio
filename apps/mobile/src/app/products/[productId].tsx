@@ -110,7 +110,14 @@ export default function ProductDetailScreen() {
       const addRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/skus`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ sku_id: Number(productId), quantity: 1 }),
+        body: JSON.stringify({
+          sku_id: Number(productId),
+          quantity: 1,
+          // productName and thumbnailUrl will be populated once real product
+          // data fetching is wired up (pending Edge Function integration).
+          productName: undefined,
+          thumbnailUrl: undefined,
+        }),
       });
 
       setAddState(addRes.ok ? "added" : "idle");

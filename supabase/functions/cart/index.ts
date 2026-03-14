@@ -51,6 +51,70 @@ async function validateUser(req: Request): Promise<string | null> {
   return data.user.id;
 }
 
+/**
+ * Upserts product info into cart_items for name/thumbnail display at get-cart time.
+ *
+ * Violet's cart API returns only sku_id + price in bag items — no product metadata.
+ * We store product name and thumbnail at add-to-cart time so getCartFn can enrich
+ * the response without calling the catalog API again.
+ *
+ * Logs a warning on failure (non-fatal: cart functions correctly, just without
+ * product names/thumbnails).
+ */
+async function upsertCartItem(
+  cartId: string,
+  skuId: string,
+  quantity: number,
+  unitPrice: number,
+  productName: string | null,
+  thumbnailUrl: string | null,
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.from("cart_items").upsert(
+    {
+      cart_id: cartId,
+      sku_id: String(skuId),
+      quantity,
+      unit_price: unitPrice,
+      product_name: productName,
+      thumbnail_url: thumbnailUrl,
+    },
+    { onConflict: "cart_id, sku_id" },
+  );
+  if (error) {
+    console.warn("[cart_items] upsert failed — product info will not display:", error.message);
+  }
+}
+
+/**
+ * Deletes a cart_items row when an item is removed from the Violet cart.
+ *
+ * Without this cleanup, removed items accumulate as orphan rows in cart_items.
+ * They don't cause incorrect display (Violet is the source of truth for cart contents)
+ * but grow the table unbounded and waste Supabase bandwidth on every getCartFn query.
+ */
+async function deleteCartItem(cartId: string, skuId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  await supabase.from("cart_items").delete().eq("cart_id", cartId).eq("sku_id", String(skuId));
+}
+
+/** Fetches product info map from cart_items for a given cart UUID. */
+async function getProductInfoMap(
+  cartId: string,
+): Promise<Record<string, { name: string | null; thumbnailUrl: string | null }>> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from("cart_items")
+    .select("sku_id, product_name, thumbnail_url")
+    .eq("cart_id", cartId);
+
+  const map: Record<string, { name: string | null; thumbnailUrl: string | null }> = {};
+  for (const row of data ?? []) {
+    map[row.sku_id] = { name: row.product_name, thumbnailUrl: row.thumbnail_url };
+  }
+  return map;
+}
+
 /** Upserts a cart row in Supabase and returns the Supabase cart UUID. */
 async function upsertCart(violetCartId: string, userId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin();
@@ -155,7 +219,26 @@ Deno.serve(async (req: Request) => {
 
     const cartData = await res.json();
     const supabaseCartId = await upsertCart(violetCartId, userId);
-    return json({ data: { ...transformCart(cartData), id: supabaseCartId ?? "" }, error: null });
+    const transformed = transformCart(cartData);
+
+    // Enrich items with product names/thumbnails from Supabase cart_items
+    if (supabaseCartId) {
+      const productInfoMap = await getProductInfoMap(supabaseCartId);
+      const enrichedBags = (transformed.bags as Array<Record<string, unknown>>).map((bag) => ({
+        ...bag,
+        items: (bag.items as Array<Record<string, unknown>>).map((item) => ({
+          ...item,
+          name: productInfoMap[item.skuId as string]?.name ?? undefined,
+          thumbnailUrl: productInfoMap[item.skuId as string]?.thumbnailUrl ?? undefined,
+        })),
+      }));
+      return json({
+        data: { ...transformed, id: supabaseCartId, bags: enrichedBags },
+        error: null,
+      });
+    }
+
+    return json({ data: { ...transformed, id: supabaseCartId ?? "" }, error: null });
   }
 
   // ── Route: POST /cart/{id}/skus — add SKU ─────────────────────────
@@ -186,6 +269,26 @@ Deno.serve(async (req: Request) => {
 
     const cartData = await res.json();
     const supabaseCartId = await upsertCart(violetCartId, userId);
+
+    // Store product info for name/thumbnail display at get-cart time
+    if (supabaseCartId) {
+      const transformed = transformCart(cartData);
+      const addedItem = (transformed.bags as Array<Record<string, unknown>>)
+        .flatMap((b) => b.items as Array<Record<string, unknown>>)
+        .find((i) => String(i.skuId) === String(body.sku_id));
+
+      await upsertCartItem(
+        supabaseCartId,
+        String(body.sku_id),
+        body.quantity ?? 1,
+        (addedItem?.unitPrice as number) ?? 0,
+        body.productName ?? null,
+        body.thumbnailUrl ?? null,
+      );
+
+      return json({ data: { ...transformed, id: supabaseCartId }, error: null });
+    }
+
     return json({ data: { ...transformCart(cartData), id: supabaseCartId ?? "" }, error: null });
   }
 
@@ -235,6 +338,13 @@ Deno.serve(async (req: Request) => {
 
     const cartData = await res.json();
     const supabaseCartId = await upsertCart(violetCartId, userId);
+
+    // Clean up orphan row — Violet confirmed removal, so delete from cart_items.
+    // Non-fatal: orphan rows don't show incorrect data but accumulate unbounded.
+    if (supabaseCartId) {
+      await deleteCartItem(supabaseCartId, skuId);
+    }
+
     return json({ data: { ...transformCart(cartData), id: supabaseCartId ?? "" }, error: null });
   }
 
@@ -301,7 +411,11 @@ function transformCart(raw: unknown): Record<string, unknown> {
       })
     : [];
 
-  const total = bags.reduce((sum, b) => sum + (b.subtotal as number), 0);
+  // Total = sum of (subtotal + tax + shippingTotal) per bag — mirrors violetAdapter.ts
+  const total = bags.reduce(
+    (sum, b) => sum + (b.subtotal as number) + (b.tax as number) + (b.shippingTotal as number),
+    0,
+  );
 
   return {
     violetCartId: String(r.id ?? ""),

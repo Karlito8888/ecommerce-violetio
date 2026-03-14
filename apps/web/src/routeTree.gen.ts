@@ -13,6 +13,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
+import { Route as CheckoutIndexRouteImport } from './routes/checkout/index'
 import { Route as CartIndexRouteImport } from './routes/cart/index'
 import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
@@ -37,6 +38,11 @@ const SearchIndexRoute = SearchIndexRouteImport.update({
 const ProductsIndexRoute = ProductsIndexRouteImport.update({
   id: '/products/',
   path: '/products/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutIndexRoute = CheckoutIndexRouteImport.update({
+  id: '/checkout/',
+  path: '/checkout/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CartIndexRoute = CartIndexRouteImport.update({
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/auth/verify': typeof AuthVerifyRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/cart/': typeof CartIndexRoute
+  '/checkout/': typeof CheckoutIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/auth/verify': typeof AuthVerifyRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/cart': typeof CartIndexRoute
+  '/checkout': typeof CheckoutIndexRoute
   '/products': typeof ProductsIndexRoute
   '/search': typeof SearchIndexRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/auth/verify': typeof AuthVerifyRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/cart/': typeof CartIndexRoute
+  '/checkout/': typeof CheckoutIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/products/$productId'
     | '/cart/'
+    | '/checkout/'
     | '/products/'
     | '/search/'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/products/$productId'
     | '/cart'
+    | '/checkout'
     | '/products'
     | '/search'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/products/$productId'
     | '/cart/'
+    | '/checkout/'
     | '/products/'
     | '/search/'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   AuthVerifyRoute: typeof AuthVerifyRoute
   ProductsProductIdRoute: typeof ProductsProductIdRoute
   CartIndexRoute: typeof CartIndexRoute
+  CheckoutIndexRoute: typeof CheckoutIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
 }
@@ -175,6 +188,13 @@ declare module '@tanstack/react-router' {
       path: '/products'
       fullPath: '/products/'
       preLoaderRoute: typeof ProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout/': {
+      id: '/checkout/'
+      path: '/checkout'
+      fullPath: '/checkout/'
+      preLoaderRoute: typeof CheckoutIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cart/': {
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyRoute: AuthVerifyRoute,
   ProductsProductIdRoute: ProductsProductIdRoute,
   CartIndexRoute: CartIndexRoute,
+  CheckoutIndexRoute: CheckoutIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
 }

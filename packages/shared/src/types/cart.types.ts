@@ -67,12 +67,20 @@ export interface CartItem {
   quantity: number;
   /** Unit price in integer cents */
   unitPrice: number;
+  /** Product name — enriched from Supabase cart_items at get-cart time */
+  name?: string;
+  /** Product thumbnail URL — enriched from Supabase cart_items at get-cart time */
+  thumbnailUrl?: string;
 }
 
 /** Input payload for adding an item to the cart. */
 export interface CartItemInput {
   skuId: string;
   quantity: number;
+  /** Product name to store in Supabase cart_items for display purposes */
+  productName?: string;
+  /** Product thumbnail URL to store in Supabase cart_items for display purposes */
+  thumbnailUrl?: string;
 }
 
 /** Input for creating a new cart (caller provides session context). */
