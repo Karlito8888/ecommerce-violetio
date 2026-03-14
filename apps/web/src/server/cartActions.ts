@@ -195,6 +195,7 @@ export const addToCartFn = createServerFn({ method: "POST" })
     // Non-fatal: product name/thumbnail won't display but cart still works.
     // Most likely cause: migration 20260315000000_cart_items_product_info.sql not applied.
     if (itemUpsertError) {
+      // eslint-disable-next-line no-console
       console.warn(
         "[cart_items] upsert failed — product info will not display:",
         itemUpsertError.message,
