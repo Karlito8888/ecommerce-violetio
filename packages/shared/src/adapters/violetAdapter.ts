@@ -286,6 +286,7 @@ export class VioletAdapter implements SupplierAdapter {
     }
 
     // Step 5: Apply remaining filters on transformed data
+    products = products.filter((p) => p.thumbnailUrl !== null);
     if (params.inStock) {
       products = products.filter((p) => p.available);
     }

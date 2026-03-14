@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { formatPrice } from "@ecommerce/shared";
 
@@ -52,19 +53,29 @@ export default function BaseProductCard({
   minPrice,
   currency,
 }: BaseProductCardProps) {
+  const [imageError, setImageError] = useState(false);
   const isOutOfStock = !available;
   const priceDisplay = formatPrice(minPrice, currency);
   const imageAlt = `${name} by ${merchantName}`;
 
+  if (imageError) return null;
+
   return (
     <article
+      role="listitem"
       className={`product-card${isOutOfStock ? " product-card--out-of-stock" : ""}`}
       aria-label={`${name}, ${priceDisplay}`}
     >
       <Link to="/products/$productId" params={{ productId: id }} className="product-card__link">
         <div className="product-card__image-wrap">
           {thumbnailUrl ? (
-            <img src={thumbnailUrl} alt={imageAlt} className="product-card__image" loading="lazy" />
+            <img
+              src={thumbnailUrl}
+              alt={imageAlt}
+              className="product-card__image"
+              loading="lazy"
+              onError={() => setImageError(true)}
+            />
           ) : (
             <div className="product-card__placeholder" role="img" aria-label={imageAlt}>
               <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">

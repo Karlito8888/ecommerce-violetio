@@ -17,9 +17,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
   return (
     <div className="product-grid" role="list">
       {products.map((product) => (
-        <div key={product.id} role="listitem">
-          <ProductCard product={product} />
-        </div>
+        <ProductCard key={product.id} product={product} />
       ))}
     </div>
   );

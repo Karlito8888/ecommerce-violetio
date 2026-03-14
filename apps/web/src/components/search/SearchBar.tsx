@@ -187,6 +187,7 @@ export default function SearchBar({
         <input
           ref={inputRef}
           type="search"
+          name="q"
           className="search-bar__input"
           placeholder={placeholder}
           aria-label="Search products"
