@@ -18,6 +18,9 @@ import type {
   WebhookEvent,
   SearchResult,
   SearchFilters,
+  ShippingAddressInput,
+  ShippingMethodsAvailable,
+  SetShippingMethodInput,
   VioletOfferResponse,
   VioletSkuResponse,
   VioletAlbumResponse,
@@ -29,6 +32,7 @@ import {
   violetOfferSchema,
   violetPaginatedOffersSchema,
   violetCartResponseSchema,
+  violetShippingAvailableResponseSchema,
 } from "../schemas/index.js";
 import type { VioletBagResponse, VioletCartSkuResponse } from "../schemas/index.js";
 
@@ -618,6 +622,166 @@ export class VioletAdapter implements SupplierAdapter {
       data: null,
       error: { code: "VIOLET.RATE_LIMITED", message: "Max retries exceeded" },
     };
+  }
+
+  // ─── Shipping (Story 4.3) ──────────────────────────────────────────
+
+  /**
+   * Sets the shipping address for a Violet cart.
+   *
+   * ## Why this returns `ApiResponse<void>`
+   * Violet's POST /shipping_address response is a 200 with the order address object,
+   * not a full cart. We don't need to parse the response body — we just need to know
+   * if the address was accepted. The caller then calls `getAvailableShippingMethods`.
+   *
+   * ## Field mapping (camelCase → Violet snake_case)
+   * - `address1`   → `address_1`   (Violet's non-standard field name)
+   * - `postalCode` → `postal_code`
+   * All other fields are the same name in both systems.
+   *
+   * @see https://docs.violet.io/api-reference/checkout/cart/set-shipping-address
+   */
+  async setShippingAddress(
+    violetCartId: string,
+    address: ShippingAddressInput,
+  ): Promise<ApiResponse<void>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/shipping_address`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          /**
+           * Violet OrderAddress fields confirmed from official docs:
+           * address_1, city, state, postal_code, country, phone.
+           *
+           * NOTE: `name` and `email` are NOT part of the shipping address object —
+           * they belong to the Customer object (POST /checkout/cart/{id}/customer, Story 4.4).
+           * Sending them here will be silently ignored or cause validation errors.
+           *
+           * @see https://docs.violet.io/api-reference/order-service/checkout-shipping/set-shipping-address
+           * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers
+           */
+          address_1: address.address1,
+          city: address.city,
+          state: address.state,
+          postal_code: address.postalCode,
+          country: address.country,
+          phone: address.phone,
+        }),
+      },
+    );
+    if (result.error) return { data: null, error: result.error };
+    return { data: undefined, error: null };
+  }
+
+  /**
+   * Fetches available shipping methods for all bags in the cart.
+   *
+   * ## Why this call is slow (2–5 seconds)
+   * Violet's API calls third-party carrier APIs (USPS, FedEx, UPS) in real-time
+   * for each merchant bag. This is not cacheable — rates depend on address + cart content.
+   * Always show a per-bag loading skeleton, never a global spinner.
+   *
+   * ## PREREQUISITE: shipping address must be set first
+   * Calling this without a prior `setShippingAddress` will fail or return empty results.
+   * The UI enforces the address → methods order.
+   *
+   * ## Response transformation
+   * Violet returns `[{ bag_id: number, shipping_methods: [...] }]`.
+   * We normalize to `ShippingMethodsAvailable[]` with camelCase and string IDs.
+   * The `label ?? name ?? ""` fallback handles Violet's inconsistent field naming.
+   *
+   * @see https://docs.violet.io/api-reference/checkout/cart/get-available-shipping-methods
+   */
+  async getAvailableShippingMethods(
+    violetCartId: string,
+  ): Promise<ApiResponse<ShippingMethodsAvailable[]>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/shipping/available`,
+      { method: "GET" },
+    );
+    if (result.error) return { data: null, error: result.error };
+
+    const parsed = violetShippingAvailableResponseSchema.safeParse(result.data);
+    if (!parsed.success) {
+      return {
+        data: null,
+        error: {
+          code: "VIOLET.VALIDATION_ERROR",
+          message: `Invalid shipping/available response: ${parsed.error.message}`,
+        },
+      };
+    }
+
+    return {
+      data: parsed.data.map((item) => ({
+        bagId: String(item.bag_id),
+        shippingMethods: item.shipping_methods.map((m) => ({
+          /**
+           * Confirmed from Violet docs: the identifier field is "shipping_method_id" (string).
+           * This value must be sent back in the POST /shipping body as "shipping_method_id".
+           *
+           * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/shipping-methods
+           */
+          id: m.shipping_method_id,
+          label: m.label,
+          carrier: m.carrier,
+          /**
+           * Delivery time fields (minDays, maxDays) are NOT available from Violet's API.
+           * Confirmed via official FAQ: carrier APIs don't consistently provide this data.
+           * These will always be undefined in practice.
+           *
+           * @see https://docs.violet.io/faqs/checkout/shipping
+           */
+          minDays: m.min_days,
+          maxDays: m.max_days,
+          price: m.price,
+        })),
+      })),
+      error: null,
+    };
+  }
+
+  /**
+   * Applies shipping method selections to a cart and returns the "priced cart".
+   *
+   * ## Why this returns `ApiResponse<Cart>` (not void)
+   * Violet's POST /shipping response is the full cart with updated `shipping_total`
+   * per bag. We MUST parse and return it so the UI can update cart totals immediately
+   * without a separate GET call.
+   *
+   * ## Request body format (Violet snake_case)
+   * Violet expects: `[{ bag_id: number, shipping_method_id: string }]`
+   * Note: the field is "shipping_method_id" (not "shipping_method").
+   * This was verified against the Violet sandbox and matches the story spec (C1).
+   *
+   * ## bagId conversion
+   * Our `SetShippingMethodInput.bagId` is a string (our internal convention).
+   * Violet requires `bag_id` as a number — we convert with `Number(s.bagId)`.
+   *
+   * @see https://docs.violet.io/api-reference/checkout/cart/set-shipping-methods
+   * @see parseAndTransformCart — used to parse the "priced cart" response
+   */
+  async setShippingMethods(
+    violetCartId: string,
+    selections: SetShippingMethodInput[],
+  ): Promise<ApiResponse<Cart>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/shipping`,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          selections.map((s) => ({
+            bag_id: Number(s.bagId),
+            shipping_method_id: s.shippingMethodId,
+          })),
+        ),
+      },
+    );
+    if (result.error) return { data: null, error: result.error };
+
+    // The response is a full "priced cart" — parse it to update shippingTotal per bag.
+    return this.parseAndTransformCart(result.data);
   }
 
   // ─── Not implemented (future stories) ─────────────────────────────

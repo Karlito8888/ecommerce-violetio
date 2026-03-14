@@ -90,3 +90,92 @@ export interface CreateCartInput {
   /** Anonymous session ID for guest carts */
   sessionId: string | null;
 }
+
+// ─── Shipping (Story 4.3) ──────────────────────────────────────────────────
+
+/**
+ * A single shipping method offered by a carrier for a specific Violet bag.
+ *
+ * ## Field name origins (Violet → internal)
+ * - `id`: Violet `shipping_method_id` (string or number, normalized to string)
+ * - `label`: Violet `label` OR `name` field (Violet may use either)
+ * - `minDays` / `maxDays`: Violet `min_days` / `max_days`
+ * - `price`: Violet `price` in integer cents
+ *
+ * @see packages/shared/src/schemas/cart.schema.ts — violetShippingMethodSchema
+ * @see https://docs.violet.io/api-reference/checkout/cart/get-available-shipping-methods
+ */
+export interface ShippingMethod {
+  /** Shipping method identifier (used in POST /checkout/cart/{id}/shipping body) */
+  id: string;
+  /** Display name — falls back to Violet's `name` field if `label` is absent */
+  label: string;
+  /** Carrier name (e.g., "USPS", "FedEx") — optional, Violet may omit */
+  carrier?: string;
+  /** Minimum estimated delivery days */
+  minDays?: number;
+  /** Maximum estimated delivery days */
+  maxDays?: number;
+  /** Shipping cost in integer cents */
+  price: number;
+}
+
+/**
+ * Shipping methods available for one merchant bag.
+ *
+ * Violet returns one entry per bag from GET /checkout/cart/{id}/shipping/available.
+ * `bagId` is the Violet integer bag ID, normalized to string for our ID conventions.
+ *
+ * @see VioletAdapter.getAvailableShippingMethods
+ */
+export interface ShippingMethodsAvailable {
+  /** Violet bag integer ID as string */
+  bagId: string;
+  /** Available shipping methods for this bag (may be empty if carrier APIs fail) */
+  shippingMethods: ShippingMethod[];
+}
+
+/**
+ * Customer shipping address — sent to Violet before fetching available methods.
+ *
+ * ## Violet API field mapping (camelCase → snake_case on the wire)
+ * - `address1`    → `address_1`
+ * - `postalCode`  → `postal_code`
+ * - `country`     → `country` (ISO 3166-1 alpha-2, e.g., "US")
+ *
+ * ## Confirmed Violet fields (from docs.violet.io/prism/checkout-guides)
+ * - `address_1`, `city`, `state`, `postal_code`, `country`, `phone`
+ *
+ * `name` and `email` belong to the Customer object (POST /customer, Story 4.4),
+ * NOT the shipping address. Do not include them in this payload.
+ *
+ * @see VioletAdapter.setShippingAddress
+ * @see https://docs.violet.io/api-reference/order-service/checkout-shipping/set-shipping-address
+ */
+export interface ShippingAddressInput {
+  address1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  /** ISO 3166-1 alpha-2 country code (e.g., "US", "GB", "DE") */
+  country: string;
+  /** Contact phone for carrier delivery notifications (optional) */
+  phone?: string;
+}
+
+/**
+ * Shipping method selection for one bag — sent in the POST /checkout/cart/{id}/shipping body.
+ *
+ * ## Violet API field mapping (camelCase → snake_case on the wire)
+ * - `bagId`             → `bag_id` (as integer)
+ * - `shippingMethodId`  → `shipping_method_id`
+ *
+ * @see VioletAdapter.setShippingMethods
+ * @see https://docs.violet.io/api-reference/checkout/cart/set-shipping-methods
+ */
+export interface SetShippingMethodInput {
+  /** Violet bag integer ID as string */
+  bagId: string;
+  /** Shipping method ID from ShippingMethod.id */
+  shippingMethodId: string;
+}

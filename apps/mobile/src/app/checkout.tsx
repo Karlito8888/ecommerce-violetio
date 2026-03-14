@@ -1,0 +1,702 @@
+/**
+ * Checkout screen — shipping address + method selection (Story 4.3).
+ *
+ * ## Architecture
+ * Calls the Supabase Edge Function `/cart/{id}/...` for all Violet API calls.
+ * The Violet token NEVER reaches this client — it stays in the Edge Function.
+ *
+ * ## Flow (enforced by component state)
+ * 1. Address form → POST /{cartId}/shipping_address
+ * 2. GET /{cartId}/shipping/available (slow: 2–5s, show per-bag skeleton)
+ * 3. Per-bag method selection → POST /{cartId}/shipping (returns priced cart)
+ * 4. Navigate to payment stub (Story 4.4)
+ *
+ * @see supabase/functions/cart/index.ts — shipping routes
+ * @see apps/web/src/routes/checkout/index.tsx — web equivalent
+ */
+
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { Spacing } from "@/constants/theme";
+import { createSupabaseClient, formatPrice } from "@ecommerce/shared";
+import type { ShippingMethodsAvailable } from "@ecommerce/shared";
+
+/** SecureStore key for the Violet cart ID (set by the cart screen on cart creation). */
+const CART_KEY = "violet_cart_id";
+
+/** Supabase Edge Function base URL for cart/shipping operations. */
+const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
+  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/cart`
+  : null;
+
+/**
+ * Retrieves the Supabase session access token for Edge Function authorization.
+ * Anonymous users have a real token via Supabase anonymous auth.
+ */
+async function getSessionToken(): Promise<string | null> {
+  const supabase = createSupabaseClient();
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+interface AddressFields {
+  address1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+type CheckoutStep = "address" | "methods" | "confirmed";
+
+export default function CheckoutScreen() {
+  const [step, setStep] = useState<CheckoutStep>("address");
+
+  // ── Address state ───────────────────────────────────────────────────
+  const [address, setAddress] = useState<AddressFields>({
+    address1: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "US",
+  });
+  const [isAddressSubmitting, setIsAddressSubmitting] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
+
+  // ── Shipping methods state ──────────────────────────────────────────
+  const [availableMethods, setAvailableMethods] = useState<ShippingMethodsAvailable[]>([]);
+  const [isLoadingMethods, setIsLoadingMethods] = useState(false);
+  const [methodsError, setMethodsError] = useState<string | null>(null);
+  /**
+   * Per-bag error state (key = bagId).
+   * Set for bags that return 0 shipping methods — shown with a per-bag retry button.
+   * Satisfies AC#10: "retry button and clear error message per Bag (not a global error)".
+   */
+  const [bagErrorState, setBagErrorState] = useState<Record<string, string>>({});
+  /** Selected shipping method per bag (key = bagId) */
+  const [selectedMethods, setSelectedMethods] = useState<Record<string, string>>({});
+
+  // ── Payment CTA state ───────────────────────────────────────────────
+  const [isSubmittingShipping, setIsSubmittingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+
+  const allBagsSelected =
+    availableMethods.length > 0 &&
+    availableMethods.every((bag) => Boolean(selectedMethods[bag.bagId]));
+
+  // ── Fetch available shipping methods ────────────────────────────────
+  const fetchAvailableShippingMethods = useCallback(async (violetCartId: string) => {
+    if (!EDGE_FN_BASE) return;
+    const token = await getSessionToken();
+    if (!token) {
+      setMethodsError("Not authenticated. Please restart the app.");
+      return;
+    }
+
+    setIsLoadingMethods(true);
+    setMethodsError(null);
+    setBagErrorState({});
+
+    try {
+      // This call is intentionally slow (2–5s) — Violet queries carrier APIs.
+      // The ActivityIndicator and skeleton below covers this wait.
+      const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping/available`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        setMethodsError(`Failed to load shipping options (${res.status}): ${text}`);
+        return;
+      }
+
+      const json = await res.json();
+      // Edge Function transforms Violet snake_case → ShippingMethodsAvailable[]
+      // (bag_id → bagId, shipping_methods → shippingMethods, shipping_method_id → id)
+      const methods: ShippingMethodsAvailable[] = json.data ?? [];
+      setAvailableMethods(methods);
+
+      // Per-bag error state (AC#10): flag bags that returned 0 shipping methods.
+      // Violet may return an empty array for a bag if the carrier API failed —
+      // show a per-bag error with retry instead of a global error.
+      const bagErrors: Record<string, string> = {};
+      for (const bag of methods) {
+        if (bag.shippingMethods.length === 0) {
+          bagErrors[bag.bagId] = "No shipping methods available for this merchant.";
+        }
+      }
+      setBagErrorState(bagErrors);
+
+      // Auto-select bags with only one shipping option (AC#7)
+      const autoSelections: Record<string, string> = {};
+      for (const bag of methods) {
+        if (bag.shippingMethods.length === 1) {
+          autoSelections[bag.bagId] = bag.shippingMethods[0].id;
+        }
+      }
+      if (Object.keys(autoSelections).length > 0) {
+        setSelectedMethods((prev) => ({ ...autoSelections, ...prev }));
+      }
+    } catch {
+      setMethodsError("Network error loading shipping options. Please try again.");
+    } finally {
+      setIsLoadingMethods(false);
+    }
+  }, []);
+
+  // ── Address submit ──────────────────────────────────────────────────
+  const handleAddressSubmit = useCallback(async () => {
+    // Basic validation
+    if (
+      !address.address1.trim() ||
+      !address.city.trim() ||
+      !address.state.trim() ||
+      !address.postalCode.trim() ||
+      !address.country.trim()
+    ) {
+      setAddressError("All address fields are required.");
+      return;
+    }
+
+    if (!EDGE_FN_BASE) {
+      setAddressError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
+      return;
+    }
+
+    const violetCartId = await SecureStore.getItemAsync(CART_KEY);
+    if (!violetCartId) {
+      setAddressError("No active cart found. Please add items to your cart first.");
+      return;
+    }
+
+    const token = await getSessionToken();
+    if (!token) {
+      setAddressError("Not authenticated. Please restart the app.");
+      return;
+    }
+
+    setIsAddressSubmitting(true);
+    setAddressError(null);
+
+    try {
+      const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping_address`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          // Violet snake_case field names (Edge Function forwards body as-is)
+          address_1: address.address1,
+          city: address.city,
+          state: address.state,
+          postal_code: address.postalCode,
+          country: address.country,
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        setAddressError(`Address not accepted (${res.status}): ${text}`);
+        return;
+      }
+
+      // Address accepted — fetch available methods
+      setStep("methods");
+      await fetchAvailableShippingMethods(violetCartId);
+    } catch {
+      setAddressError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsAddressSubmitting(false);
+    }
+  }, [address, fetchAvailableShippingMethods]);
+
+  // ── Retry shipping methods ──────────────────────────────────────────
+  const handleRetry = useCallback(async () => {
+    const violetCartId = await SecureStore.getItemAsync(CART_KEY);
+    if (violetCartId) await fetchAvailableShippingMethods(violetCartId);
+  }, [fetchAvailableShippingMethods]);
+
+  // ── Continue to payment ─────────────────────────────────────────────
+  const handleContinueToPayment = useCallback(async () => {
+    if (!allBagsSelected) return;
+
+    if (!EDGE_FN_BASE) return;
+
+    const violetCartId = await SecureStore.getItemAsync(CART_KEY);
+    if (!violetCartId) return;
+
+    const token = await getSessionToken();
+    if (!token) return;
+
+    setIsSubmittingShipping(true);
+    setShippingError(null);
+
+    try {
+      // Build selections array: one per bag
+      // Violet format: [{ bag_id: number, shipping_method_id: string }]
+      const selections = Object.entries(selectedMethods).map(([bagId, shippingMethodId]) => ({
+        bag_id: Number(bagId),
+        shipping_method_id: shippingMethodId,
+      }));
+
+      const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(selections),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        setShippingError(`Failed to confirm shipping (${res.status}): ${text}`);
+        return;
+      }
+
+      // Shipping confirmed — navigate to payment stub (Story 4.4)
+      setStep("confirmed");
+      // Story 4.4 will add: router.push("/payment");
+    } catch {
+      setShippingError("Network error. Please try again.");
+    } finally {
+      setIsSubmittingShipping(false);
+    }
+  }, [allBagsSelected, selectedMethods]);
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        {/* ── Header ── */}
+        <ThemedView style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ThemedText style={styles.backText}>← Back</ThemedText>
+          </TouchableOpacity>
+          <ThemedText style={styles.title}>Checkout</ThemedText>
+        </ThemedView>
+
+        {/* ── Address section ── */}
+        <ThemedView style={styles.section}>
+          <ThemedText style={styles.sectionTitle}>SHIPPING ADDRESS</ThemedText>
+
+          <ThemedText style={styles.fieldLabel}>Street Address</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={address.address1}
+            onChangeText={(v) => setAddress((p) => ({ ...p, address1: v }))}
+            placeholder="123 Main Street"
+            autoComplete="street-address"
+            editable={step === "address"}
+          />
+
+          <View style={styles.row}>
+            <View style={styles.rowFieldWide}>
+              <ThemedText style={styles.fieldLabel}>City</ThemedText>
+              <TextInput
+                style={styles.input}
+                value={address.city}
+                onChangeText={(v) => setAddress((p) => ({ ...p, city: v }))}
+                autoComplete="address-line2"
+                editable={step === "address"}
+              />
+            </View>
+            <View style={styles.rowFieldNarrow}>
+              <ThemedText style={styles.fieldLabel}>State</ThemedText>
+              <TextInput
+                style={styles.input}
+                value={address.state}
+                onChangeText={(v) => setAddress((p) => ({ ...p, state: v }))}
+                autoComplete="address-line1"
+                editable={step === "address"}
+              />
+            </View>
+          </View>
+
+          <ThemedText style={styles.fieldLabel}>ZIP / Postal Code</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={address.postalCode}
+            onChangeText={(v) => setAddress((p) => ({ ...p, postalCode: v }))}
+            autoComplete="postal-code"
+            keyboardType="numbers-and-punctuation"
+            editable={step === "address"}
+          />
+
+          <ThemedText style={styles.fieldLabel}>Country</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={address.country}
+            onChangeText={(v) => setAddress((p) => ({ ...p, country: v.toUpperCase() }))}
+            placeholder="US"
+            autoCapitalize="characters"
+            maxLength={2}
+            editable={step === "address"}
+          />
+
+          {addressError && <ThemedText style={styles.errorText}>{addressError}</ThemedText>}
+
+          {step === "address" && (
+            <TouchableOpacity
+              style={[styles.primaryButton, isAddressSubmitting && styles.buttonDisabled]}
+              onPress={handleAddressSubmit}
+              disabled={isAddressSubmitting}
+            >
+              {isAddressSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <ThemedText style={styles.primaryButtonText}>Continue →</ThemedText>
+              )}
+            </TouchableOpacity>
+          )}
+        </ThemedView>
+
+        {/* ── Shipping methods section ── */}
+        {step !== "address" && (
+          <ThemedView style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>SHIPPING METHOD</ThemedText>
+
+            {/* Global loading state (AC#12) */}
+            {isLoadingMethods && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" />
+                <ThemedText style={styles.loadingText}>
+                  Fetching shipping rates from carriers…
+                </ThemedText>
+                <ThemedText style={styles.loadingSubText}>(This may take a few seconds)</ThemedText>
+              </View>
+            )}
+
+            {/* Error with retry (AC#10) */}
+            {!isLoadingMethods && methodsError && (
+              <View style={styles.bagError}>
+                <ThemedText style={styles.errorText}>{methodsError}</ThemedText>
+                <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+                  <ThemedText style={styles.retryButtonText}>Retry</ThemedText>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Shipping options per bag — with per-bag error/retry (AC#10) */}
+            {!isLoadingMethods &&
+              !methodsError &&
+              availableMethods.map((bagMethods) => (
+                <View key={bagMethods.bagId} style={styles.bagSection}>
+                  <ThemedText style={styles.bagTitle}>Bag {bagMethods.bagId}</ThemedText>
+
+                  {/* Per-bag error with retry (AC#10) */}
+                  {bagErrorState[bagMethods.bagId] ? (
+                    <View style={styles.bagError}>
+                      <ThemedText style={styles.errorText}>
+                        {bagErrorState[bagMethods.bagId]}
+                      </ThemedText>
+                      <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+                        <ThemedText style={styles.retryButtonText}>Retry</ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  ) : bagMethods.shippingMethods.length === 0 ? null : (
+                    <>
+                      {bagMethods.shippingMethods.length === 1 && (
+                        <ThemedText style={styles.autoSelectNote}>
+                          Only one option — auto-selected.
+                        </ThemedText>
+                      )}
+                      {bagMethods.shippingMethods.map((method) => {
+                        const isSelected = selectedMethods[bagMethods.bagId] === method.id;
+                        return (
+                          <TouchableOpacity
+                            key={method.id}
+                            style={[styles.methodOption, isSelected && styles.methodOptionSelected]}
+                            onPress={() =>
+                              setSelectedMethods((prev) => ({
+                                ...prev,
+                                [bagMethods.bagId]: method.id,
+                              }))
+                            }
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: isSelected }}
+                          >
+                            <View style={styles.methodOptionContent}>
+                              <View style={styles.methodRadio}>
+                                <View
+                                  style={[
+                                    styles.methodRadioInner,
+                                    isSelected && styles.methodRadioInnerSelected,
+                                  ]}
+                                />
+                              </View>
+                              <View style={styles.methodInfo}>
+                                <ThemedText style={styles.methodName}>{method.label}</ThemedText>
+                                {(method.carrier !== undefined || method.minDays !== undefined) && (
+                                  <ThemedText style={styles.methodDelivery}>
+                                    {method.carrier ? `${method.carrier} · ` : ""}
+                                    {method.minDays !== undefined && method.maxDays !== undefined
+                                      ? `${method.minDays}–${method.maxDays} days`
+                                      : method.minDays !== undefined
+                                        ? `${method.minDays}+ days`
+                                        : ""}
+                                  </ThemedText>
+                                )}
+                              </View>
+                              <ThemedText style={styles.methodPrice}>
+                                {method.price === 0 ? "FREE" : formatPrice(method.price)}
+                              </ThemedText>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </>
+                  )}
+                </View>
+              ))}
+
+            {shippingError && (
+              <ThemedText style={[styles.errorText, { marginTop: Spacing.two }]}>
+                {shippingError}
+              </ThemedText>
+            )}
+
+            {step === "confirmed" && (
+              <ThemedText style={styles.confirmedText}>
+                ✓ Shipping confirmed. Payment coming soon.
+              </ThemedText>
+            )}
+
+            {/* Continue to Payment CTA */}
+            {step === "methods" && (
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (!allBagsSelected || isSubmittingShipping) && styles.buttonDisabled,
+                  { marginTop: Spacing.three },
+                ]}
+                onPress={handleContinueToPayment}
+                disabled={!allBagsSelected || isSubmittingShipping}
+                accessibilityState={{ disabled: !allBagsSelected }}
+              >
+                {isSubmittingShipping ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <ThemedText style={styles.primaryButtonText}>Continue to Payment</ThemedText>
+                )}
+              </TouchableOpacity>
+            )}
+          </ThemedView>
+        )}
+
+        {/* Affiliate disclosure */}
+        <ThemedText style={styles.affiliate}>
+          We earn a commission on purchases — this doesn't affect your price.
+        </ThemedText>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    padding: Spacing.three,
+    paddingBottom: Spacing.five,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Spacing.three,
+    gap: Spacing.two,
+  },
+  backButton: {
+    paddingVertical: Spacing.one,
+    paddingRight: Spacing.two,
+  },
+  backText: {
+    fontSize: 14,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "600",
+  },
+  section: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e8e4df",
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 1,
+    marginBottom: Spacing.three,
+    opacity: 0.6,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    marginBottom: Spacing.one,
+    opacity: 0.8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#d5cec6",
+    borderRadius: 8,
+    padding: Spacing.two,
+    fontSize: 15,
+    marginBottom: Spacing.two,
+    color: "#1a1a1a",
+    backgroundColor: "#fff",
+  },
+  row: {
+    flexDirection: "row",
+    gap: Spacing.two,
+  },
+  rowFieldWide: {
+    flex: 2,
+  },
+  rowFieldNarrow: {
+    flex: 1,
+  },
+  errorText: {
+    color: "#b54a4a",
+    fontSize: 13,
+    marginTop: Spacing.one,
+  },
+  primaryButton: {
+    backgroundColor: "#2c2c2c",
+    borderRadius: 8,
+    padding: Spacing.three,
+    alignItems: "center",
+    marginTop: Spacing.two,
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  loadingContainer: {
+    alignItems: "center",
+    paddingVertical: Spacing.four,
+    gap: Spacing.two,
+  },
+  loadingText: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  loadingSubText: {
+    fontSize: 12,
+    opacity: 0.6,
+    textAlign: "center",
+  },
+  bagError: {
+    gap: Spacing.two,
+  },
+  retryButton: {
+    borderWidth: 1,
+    borderColor: "#b54a4a",
+    borderRadius: 6,
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    alignSelf: "flex-start",
+  },
+  retryButtonText: {
+    color: "#b54a4a",
+    fontSize: 13,
+  },
+  bagSection: {
+    marginBottom: Spacing.three,
+  },
+  bagTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.8,
+    marginBottom: Spacing.two,
+    opacity: 0.6,
+    textTransform: "uppercase",
+  },
+  autoSelectNote: {
+    fontSize: 12,
+    opacity: 0.6,
+    marginBottom: Spacing.one,
+  },
+  methodOption: {
+    borderWidth: 1,
+    borderColor: "#d5cec6",
+    borderRadius: 8,
+    marginBottom: Spacing.one,
+  },
+  methodOptionSelected: {
+    borderColor: "#8b7355",
+    backgroundColor: "rgba(139, 115, 85, 0.05)",
+  },
+  methodOptionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.two,
+    gap: Spacing.two,
+  },
+  methodRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: "#8b7355",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  methodRadioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "transparent",
+  },
+  methodRadioInnerSelected: {
+    backgroundColor: "#8b7355",
+  },
+  methodInfo: {
+    flex: 1,
+  },
+  methodName: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  methodDelivery: {
+    fontSize: 12,
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  methodPrice: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  confirmedText: {
+    color: "#5a7a4a",
+    fontWeight: "500",
+    fontSize: 14,
+    marginTop: Spacing.two,
+  },
+  affiliate: {
+    fontSize: 12,
+    opacity: 0.5,
+    textAlign: "center",
+    marginTop: Spacing.two,
+  },
+});

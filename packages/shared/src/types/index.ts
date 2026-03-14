@@ -22,6 +22,10 @@ export type {
   CartItem,
   CartItemInput,
   CreateCartInput,
+  ShippingMethod,
+  ShippingMethodsAvailable,
+  ShippingAddressInput,
+  SetShippingMethodInput,
 } from "./cart.types.js";
 export type {
   Order,

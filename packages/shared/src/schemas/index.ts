@@ -16,11 +16,17 @@ export {
   violetCartSkuSchema,
   violetBagSchema,
   violetCartResponseSchema,
+  violetShippingMethodSchema,
+  violetShippingAvailableItemSchema,
+  violetShippingAvailableResponseSchema,
+  violetShippingAddressSchema,
 } from "./cart.schema.js";
 export type {
   VioletCartResponse,
   VioletBagResponse,
   VioletCartSkuResponse,
+  VioletShippingMethod,
+  VioletShippingAvailableResponse,
 } from "./cart.schema.js";
 export {
   webhookEventTypeSchema,

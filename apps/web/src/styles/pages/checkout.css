@@ -1,0 +1,445 @@
+/* ─── Checkout Page ──────────────────────────────────────────────────────────
+ * BEM: .checkout (block)
+ * Two-column layout on desktop (form left, order summary sidebar right).
+ * Single-column on mobile (< 768px).
+ *
+ * Story 4.3: Shipping address form + per-bag shipping method selection.
+ * Story 4.4 will add the payment section below shipping methods.
+ *
+ * Design: consistent with .cart page layout (same two-column grid approach),
+ * using design tokens from tokens.css (--space-*, --color-*, --font-*).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.checkout {
+  padding: var(--space-8) 0;
+}
+
+.checkout__title {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-8) 0;
+}
+
+/* Two-column grid: form left, order summary sidebar right */
+.checkout__layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: var(--space-12);
+  align-items: start;
+}
+
+/* ── Left column: form sections (address, shipping methods, payment in 4.4) ── */
+
+.checkout__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* A discrete form section (address block, shipping methods block, etc.) */
+.checkout__section {
+  background: var(--color-ivory);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.checkout__section-title {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-6) 0;
+}
+
+/* ── Form fields ── */
+
+.checkout__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.checkout__field:last-child {
+  margin-bottom: 0;
+}
+
+.checkout__field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-charcoal);
+}
+
+.checkout__field-input,
+.checkout__field-select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-stone);
+  border-radius: var(--radius-md);
+  background: #fff;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--color-ink);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.checkout__field-input:focus,
+.checkout__field-select:focus {
+  outline: none;
+  border-color: var(--color-sienna);
+  box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.12);
+}
+
+/* Modifier: red border when field has a validation error */
+.checkout__field--error .checkout__field-input,
+.checkout__field--error .checkout__field-select {
+  border-color: var(--color-error);
+}
+
+.checkout__field-error {
+  font-size: 0.75rem;
+  color: var(--color-error);
+  margin: 0;
+}
+
+/* Two-column row for city/state/zip on desktop */
+.checkout__field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.checkout__field-row--3col {
+  grid-template-columns: 1fr 80px 100px;
+}
+
+/* Country warning banner */
+.checkout__country-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(193, 122, 42, 0.08);
+  border: 1px solid rgba(193, 122, 42, 0.25);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  color: var(--color-warning);
+  margin-top: var(--space-4);
+}
+
+/* ── Shipping methods per bag ── */
+
+.checkout__shipping-methods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Merchant group header within shipping methods */
+.checkout__bag-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-steel);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-3) 0;
+}
+
+/* Skeleton loading state while carrier APIs respond */
+.checkout__bag-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.checkout__bag-loading-item {
+  height: 52px;
+  background: var(--color-linen);
+  border-radius: var(--radius-md);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* Per-bag error with retry */
+.checkout__bag-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(181, 74, 74, 0.06);
+  border: 1px solid rgba(181, 74, 74, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  color: var(--color-error);
+}
+
+.checkout__bag-error-retry {
+  background: none;
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.75rem;
+  color: var(--color-error);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.checkout__bag-error-retry:hover {
+  background: rgba(181, 74, 74, 0.08);
+}
+
+/* A single shipping option row */
+.checkout__method-option {
+  border: 1px solid var(--color-stone);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+  margin-bottom: var(--space-2);
+}
+
+.checkout__method-option:last-child {
+  margin-bottom: 0;
+}
+
+/* Selected state: subtle warm highlight */
+.checkout__method-option--selected {
+  border-color: var(--color-sienna);
+  background: rgba(139, 115, 85, 0.05);
+}
+
+.checkout__method-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  width: 100%;
+}
+
+.checkout__method-label input[type="radio"] {
+  flex-shrink: 0;
+  accent-color: var(--color-sienna);
+  width: 16px;
+  height: 16px;
+}
+
+.checkout__method-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checkout__method-name {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.checkout__method-delivery {
+  font-size: 0.75rem;
+  color: var(--color-steel);
+}
+
+.checkout__method-price {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-ink);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ── Submit CTA ── */
+
+.checkout__submit {
+  display: block;
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-midnight);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    opacity var(--transition-fast);
+  text-align: center;
+}
+
+.checkout__submit:hover:not(:disabled) {
+  background: var(--color-charcoal);
+}
+
+.checkout__submit:disabled,
+.checkout__submit--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Order summary sidebar (right column) ── */
+
+.checkout__summary {
+  background: var(--color-ivory);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  position: sticky;
+  top: var(--space-8);
+}
+
+.checkout__summary-title {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-5) 0;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-sand);
+}
+
+/* Individual product item in the sidebar */
+.checkout__summary-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-linen);
+}
+
+.checkout__summary-item:last-of-type {
+  border-bottom: none;
+}
+
+.checkout__summary-item-img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  background: var(--color-linen);
+}
+
+.checkout__summary-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkout__summary-item-name {
+  font-size: 0.8125rem;
+  color: var(--color-ink);
+  margin: 0 0 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkout__summary-item-qty {
+  font-size: 0.75rem;
+  color: var(--color-steel);
+}
+
+.checkout__summary-item-price {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+/* Totals breakdown */
+.checkout__summary-totals {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-sand);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.checkout__summary-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--color-charcoal);
+}
+
+.checkout__summary-line--total {
+  font-weight: 600;
+  color: var(--color-ink);
+  font-size: 1rem;
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-sand);
+}
+
+/* Affiliate disclosure */
+.checkout__affiliate {
+  margin-top: var(--space-4);
+  font-size: 0.75rem;
+  color: var(--color-silver);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ── Address submit button (within address section) ── */
+
+.checkout__address-submit {
+  margin-top: var(--space-5);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-sienna);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.checkout__address-submit:hover:not(:disabled) {
+  background: var(--color-amber);
+}
+
+.checkout__address-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Responsive: mobile single column ── */
+
+@media (max-width: 768px) {
+  .checkout__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .checkout__summary {
+    position: static;
+    /* Show summary at the top on mobile for quick price reference */
+    order: -1;
+  }
+
+  .checkout__field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .checkout__field-row--3col {
+    grid-template-columns: 1fr;
+  }
+}

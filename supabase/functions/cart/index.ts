@@ -6,13 +6,16 @@
  *
  * ## Routes (matched by method + URL path suffix)
  *
- * | Method | Path                          | Action         |
- * |--------|-------------------------------|----------------|
- * | POST   | /cart                         | Create cart    |
- * | POST   | /cart/{id}/skus               | Add SKU        |
- * | PUT    | /cart/{id}/skus/{skuId}       | Update qty     |
- * | DELETE | /cart/{id}/skus/{skuId}       | Remove SKU     |
- * | GET    | /cart/{id}                    | Fetch cart     |
+ * | Method | Path                          | Action                      |
+ * |--------|-------------------------------|-----------------------------|
+ * | POST   | /cart                         | Create cart                 |
+ * | POST   | /cart/{id}/skus               | Add SKU                     |
+ * | PUT    | /cart/{id}/skus/{skuId}       | Update qty                  |
+ * | DELETE | /cart/{id}/skus/{skuId}       | Remove SKU                  |
+ * | GET    | /cart/{id}                    | Fetch cart                  |
+ * | POST   | /cart/{id}/shipping_address   | Set shipping address        |
+ * | GET    | /cart/{id}/shipping/available | Get available shipping      |
+ * | POST   | /cart/{id}/shipping           | Set shipping methods        |
  *
  * ## Authentication
  *
@@ -20,8 +23,33 @@
  * The JWT is validated before any Violet API call is made.
  * The Violet token is never exposed to mobile clients.
  *
+ * ## Shipping route ordering (important)
+ *
+ * The `/shipping_address` route MUST be matched before `/shipping` to avoid
+ * incorrect routing. Both end with "shipping" as a substring.
+ * Order: shipping_address → shipping/available → shipping
+ *
+ * ## Data transformation for shipping routes
+ *
+ * Cart routes (create, add SKU, etc.) return Violet's raw JSON directly to mobile.
+ * Shipping routes MUST transform before returning:
+ * - GET /shipping/available: Violet returns snake_case → must transform to ShippingMethodsAvailable[]
+ *   (see transformShippingAvailable). Web uses VioletAdapter which does this via Zod.
+ * - POST /shipping: returns cart data → transformed via transformCart() (same as other cart routes).
+ * - POST /shipping_address: returns 200 with no body needed → return empty 200.
+ *
+ * ## Violet best practices applied here
+ * - Never expose Violet JWT to the mobile client (Authorization header only on server side)
+ * - Set shipping address BEFORE calling /shipping/available (Violet prerequisite)
+ * - /shipping/available is slow (2–5s, calls carrier APIs) — mobile must show loading state
+ * - POST /shipping body: `[{ bag_id: number, shipping_method_id: string }]` — one per bag
+ * - POST /shipping response is a "priced cart" (shipping_total per bag updated)
+ *
  * @see supabase/functions/_shared/violetAuth.ts — getVioletHeaders()
  * @see supabase/functions/_shared/supabaseAdmin.ts — getSupabaseAdmin()
+ * @see https://docs.violet.io/api-reference/checkout/cart/set-shipping-address
+ * @see https://docs.violet.io/api-reference/checkout/cart/get-available-shipping-methods
+ * @see https://docs.violet.io/api-reference/checkout/cart/set-shipping-methods
  */
 
 import { corsHeaders } from "../_shared/cors.ts";
@@ -348,8 +376,148 @@ Deno.serve(async (req: Request) => {
     return json({ data: { ...transformCart(cartData), id: supabaseCartId ?? "" }, error: null });
   }
 
+  // ── Route: POST /cart/{id}/shipping_address — set address ─────────
+  // MUST be checked before /shipping to prevent incorrect substring match
+  const shippingAddressMatch = path.match(/^\/([^/]+)\/shipping_address$/);
+  if (req.method === "POST" && shippingAddressMatch) {
+    const violetCartId = shippingAddressMatch[1];
+    const body = await req.json();
+
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping_address`, {
+      method: "POST",
+      headers: violetHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Set shipping address failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    return new Response(null, { status: 200, headers: jsonHeaders });
+  }
+
+  // ── Route: GET /cart/{id}/shipping/available — get methods ─────────
+  const shippingAvailableMatch = path.match(/^\/([^/]+)\/shipping\/available$/);
+  if (req.method === "GET" && shippingAvailableMatch) {
+    const violetCartId = shippingAvailableMatch[1];
+
+    // Note: This call is intentionally slow (2–5s) — it queries carrier APIs.
+    // The mobile app should show a per-bag skeleton loader while pending.
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping/available`, {
+      method: "GET",
+      headers: violetHeaders,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Get available shipping failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    const rawData = await res.json();
+    // Transform Violet snake_case → ShippingMethodsAvailable[] (camelCase).
+    // This mirrors VioletAdapter.getAvailableShippingMethods() on web.
+    // Mobile reads our internal format — never the raw Violet field names.
+    const data = transformShippingAvailable(rawData);
+    return json({ data, error: null });
+  }
+
+  // ── Route: POST /cart/{id}/shipping — set shipping methods ─────────
+  // Must be AFTER shipping_address check to avoid path conflict.
+  const shippingMatch = path.match(/^\/([^/]+)\/shipping$/);
+  if (req.method === "POST" && shippingMatch) {
+    const violetCartId = shippingMatch[1];
+    const body = await req.json();
+
+    // Body: [{ bag_id: number, shipping_method_id: string }]
+    // Violet returns the full "priced cart" (shipping_total per bag updated).
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping`, {
+      method: "POST",
+      headers: violetHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Set shipping methods failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    const cartData = await res.json();
+    const transformed = transformCart(cartData);
+    // Refresh Supabase cart row with updated timestamp
+    await upsertCart(violetCartId, userId);
+    return json({ data: transformed, error: null });
+  }
+
   return errorResponse("CART.NOT_FOUND", "Route not found", 404);
 });
+
+/**
+ * Transforms Violet's GET /shipping/available response (snake_case) to our
+ * internal ShippingMethodsAvailable[] format (camelCase).
+ *
+ * ## Why transformation is required here
+ * The Edge Function is the snake_case → camelCase boundary for mobile clients,
+ * mirroring what VioletAdapter.getAvailableShippingMethods() does for web.
+ * Mobile reads `ShippingMethodsAvailable[]` (our camelCase format). Without
+ * this transformation, `bag.bagId` and `bag.shippingMethods` would be
+ * undefined at runtime, crashing the shipping selection screen.
+ *
+ * ## Field mapping (Violet → internal, confirmed from official docs)
+ * - `bag_id` (number)            → `bagId` (string)
+ * - `shipping_methods` (array)   → `shippingMethods` (array)
+ * - `shipping_method_id` (str)   → `id` (string) — Violet's confirmed field name
+ * - `label` (string)             → `label` (string)
+ * - `carrier` (string|undefined) → `carrier` (string|undefined)
+ * - `price` (number, cents)      → `price` (number, cents)
+ *
+ * ## Note on delivery time fields
+ * `min_days`/`max_days` are kept for forward compatibility but Violet's FAQ
+ * confirms these are not provided: "The platforms don't consistently provide
+ * shipping time data through their APIs."
+ *
+ * @see packages/shared/src/adapters/violetAdapter.ts — getAvailableShippingMethods() (web equivalent)
+ * @see packages/shared/src/types/cart.types.ts — ShippingMethodsAvailable, ShippingMethod
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/shipping-methods
+ */
+function transformShippingAvailable(raw: unknown): Array<{
+  bagId: string;
+  shippingMethods: Array<{
+    id: string;
+    label: string;
+    carrier?: string;
+    price: number;
+    minDays?: number;
+    maxDays?: number;
+  }>;
+}> {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Array<Record<string, unknown>>).map((item) => ({
+    bagId: String(item.bag_id ?? ""),
+    shippingMethods: Array.isArray(item.shipping_methods)
+      ? (item.shipping_methods as Array<Record<string, unknown>>).map((m) => ({
+          id: String(m.shipping_method_id ?? ""),
+          label: String(m.label ?? ""),
+          carrier: m.carrier !== undefined ? String(m.carrier) : undefined,
+          price: Math.max(0, Number(m.price ?? 0)),
+          minDays: m.min_days !== undefined ? Number(m.min_days) : undefined,
+          maxDays: m.max_days !== undefined ? Number(m.max_days) : undefined,
+        }))
+      : [],
+  }));
+}
 
 /**
  * Transforms a raw Violet cart response to our internal Cart shape.
