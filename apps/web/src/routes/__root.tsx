@@ -9,6 +9,15 @@ import Header from "../components/Header";
 import { AppBannerContext, useAppBannerProvider } from "../hooks/useAppBanner";
 import { initAnonymousSession } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../utils/supabase";
+import { CartProvider } from "../contexts/CartContext";
+import CartDrawer from "../features/cart/CartDrawer";
+import {
+  getCartFn,
+  getCartCookieFn,
+  updateCartItemFn,
+  removeFromCartFn,
+} from "../server/cartActions";
+import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
 
 import appCss from "../styles/index.css?url";
 
@@ -16,31 +25,33 @@ import appCss from "../styles/index.css?url";
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;}catch(e){}})();`;
 
 /**
- * Root route with typed router context.
- *
- * `createRootRouteWithContext<RouterContext>()` makes `queryClient` available
- * in all child route loaders via `context.queryClient`. This is required for
- * SSR data prefetching with TanStack Query (ensureQueryData / ensureInfiniteQueryData).
- *
- * The context value is provided by `getRouter()` in `router.tsx` via
- * `createTanStackRouter({ context: { queryClient } })`.
+ * Platform-specific adapters for CartDrawer shared hooks.
+ * TanStack Start Server Functions use .({ data: ... }) convention;
+ * shared hook types expect plain function signatures.
  */
+const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
+const updateCartItem: UpdateCartItemFn = (input) => updateCartItemFn({ data: input });
+const removeFromCart: RemoveFromCartFn = (input) => removeFromCartFn({ data: input });
+
 /**
  * Root route — HTML shell with global defaults.
  *
+ * ## Cart Integration (Story 4.1)
+ * CartProvider wraps the entire app so the cart drawer is available on every
+ * page. CartDrawer is mounted inside CartProvider to access useCartContext().
+ *
+ * The loader reads the `violet_cart_id` HttpOnly cookie server-side on every
+ * initial page load/refresh, so CartProvider is hydrated with the existing cart
+ * ID without requiring a client-side round-trip.
+ *
  * ## SEO Meta Strategy (Story 3.8)
- *
- * TanStack Start **merges** child `head()` meta with root meta (child `title`
- * overrides, other tags accumulate). To avoid duplicate OG/Twitter tags:
- *
- * - Root sets **site-wide invariants only**: charset, viewport, og:site_name,
- *   og:locale. These never change per-page.
- * - Root does NOT set og:type or twitter:card — those come from each child
- *   route via `buildPageMeta()`, which generates the full tag set per page.
- * - Default title and description act as fallbacks for routes that don't
- *   override them (e.g., 404 or future routes without explicit head()).
+ * Root sets site-wide invariants only; child routes add page-specific meta.
  */
 export const Route = createRootRouteWithContext<RouterContext>()({
+  loader: async () => {
+    const { violetCartId } = await getCartCookieFn();
+    return { initialVioletCartId: violetCartId ?? null };
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -51,7 +62,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         content:
           "Discover unique products from curated merchants — powered by AI search. Maison Émile brings you a handpicked shopping experience.",
       },
-      // Site-wide OG invariants (child routes add og:title, og:type, etc. via buildPageMeta)
       { property: "og:site_name", content: "Maison Émile" },
       { property: "og:locale", content: "en_US" },
     ],
@@ -62,6 +72,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const appBanner = useAppBannerProvider();
+  // Hydrate CartProvider from the HttpOnly cookie read server-side in the loader.
+  // This ensures the cart badge and drawer are populated immediately on page refresh,
+  // without waiting for a client-side fetch.
+  const { initialVioletCartId } = Route.useLoaderData();
 
   useEffect(() => {
     initAnonymousSession(getSupabaseBrowserClient()).catch((err) => {
@@ -77,25 +91,26 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <AppBannerContext.Provider value={appBanner}>
-          <a href="#main-content" className="sr-only sr-only--focusable">
-            Skip to content
-          </a>
-          <AppBanner />
-          <Header />
-          <main id="main-content">{children}</main>
-          <Footer />
-        </AppBannerContext.Provider>
+        <CartProvider initialVioletCartId={initialVioletCartId}>
+          <AppBannerContext.Provider value={appBanner}>
+            <a href="#main-content" className="sr-only sr-only--focusable">
+              Skip to content
+            </a>
+            <AppBanner />
+            <Header />
+            <main id="main-content">{children}</main>
+            <Footer />
+          </AppBannerContext.Provider>
+          {/* CartDrawer mounted inside CartProvider — always available app-wide */}
+          <CartDrawer
+            fetchCartFn={fetchCart}
+            updateCartItemFn={updateCartItem}
+            removeFromCartFn={removeFromCart}
+          />
+        </CartProvider>
         <TanStackDevtools
-          config={{
-            position: "bottom-right",
-          }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
+          config={{ position: "bottom-right" }}
+          plugins={[{ name: "Tanstack Router", render: <TanStackRouterDevtoolsPanel /> }]}
         />
         <Scripts />
       </body>

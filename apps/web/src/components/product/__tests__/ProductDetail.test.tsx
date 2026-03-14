@@ -12,11 +12,34 @@
  * - Trust indicators rendered
  * - Single SKU products auto-select the SKU
  */
-import { afterEach, describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { Product, SKU } from "@ecommerce/shared";
 import ProductDetail from "../ProductDetail";
+
+// Mock cart hooks to avoid QueryClientProvider + CartProvider tree requirements
+// (Bun workspace dual-React-instance issue — see test file header comment)
+vi.mock("@ecommerce/shared", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@ecommerce/shared")>();
+  return {
+    ...original,
+    useAddToCart: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  };
+});
+
+vi.mock("../../../contexts/CartContext", () => ({
+  useCartContext: vi.fn().mockReturnValue({
+    cartId: null,
+    violetCartId: null,
+    isDrawerOpen: false,
+    openDrawer: vi.fn(),
+    closeDrawer: vi.fn(),
+    setCart: vi.fn(),
+    clearCart: vi.fn(),
+  }),
+  CartProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 
 function createMockSku(overrides: Partial<SKU> = {}): SKU {
   return {

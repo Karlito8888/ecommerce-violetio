@@ -12,6 +12,17 @@ export {
 export { searchQuerySchema, searchResponseSchema, productMatchSchema } from "./search.schema.js";
 export type { SearchQueryInput, SearchResponseOutput } from "./search.schema.js";
 export {
+  violetBagErrorSchema,
+  violetCartSkuSchema,
+  violetBagSchema,
+  violetCartResponseSchema,
+} from "./cart.schema.js";
+export type {
+  VioletCartResponse,
+  VioletBagResponse,
+  VioletCartSkuResponse,
+} from "./cart.schema.js";
+export {
   webhookEventTypeSchema,
   violetWebhookHeadersSchema,
   violetRequiredHeadersSchema,

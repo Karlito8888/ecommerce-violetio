@@ -5,3 +5,12 @@ export {
 } from "./useProducts.js";
 export type { ProductsFetchFn, ProductDetailFetchFn } from "./useProducts.js";
 export { searchQueryOptions, useSearch } from "./useSearch.js";
+export {
+  cartDetailQueryOptions,
+  useCartQuery,
+  useAddToCart,
+  useUpdateCartItem,
+  useRemoveFromCart,
+  getCartItemCount,
+} from "./useCart.js";
+export type { CartFetchFn, AddToCartFn, UpdateCartItemFn, RemoveFromCartFn } from "./useCart.js";

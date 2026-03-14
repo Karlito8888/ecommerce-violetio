@@ -76,6 +76,16 @@
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
 
+  /* ── Z-index scale ── */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-drawer: 400;
+  --z-modal: 500;
+  --z-toast: 600;
+
   /* ── Composite Surfaces (themeable transparency layers) ── */
   --surface-frosted: rgba(250, 250, 248, 0.84);
   --surface-elevated: rgba(250, 250, 248, 0.9);

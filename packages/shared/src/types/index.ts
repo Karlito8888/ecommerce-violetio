@@ -15,7 +15,14 @@ export type {
   ProductVariant,
   SkuDimensions,
 } from "./product.types.js";
-export type { Cart, Bag, CartItem, CartItemInput } from "./cart.types.js";
+export type {
+  Cart,
+  Bag,
+  BagError,
+  CartItem,
+  CartItemInput,
+  CreateCartInput,
+} from "./cart.types.js";
 export type {
   Order,
   BagStatus,

@@ -27,6 +27,7 @@
 @import "./components/category-chips.css";
 @import "./components/search-bar.css";
 @import "./components/search-results.css";
+@import "./components/cart-drawer.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";

@@ -5,6 +5,7 @@ import type {
   PaginatedResult,
   Cart,
   CartItemInput,
+  CreateCartInput,
   PaymentIntent,
   Order,
   WebhookEvent,
@@ -32,9 +33,11 @@ export interface SupplierAdapter {
   searchProducts(query: string, filters?: SearchFilters): Promise<ApiResponse<SearchResult>>;
 
   // Cart
-  createCart(userId: string): Promise<ApiResponse<Cart>>;
-  addToCart(cartId: string, item: CartItemInput): Promise<ApiResponse<Cart>>;
-  removeFromCart(cartId: string, itemId: string): Promise<ApiResponse<Cart>>;
+  createCart(input: CreateCartInput): Promise<ApiResponse<Cart>>;
+  addToCart(violetCartId: string, item: CartItemInput): Promise<ApiResponse<Cart>>;
+  updateCartItem(violetCartId: string, skuId: string, quantity: number): Promise<ApiResponse<Cart>>;
+  removeFromCart(violetCartId: string, skuId: string): Promise<ApiResponse<Cart>>;
+  getCart(violetCartId: string): Promise<ApiResponse<Cart>>;
 
   // Checkout
   getPaymentIntent(cartId: string): Promise<ApiResponse<PaymentIntent>>;

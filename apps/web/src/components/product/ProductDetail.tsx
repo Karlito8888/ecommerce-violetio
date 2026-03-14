@@ -1,9 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import type { Product, SKU } from "@ecommerce/shared";
-import { stripHtml } from "@ecommerce/shared";
+import { stripHtml, useAddToCart } from "@ecommerce/shared";
+import type { AddToCartFn } from "@ecommerce/shared";
 import ImageGallery from "./ImageGallery";
 import VariantSelector from "./VariantSelector";
 import PriceBreakdown from "./PriceBreakdown";
+import { useCartContext } from "../../contexts/CartContext";
+import { createCartFn, addToCartFn } from "../../server/cartActions";
+import { getSupabaseBrowserClient } from "../../utils/supabase";
 
 import "./ProductDetail.css";
 
@@ -51,8 +55,17 @@ import "./ProductDetail.css";
  *
  * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
  */
+/**
+ * Platform-specific add-to-cart function adapter.
+ * Bridges TanStack Start Server Function convention to shared hook signature.
+ */
+const addToCartAdapter: AddToCartFn = (input) => addToCartFn({ data: input });
+
 export default function ProductDetail({ product }: { product: Product }) {
   const [selectedValues, setSelectedValues] = useState<Record<string, string>>({});
+  const [addButtonState, setAddButtonState] = useState<"idle" | "loading" | "added">("idle");
+
+  const { violetCartId, setCart, openDrawer } = useCartContext();
 
   /**
    * Find the SKU matching ALL currently selected variant values.
@@ -105,6 +118,75 @@ export default function ProductDetail({ product }: { product: Product }) {
     setSelectedValues((prev) => ({ ...prev, [variantName]: value }));
   };
 
+  const addMutation = useAddToCart(violetCartId, addToCartAdapter, (cart) => {
+    // On success: update CartContext with new IDs and open drawer
+    setCart(cart.id, cart.violetCartId);
+    openDrawer();
+  });
+
+  /**
+   * Handles "Add to Bag" click:
+   * 1. Reads the Supabase session to get userId (authenticated) or sessionId (anonymous)
+   * 2. If no cart exists yet, creates one via createCartFn with the correct owner field
+   * 3. Adds the selected SKU to the cart
+   * 4. Shows confirmation state for 1.5s only on success
+   *
+   * ## Why we read the session here (not at component mount)
+   * The session may change between mount and click (e.g. anonymous → signed in).
+   * Reading at click time ensures we always use the current user context.
+   *
+   * ## userId vs sessionId convention (per Violet architecture)
+   * - Authenticated user (is_anonymous = false): userId = user.id, sessionId = null
+   * - Anonymous user (is_anonymous = true): userId = null, sessionId = user.id
+   * Both satisfy the DB CHECK constraint `carts_has_owner`.
+   */
+  const handleAddToCart = useCallback(async () => {
+    if (!selectedSku || addButtonState !== "idle") return;
+    setAddButtonState("loading");
+
+    try {
+      // Read current Supabase session for cart ownership context
+      const supabase = getSupabaseBrowserClient();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user ?? null;
+      const userId = user && !user.is_anonymous ? user.id : null;
+      const sessionId = user?.is_anonymous ? user.id : null;
+
+      let currentVioletCartId = violetCartId;
+
+      // Create cart if none exists
+      if (!currentVioletCartId) {
+        const createResult = await createCartFn({
+          data: { userId, sessionId },
+        });
+        if (createResult.error || !createResult.data) {
+          setAddButtonState("idle");
+          return;
+        }
+        setCart(createResult.data.id, createResult.data.violetCartId);
+        currentVioletCartId = createResult.data.violetCartId;
+      }
+
+      // Use mutateAsync so we only show "added" on actual success
+      const result = await addMutation.mutateAsync({
+        violetCartId: currentVioletCartId,
+        skuId: selectedSku.id,
+        quantity: 1,
+        userId,
+        sessionId,
+      });
+
+      if (result.data) {
+        setAddButtonState("added");
+        setTimeout(() => setAddButtonState("idle"), 1500);
+      } else {
+        setAddButtonState("idle");
+      }
+    } catch {
+      setAddButtonState("idle");
+    }
+  }, [selectedSku, addButtonState, violetCartId, setCart, addMutation]);
+
   /** Safe plain-text description — HTML stripped via shared `stripHtml` utility. */
   const plainDescription = stripHtml(product.htmlDescription ?? product.description);
 
@@ -136,18 +218,18 @@ export default function ProductDetail({ product }: { product: Product }) {
 
         <button
           type="button"
-          className={`product-detail__cta${!isAvailable ? " product-detail__cta--disabled" : ""}`}
-          disabled={!isAvailable}
-          onClick={() => {
-            /**
-             * TODO: Story 4.1 — Cart API integration
-             * Replace this placeholder with: addToCart({ skuId: selectedSku.id, quantity: 1 })
-             * The Violet Cart API requires a specific sku_id — this is why the button
-             * is disabled until a SKU is selected on multi-variant products.
-             */
-          }}
+          className={`product-detail__cta${!isAvailable || addButtonState !== "idle" ? " product-detail__cta--disabled" : ""}`}
+          disabled={!isAvailable || addButtonState === "loading"}
+          aria-busy={addButtonState === "loading"}
+          onClick={handleAddToCart}
         >
-          {isAvailable ? "Add to Bag" : "Notify When Available"}
+          {addButtonState === "loading"
+            ? "Adding…"
+            : addButtonState === "added"
+              ? "✓ Added!"
+              : isAvailable
+                ? "Add to Bag"
+                : "Notify When Available"}
         </button>
 
         <p className="product-detail__affiliate">

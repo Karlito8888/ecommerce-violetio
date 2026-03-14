@@ -8,7 +8,11 @@ import type {
   ProductVariant,
   SKU,
   Cart,
+  Bag,
+  BagError,
+  CartItem,
   CartItemInput,
+  CreateCartInput,
   PaymentIntent,
   Order,
   WebhookEvent,
@@ -21,7 +25,12 @@ import type {
 import type { SupplierAdapter } from "./supplierAdapter.js";
 import { VioletTokenManager } from "../clients/violetAuth.js";
 import { VIOLET_API_BASE } from "../utils/constants.js";
-import { violetOfferSchema, violetPaginatedOffersSchema } from "../schemas/index.js";
+import {
+  violetOfferSchema,
+  violetPaginatedOffersSchema,
+  violetCartResponseSchema,
+} from "../schemas/index.js";
+import type { VioletBagResponse, VioletCartSkuResponse } from "../schemas/index.js";
 
 /**
  * Maximum number of retry attempts on transient errors (HTTP 429, network failures).
@@ -651,16 +660,201 @@ export class VioletAdapter implements SupplierAdapter {
     };
   }
 
-  async createCart(_userId: string): Promise<ApiResponse<Cart>> {
-    throw new Error("Not implemented — Story 4.1");
+  // ─── Cart ─────────────────────────────────────────────────────────
+
+  /**
+   * Creates a new Violet cart via POST /checkout/cart.
+   *
+   * The `channel_id` is our Violet App ID — required by Violet to associate
+   * the cart with our merchant channel.
+   *
+   * The `input` parameter carries userId/sessionId for Supabase persistence
+   * (handled by the Server Function layer, not here).
+   */
+  async createCart(_input: CreateCartInput): Promise<ApiResponse<Cart>> {
+    const appId = this.getAppId();
+    if (!appId) {
+      return {
+        data: null,
+        error: { code: "VIOLET.CONFIG_MISSING", message: "VIOLET_APP_ID not configured" },
+      };
+    }
+
+    const result = await this.fetchWithRetry(`${this.apiBase}/checkout/cart`, {
+      method: "POST",
+      body: JSON.stringify({ channel_id: Number(appId), currency: "USD" }),
+    });
+
+    if (result.error) return { data: null, error: result.error };
+
+    return this.parseAndTransformCart(result.data);
   }
 
-  async addToCart(_cartId: string, _item: CartItemInput): Promise<ApiResponse<Cart>> {
-    throw new Error("Not implemented — Story 4.1");
+  /**
+   * Adds a SKU to a Violet cart via POST /checkout/cart/{cartId}/skus.
+   *
+   * @param violetCartId - Violet cart integer ID (as string)
+   * @param item - SKU ID and quantity to add
+   */
+  async addToCart(violetCartId: string, item: CartItemInput): Promise<ApiResponse<Cart>> {
+    const appId = this.getAppId();
+    if (!appId) {
+      return {
+        data: null,
+        error: { code: "VIOLET.CONFIG_MISSING", message: "VIOLET_APP_ID not configured" },
+      };
+    }
+
+    const result = await this.fetchWithRetry(`${this.apiBase}/checkout/cart/${violetCartId}/skus`, {
+      method: "POST",
+      body: JSON.stringify({
+        sku_id: Number(item.skuId),
+        quantity: item.quantity,
+        app_id: Number(appId),
+      }),
+    });
+
+    if (result.error) return { data: null, error: result.error };
+
+    return this.parseAndTransformCart(result.data);
   }
 
-  async removeFromCart(_cartId: string, _itemId: string): Promise<ApiResponse<Cart>> {
-    throw new Error("Not implemented — Story 4.1");
+  /**
+   * Updates a SKU quantity via PUT /checkout/cart/{cartId}/skus/{skuId}.
+   *
+   * @param violetCartId - Violet cart integer ID (as string)
+   * @param skuId - Violet SKU integer ID (as string)
+   * @param quantity - New quantity (minimum 1)
+   */
+  async updateCartItem(
+    violetCartId: string,
+    skuId: string,
+    quantity: number,
+  ): Promise<ApiResponse<Cart>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/skus/${skuId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ quantity }),
+      },
+    );
+
+    if (result.error) return { data: null, error: result.error };
+
+    return this.parseAndTransformCart(result.data);
+  }
+
+  /**
+   * Removes a SKU from a Violet cart via DELETE /checkout/cart/{cartId}/skus/{skuId}.
+   *
+   * @param violetCartId - Violet cart integer ID (as string)
+   * @param skuId - Violet SKU integer ID (as string)
+   */
+  async removeFromCart(violetCartId: string, skuId: string): Promise<ApiResponse<Cart>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/skus/${skuId}`,
+      { method: "DELETE" },
+    );
+
+    if (result.error) return { data: null, error: result.error };
+
+    return this.parseAndTransformCart(result.data);
+  }
+
+  /**
+   * Fetches current cart state via GET /checkout/cart/{cartId}.
+   *
+   * @param violetCartId - Violet cart integer ID (as string)
+   */
+  async getCart(violetCartId: string): Promise<ApiResponse<Cart>> {
+    const result = await this.fetchWithRetry(`${this.apiBase}/checkout/cart/${violetCartId}`, {
+      method: "GET",
+    });
+
+    if (result.error) return { data: null, error: result.error };
+
+    return this.parseAndTransformCart(result.data);
+  }
+
+  /**
+   * Parses a raw Violet cart API response and transforms it to our Cart type.
+   *
+   * Handles the 200-with-errors pattern: extracts `errors` array even on HTTP 200.
+   * Returns a Cart with the `violetCartId` as the primary identifier — the caller
+   * (Server Function) is responsible for creating/looking up the Supabase cart row.
+   */
+  private parseAndTransformCart(
+    raw: unknown,
+  ): { data: Cart; error: null } | { data: null; error: { code: string; message: string } } {
+    const parsed = violetCartResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        data: null,
+        error: { code: "VIOLET.VALIDATION_ERROR", message: parsed.error.message },
+      };
+    }
+
+    const violet = parsed.data;
+    const bags = violet.bags.map((bag) => this.transformBag(bag));
+
+    // Aggregate total from all bag subtotals
+    const total = bags.reduce((sum, b) => sum + b.subtotal, 0);
+
+    // Build a partial Cart — id and userId are set by the Server Function
+    // after persisting to Supabase. violetCartId is the Violet integer ID.
+    return {
+      data: {
+        id: "", // Set by Server Function after Supabase upsert
+        violetCartId: String(violet.id),
+        userId: null,
+        sessionId: null,
+        bags,
+        total,
+        currency: violet.currency,
+        status: "active",
+      },
+      error: null,
+    };
+  }
+
+  private transformBag(raw: VioletBagResponse): Bag {
+    const items = raw.skus.map((sku) => this.transformCartSku(sku));
+    const errors: BagError[] = raw.errors.map((e) => ({
+      code: e.code,
+      message: e.message,
+      skuId: e.sku_id !== undefined ? String(e.sku_id) : undefined,
+    }));
+
+    return {
+      id: String(raw.id),
+      merchantId: String(raw.merchant_id),
+      merchantName: raw.merchant_name,
+      items,
+      subtotal: raw.subtotal,
+      tax: raw.tax,
+      shippingTotal: raw.shipping_total,
+      errors,
+    };
+  }
+
+  private transformCartSku(raw: VioletCartSkuResponse): CartItem {
+    return {
+      id: String(raw.id),
+      skuId: String(raw.sku_id),
+      productId: "", // Violet doesn't return product_id in cart SKU response
+      quantity: raw.quantity,
+      unitPrice: raw.price,
+    };
+  }
+
+  /**
+   * Returns the Violet App ID from the token manager config.
+   * Used as channel_id when creating carts.
+   */
+  private getAppId(): string | null {
+    // VioletTokenManager stores config — we access it via the stored apiBase
+    // The appId is available in process.env on the server
+    return (typeof process !== "undefined" && process.env?.VIOLET_APP_ID) || null;
   }
 
   async getPaymentIntent(_cartId: string): Promise<ApiResponse<PaymentIntent>> {

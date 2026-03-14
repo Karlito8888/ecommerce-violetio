@@ -104,7 +104,7 @@ export default function SearchResults({
     <div className="search-results" aria-live="polite">
       <div className="search-results__grid" role="list">
         {products.map((product) => (
-          <div key={product.id} className="search-results__item" role="listitem">
+          <div key={product.id} className="search-results__item">
             <SearchProductCard product={product} />
             {explanations[product.id] && (
               <p className="search-results__explanation">{explanations[product.id]}</p>
