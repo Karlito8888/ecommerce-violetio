@@ -9,6 +9,7 @@ import type {
   CustomerInput,
   PaymentIntent,
   Order,
+  OrderDetail,
   OrderSubmitResult,
   WebhookEvent,
   SearchResult,
@@ -134,7 +135,20 @@ export interface SupplierAdapter {
   submitOrder(violetCartId: string, appOrderId: string): Promise<ApiResponse<OrderSubmitResult>>;
 
   // Orders
-  getOrder(orderId: string): Promise<ApiResponse<Order>>;
+
+  /**
+   * Fetches complete order details by order ID.
+   *
+   * Used by the confirmation page to display order summary, items per merchant,
+   * totals, and shipping info. Returns data from GET /orders/{id}.
+   *
+   * ## Why `OrderDetail` instead of `Order`
+   * `OrderDetail` includes bags, items, customer, and addresses — everything
+   * needed for the confirmation UI. The lighter `Order` type is for order lists.
+   *
+   * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
+   */
+  getOrder(orderId: string): Promise<ApiResponse<OrderDetail>>;
   getOrders(userId: string): Promise<ApiResponse<Order[]>>;
 
   // Webhooks

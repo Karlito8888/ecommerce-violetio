@@ -191,7 +191,7 @@ function PaymentForm({
     });
 
     if (stripeError) {
-      setSubmitError(stripeError.message ?? "Payment authorization failed");
+      setSubmitError(getStripeErrorMessage(stripeError));
       setIsSubmitting(false);
       return;
     }
@@ -237,9 +237,14 @@ function PaymentForm({
 
       // Re-submit after 3DS success (reuse same appOrderId for idempotency)
       const retryResult = await submitOrderFn({ data: { appOrderId } });
-      if (retryResult.error || retryResult.data?.status === "REJECTED") {
+      if (
+        retryResult.error ||
+        retryResult.data?.status === "REJECTED" ||
+        retryResult.data?.status === "CANCELED"
+      ) {
         setSubmitError(
-          retryResult.error?.message ?? "Order was rejected after 3D Secure verification",
+          retryResult.error?.message ??
+            "Order could not be completed after verification. Your card was not charged.",
         );
         setIsSubmitting(false);
         return;
@@ -255,8 +260,48 @@ function PaymentForm({
       return;
     }
 
+    /**
+     * Handle CANCELED status — merchant canceled the order after initial acceptance.
+     * This is distinct from REJECTED (payment failure). The user was NOT charged.
+     *
+     * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states
+     */
+    if (result.data?.status === "CANCELED") {
+      setSubmitError(
+        "Your order was canceled by the merchant. Your card was not charged. Please try again.",
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
     // Success — COMPLETED status
     onSuccess(result.data?.id ?? "");
+  }
+
+  /**
+   * Maps Stripe error codes to human-readable messages.
+   *
+   * Stripe returns machine-readable `error.code` values. We map common payment
+   * errors to clear, actionable messages for the user. The fallback uses
+   * Stripe's own `error.message` which is already user-friendly for most cases.
+   *
+   * @see https://stripe.com/docs/error-codes
+   */
+  function getStripeErrorMessage(error: { code?: string; message?: string }): string {
+    switch (error.code) {
+      case "card_declined":
+        return "Your card was declined. Please try a different payment method.";
+      case "expired_card":
+        return "Your card has expired. Please use a different card.";
+      case "incorrect_cvc":
+        return "The security code is incorrect. Please check and try again.";
+      case "processing_error":
+        return "A processing error occurred. Please try again in a moment.";
+      case "insufficient_funds":
+        return "Insufficient funds. Please try a different payment method.";
+      default:
+        return error.message ?? "Payment could not be processed. Please try again.";
+    }
   }
 
   return (
@@ -579,7 +624,7 @@ function CheckoutPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.cart.detail(violetCartId) });
     }
 
-    // Navigate to order confirmation (Story 4.5 stub)
+    // Navigate to order confirmation page (Story 4.5 — full UI with order details)
     navigate({ to: `/order/${orderId}/confirmation` as string });
   }
 

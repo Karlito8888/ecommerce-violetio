@@ -30,6 +30,9 @@ export type {
 } from "./cart.types.js";
 export type {
   Order,
+  OrderDetail,
+  OrderBag,
+  OrderBagItem,
   OrderStatus,
   OrderSubmitInput,
   OrderSubmitResult,

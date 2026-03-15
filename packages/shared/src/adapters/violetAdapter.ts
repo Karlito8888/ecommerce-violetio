@@ -16,6 +16,9 @@ import type {
   CustomerInput,
   PaymentIntent,
   Order,
+  OrderDetail,
+  OrderBag,
+  OrderBagItem,
   OrderStatus,
   OrderSubmitResult,
   WebhookEvent,
@@ -1273,8 +1276,106 @@ export class VioletAdapter implements SupplierAdapter {
     return (typeof process !== "undefined" && process.env?.VIOLET_APP_ID) || null;
   }
 
-  async getOrder(_orderId: string): Promise<ApiResponse<Order>> {
-    throw new Error("Not implemented — Story 5.1");
+  /**
+   * Fetches complete order details from Violet's GET /orders/{id}.
+   *
+   * ## Violet response → OrderDetail mapping
+   * - `sub_total` → `subtotal` (snake_case → camelCase at adapter boundary)
+   * - `bags[].skus[]` → `bags[].items[]` (renamed for clarity: SKU is Violet's term)
+   * - `bags[].merchant_name` → `bags[].merchantName`
+   * - `date_submitted` → `dateSubmitted` (ISO 8601 string)
+   *
+   * ## 200-with-errors pattern
+   * Violet can return HTTP 200 with an `errors[]` array even for GET requests.
+   * We check this and surface bag-level errors to the caller.
+   *
+   * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
+   * @see Story 4.5 C1 — Violet GET /orders/{id} response structure
+   */
+  async getOrder(orderId: string): Promise<ApiResponse<OrderDetail>> {
+    const result = await this.fetchWithRetry(`${this.apiBase}/orders/${orderId}`, {
+      method: "GET",
+    });
+    if (result.error) return { data: null, error: result.error };
+
+    const data = result.data as Record<string, unknown>;
+
+    // Check 200-with-errors pattern — Violet may return HTTP 200 with errors[] populated
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      const firstError = data.errors[0] as Record<string, unknown> | undefined;
+      return {
+        data: null,
+        error: {
+          code: "VIOLET.ORDER_ERROR",
+          message: String(firstError?.message ?? "Order has errors"),
+        },
+      };
+    }
+
+    // Parse bags → OrderBag[] with items (Violet calls them "skus")
+    const rawBags = (data.bags as Array<Record<string, unknown>>) ?? [];
+    const bags: OrderBag[] = rawBags.map((bag) => {
+      const rawSkus = (bag.skus as Array<Record<string, unknown>>) ?? [];
+      const items: OrderBagItem[] = rawSkus.map((sku) => ({
+        skuId: String(sku.id ?? ""),
+        name: String(sku.name ?? ""),
+        quantity: Number(sku.quantity ?? 0),
+        price: Number(sku.price ?? 0),
+        linePrice: Number(sku.line_price ?? 0),
+        thumbnail: (sku.thumbnail as string) || undefined,
+      }));
+
+      const shippingMethodRaw = bag.shipping_method as Record<string, unknown> | undefined;
+
+      return {
+        id: String(bag.id ?? ""),
+        merchantName: String(bag.merchant_name ?? ""),
+        status: String(bag.status ?? ""),
+        financialStatus: String(bag.financial_status ?? ""),
+        items,
+        subtotal: Number(bag.sub_total ?? 0),
+        shippingTotal: Number(bag.shipping_total ?? 0),
+        taxTotal: Number(bag.tax_total ?? 0),
+        total: Number(bag.total ?? 0),
+        shippingMethod: shippingMethodRaw
+          ? {
+              carrier: String(shippingMethodRaw.carrier ?? ""),
+              label: String(shippingMethodRaw.label ?? ""),
+            }
+          : undefined,
+      };
+    });
+
+    // Parse customer and shipping address
+    const rawCustomer = (data.customer as Record<string, unknown>) ?? {};
+    const rawShipping = (data.shipping_address as Record<string, unknown>) ?? {};
+
+    return {
+      data: {
+        id: String(data.id ?? ""),
+        status: (data.status ?? "COMPLETED") as OrderStatus,
+        currency: String(data.currency ?? "USD"),
+        subtotal: Number(data.sub_total ?? 0),
+        shippingTotal: Number(data.shipping_total ?? 0),
+        taxTotal: Number(data.tax_total ?? 0),
+        total: Number(data.total ?? 0),
+        bags,
+        customer: {
+          email: String(rawCustomer.email ?? ""),
+          firstName: String(rawCustomer.first_name ?? ""),
+          lastName: String(rawCustomer.last_name ?? ""),
+        },
+        shippingAddress: {
+          address1: String(rawShipping.address_1 ?? ""),
+          city: String(rawShipping.city ?? ""),
+          state: String(rawShipping.state ?? ""),
+          postalCode: String(rawShipping.postal_code ?? ""),
+          country: String(rawShipping.country ?? ""),
+        },
+        dateSubmitted: (data.date_submitted as string) || undefined,
+      },
+      error: null,
+    };
   }
 
   async getOrders(_userId: string): Promise<ApiResponse<Order[]>> {

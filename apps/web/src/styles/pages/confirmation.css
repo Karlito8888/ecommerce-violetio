@@ -1,0 +1,336 @@
+/* ─── Order Confirmation Page ────────────────────────────────────────────────
+ * BEM: .confirmation (block)
+ * The "Post-Purchase Wow Moment" — editorial warmth layout per UX spec.
+ *
+ * Story 4.5: Payment Confirmation & 3D Secure Handling.
+ * This page uses EDITORIAL mode (generous whitespace, display typography)
+ * contrasting with the checkout's SEARCH-FORWARD mode (efficiency-first).
+ *
+ * Design: centered single-column layout, generous spacing, success accents.
+ * Uses --font-display (Cormorant Garamond) for the headline to create
+ * the "quiet luxury" emotional payoff described in the UX spec.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+.confirmation {
+  padding: var(--space-12) 0 var(--space-16);
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* ── Header: success icon + heading ── */
+
+.confirmation__header {
+  text-align: center;
+  margin-bottom: var(--space-10);
+}
+
+.confirmation__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-success);
+  color: #fff;
+  font-size: 1.5rem;
+  margin-bottom: var(--space-4);
+}
+
+.confirmation__heading {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.confirmation__subheading {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--color-steel);
+  margin: 0;
+}
+
+/* ── Order metadata (ID, date) ── */
+
+.confirmation__meta {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-10);
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+}
+
+.confirmation__meta-label {
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-right: var(--space-1);
+}
+
+/* ── Per-merchant bag card ── */
+
+.confirmation__bag {
+  background: var(--color-ivory);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.confirmation__bag-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-sand);
+}
+
+.confirmation__merchant-name {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.confirmation__bag-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
+  color: var(--color-success);
+}
+
+/* ── Item row within a bag ── */
+
+.confirmation__item {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) 0;
+}
+
+.confirmation__item + .confirmation__item {
+  border-top: 1px solid var(--color-sand);
+}
+
+.confirmation__bag-shipping {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-charcoal);
+}
+
+.confirmation__bag-shipping-label {
+  color: var(--color-steel);
+}
+
+.confirmation__item-image {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-sand);
+}
+
+.confirmation__item-image--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--color-sand);
+  color: var(--color-steel);
+  font-size: 0.75rem;
+}
+
+.confirmation__item-details {
+  min-width: 0;
+}
+
+.confirmation__item-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.confirmation__item-qty {
+  font-size: 0.75rem;
+  color: var(--color-steel);
+}
+
+.confirmation__item-price {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Price breakdown ── */
+
+.confirmation__pricing {
+  background: var(--color-ivory);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.confirmation__pricing-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: var(--color-charcoal);
+  padding: var(--space-2) 0;
+}
+
+.confirmation__pricing-row--total {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  border-top: 1px solid var(--color-sand);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+}
+
+/* ── Shipping address summary ── */
+
+.confirmation__address {
+  background: var(--color-ivory);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+.confirmation__section-title {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-steel);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-3) 0;
+}
+
+.confirmation__address-text {
+  font-size: 0.875rem;
+  color: var(--color-charcoal);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── Actions (Continue Shopping CTA) ── */
+
+.confirmation__actions {
+  text-align: center;
+  padding-top: var(--space-4);
+}
+
+.confirmation__cta {
+  display: inline-block;
+  padding: 0.75rem 2.5rem;
+  background: var(--color-midnight);
+  color: #fff;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+
+.confirmation__cta:hover {
+  opacity: 0.9;
+}
+
+.confirmation__tracking-hint {
+  margin-top: var(--space-4);
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+}
+
+/* ── Loading skeleton ── */
+
+.confirmation__skeleton {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-12) 0;
+}
+
+.confirmation__skeleton-block {
+  background: var(--color-sand);
+  border-radius: var(--radius-lg);
+  animation: confirmation-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes confirmation-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ── Error state ── */
+
+.confirmation__error {
+  text-align: center;
+  padding: var(--space-16) 0;
+}
+
+.confirmation__error-heading {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.confirmation__error-text {
+  font-size: 0.9375rem;
+  color: var(--color-steel);
+  margin: 0 0 var(--space-6) 0;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 640px) {
+  .confirmation {
+    padding: var(--space-8) var(--space-4) var(--space-12);
+  }
+
+  .confirmation__heading {
+    font-size: 1.5rem;
+  }
+
+  .confirmation__meta {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .confirmation__item {
+    grid-template-columns: 40px 1fr auto;
+  }
+
+  .confirmation__item-image,
+  .confirmation__item-image--placeholder {
+    width: 40px;
+    height: 40px;
+  }
+}

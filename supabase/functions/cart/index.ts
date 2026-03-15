@@ -19,6 +19,7 @@
  * | POST   | /cart/{id}/customer           | Set guest customer info     |
  * | POST   | /cart/{id}/billing_address    | Set billing address         |
  * | POST   | /cart/{id}/submit             | Submit order                |
+ * | GET    | /orders/{orderId}             | Fetch order details         |
  *
  * ## Authentication
  *
@@ -574,6 +575,45 @@ Deno.serve(async (req: Request) => {
     return json({ data: orderData, error: null });
   }
 
+  // ── Route: GET /orders/{orderId} — fetch order details (Story 4.5) ──
+  const orderMatch = path.match(/^\/orders\/([^/]+)$/);
+  if (req.method === "GET" && orderMatch) {
+    const orderId = orderMatch[1];
+
+    /**
+     * Fetches complete order details from Violet for the confirmation page.
+     *
+     * After cart submission, the cart becomes an order. The order is accessed
+     * by its Violet order ID (returned in the submit response), not the cart ID.
+     *
+     * The response includes bags with items, customer info, addresses, and totals.
+     * We transform snake_case → camelCase at this boundary for mobile clients.
+     *
+     * SECURITY: No ownership validation — Violet authenticates via channel token,
+     * not customer identity. Until Story 5.1 adds Supabase order persistence with
+     * user_id, we cannot verify the authenticated user owns this order.
+     * TODO(Story 5.1): Add Supabase order lookup with user_id ownership check.
+     *
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
+     */
+    const res = await fetch(`${VIOLET_API_BASE}/orders/${orderId}`, {
+      method: "GET",
+      headers: violetHeaders,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return errorResponse(
+        "VIOLET.ORDER_NOT_FOUND",
+        `Order fetch failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    const raw = await res.json();
+    return json({ data: transformOrder(raw), error: null });
+  }
+
   return errorResponse("CART.NOT_FOUND", "Route not found", 404);
 });
 
@@ -715,5 +755,89 @@ function transformCart(raw: unknown): Record<string, unknown> {
     paymentIntentClientSecret: r.payment_intent_client_secret
       ? String(r.payment_intent_client_secret)
       : undefined,
+  };
+}
+
+/**
+ * Transforms a raw Violet order response to our internal OrderDetail shape.
+ * snake_case → camelCase at the Edge Function boundary for mobile clients.
+ *
+ * ## Field mapping (Violet → internal)
+ * - `sub_total` → `subtotal`
+ * - `shipping_total` → `shippingTotal`
+ * - `tax_total` → `taxTotal`
+ * - `bags[].merchant_name` → `bags[].merchantName`
+ * - `bags[].financial_status` → `bags[].financialStatus`
+ * - `bags[].skus[]` → `bags[].items[]` (renamed for clarity)
+ * - `bags[].skus[].line_price` → `bags[].items[].linePrice`
+ * - `customer.first_name` → `customer.firstName`
+ * - `shipping_address.address_1` → `shippingAddress.address1`
+ * - `date_submitted` → `dateSubmitted`
+ *
+ * Mirrors VioletAdapter.getOrder() in packages/shared/src/adapters/violetAdapter.ts.
+ *
+ * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
+ */
+function transformOrder(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object") {
+    return { id: "", status: "COMPLETED", bags: [], total: 0 };
+  }
+  const r = raw as Record<string, unknown>;
+
+  const rawBags = Array.isArray(r.bags) ? (r.bags as Array<Record<string, unknown>>) : [];
+  const bags = rawBags.map((bag) => {
+    const rawSkus = Array.isArray(bag.skus) ? (bag.skus as Array<Record<string, unknown>>) : [];
+    const items = rawSkus.map((sku) => ({
+      skuId: String(sku.id ?? ""),
+      name: String(sku.name ?? ""),
+      quantity: Number(sku.quantity ?? 0),
+      price: Number(sku.price ?? 0),
+      linePrice: Number(sku.line_price ?? 0),
+      thumbnail: sku.thumbnail ? String(sku.thumbnail) : undefined,
+    }));
+
+    const sm = bag.shipping_method as Record<string, unknown> | undefined;
+
+    return {
+      id: String(bag.id ?? ""),
+      merchantName: String(bag.merchant_name ?? ""),
+      status: String(bag.status ?? ""),
+      financialStatus: String(bag.financial_status ?? ""),
+      items,
+      subtotal: Number(bag.sub_total ?? 0),
+      shippingTotal: Number(bag.shipping_total ?? 0),
+      taxTotal: Number(bag.tax_total ?? 0),
+      total: Number(bag.total ?? 0),
+      shippingMethod: sm
+        ? { carrier: String(sm.carrier ?? ""), label: String(sm.label ?? "") }
+        : undefined,
+    };
+  });
+
+  const customer = (r.customer as Record<string, unknown>) ?? {};
+  const addr = (r.shipping_address as Record<string, unknown>) ?? {};
+
+  return {
+    id: String(r.id ?? ""),
+    status: String(r.status ?? "COMPLETED"),
+    currency: String(r.currency ?? "USD"),
+    subtotal: Number(r.sub_total ?? 0),
+    shippingTotal: Number(r.shipping_total ?? 0),
+    taxTotal: Number(r.tax_total ?? 0),
+    total: Number(r.total ?? 0),
+    bags,
+    customer: {
+      email: String(customer.email ?? ""),
+      firstName: String(customer.first_name ?? ""),
+      lastName: String(customer.last_name ?? ""),
+    },
+    shippingAddress: {
+      address1: String(addr.address_1 ?? ""),
+      city: String(addr.city ?? ""),
+      state: String(addr.state ?? ""),
+      postalCode: String(addr.postal_code ?? ""),
+      country: String(addr.country ?? ""),
+    },
+    dateSubmitted: r.date_submitted ? String(r.date_submitted) : undefined,
   };
 }

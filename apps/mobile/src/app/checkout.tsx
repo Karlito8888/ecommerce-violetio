@@ -489,14 +489,32 @@ export default function CheckoutScreen() {
          * REQUIRES_ACTION from submit is rare with PaymentSheet (it handles 3DS
          * natively). If it does occur, we can't call handleNextAction from
          * PaymentSheet — show error and ask user to retry.
+         *
+         * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states
          */
-        setPaymentError("Additional verification required. Please try again.");
+        setPaymentError(
+          "Additional verification was required. Your payment may still be processing. Please check your email for confirmation.",
+        );
         setIsPaymentProcessing(false);
         return;
       }
 
-      // Success — navigate to confirmation stub (Story 4.5)
-      router.push("/");
+      /**
+       * Handle CANCELED status — merchant canceled the order after acceptance.
+       * The user was NOT charged (Stripe authorization falls off in a few days).
+       */
+      if (orderData?.status === "CANCELED") {
+        setPaymentError(
+          "Your order was canceled by the merchant. Your card was not charged. Please try again.",
+        );
+        setIsPaymentProcessing(false);
+        return;
+      }
+
+      // Success — clear cart and navigate to confirmation page (Story 4.5)
+      await SecureStore.deleteItemAsync("violet_cart_id");
+      const orderId = String(orderData?.id ?? "");
+      router.push(`/order/${orderId}/confirmation` as never);
     } catch {
       setPaymentError("Network error. Please try again.");
     } finally {

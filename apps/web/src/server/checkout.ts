@@ -29,6 +29,7 @@ import type {
   Cart,
   CustomerInput,
   PaymentIntent,
+  OrderDetail,
   OrderSubmitResult,
   ShippingAddressInput,
   ShippingMethodsAvailable,
@@ -210,6 +211,38 @@ export const submitOrderFn = createServerFn({ method: "POST" })
     }
     const adapter = getAdapter();
     return adapter.submitOrder(violetCartId, data.appOrderId);
+  });
+
+// ─── Story 4.5: Order Details for Confirmation Page ──────────────────
+
+/**
+ * Fetches complete order details for the confirmation page.
+ *
+ * ## Why this does NOT use the `violet_cart_id` cookie
+ * After submit, the cart becomes an order. The order is accessed by its
+ * Violet order ID (returned in the submit response), not the cart ID.
+ * This means the confirmation page works even after the cart cookie is cleared.
+ *
+ * ## SSR-friendly
+ * Unlike checkout (which requires Stripe.js client-side), the confirmation page
+ * can use a TanStack Start `loader` to fetch order data server-side. This gives
+ * us faster render and the page is bookmarkable/shareable.
+ *
+ * ## SECURITY: No ownership validation (known limitation)
+ * Violet's GET /orders/{id} authenticates via the channel's API token, not the
+ * customer's. Until Story 5.1 adds order persistence in Supabase with user
+ * association, we cannot validate that the requesting user owns this order.
+ * Order IDs are numeric and theoretically guessable. Mitigation: order IDs are
+ * only exposed in the submit response and URL — not enumerable via our API.
+ * TODO(Story 5.1): Add Supabase order lookup with user_id ownership check.
+ *
+ * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
+ */
+export const getOrderDetailsFn = createServerFn({ method: "GET" })
+  .inputValidator((data: { orderId: string }) => data)
+  .handler(async ({ data }): Promise<ApiResponse<OrderDetail>> => {
+    const adapter = getAdapter();
+    return adapter.getOrder(data.orderId);
   });
 
 /**
