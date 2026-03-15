@@ -77,7 +77,7 @@ development_status:
   4-3-shipping-method-selection: done
   4-4-one-step-checkout-with-stripe-payment: done
   4-5-payment-confirmation-3d-secure-handling: done
-  4-6-cross-device-cart-sync: backlog
+  4-6-cross-device-cart-sync: done
   4-7-checkout-error-handling-edge-cases: backlog
   epic-4-retrospective: optional
 

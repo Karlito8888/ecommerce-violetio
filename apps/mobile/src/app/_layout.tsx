@@ -1,10 +1,11 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import Constants from "expo-constants";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useColorScheme } from "react-native";
+import * as SecureStore from "expo-secure-store";
 import { StripeProvider } from "@stripe/stripe-react-native";
 
-import { configureEnv } from "@ecommerce/shared";
+import { configureEnv, createSupabaseClient, useCartSync } from "@ecommerce/shared";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import AppTabs from "@/components/app-tabs";
 import { BiometricPrompt } from "@/components/BiometricPrompt";
@@ -31,10 +32,44 @@ try {
   console.warn("[Auth] Supabase init failed:", msg);
 }
 
+const VIOLET_CART_KEY = "violet_cart_id";
+
+// Supabase client singleton — created once outside the render cycle to maintain
+// referential stability. Prevents useCartSync from re-subscribing on every render.
+const supabaseClient = createSupabaseClient();
+
 /** Inner component that consumes AuthContext to conditionally show BiometricPrompt. */
 function AppContent() {
   const { isLoading, user, isAnonymous, biometricEnabled } = useAuth();
   const [biometricDismissed, setBiometricDismissed] = useState(false);
+  const [_cartSyncTrigger, setCartSyncTrigger] = useState(0);
+
+  // Cross-device cart sync via Supabase Realtime (Story 4.6)
+  const syncUserId = user && !isAnonymous ? user.id : null;
+  // Read current violet cart ID from SecureStore (async, but useCartSync handles null)
+  const [currentVioletCartId, setCurrentVioletCartId] = useState<string | null>(null);
+  React.useEffect(() => {
+    SecureStore.getItemAsync(VIOLET_CART_KEY).then(setCurrentVioletCartId);
+  }, [_cartSyncTrigger]);
+
+  const handleCartUpdated = useCallback(() => {
+    // Trigger re-render so screens refetch cart data on next render
+    setCartSyncTrigger((prev) => prev + 1);
+  }, []);
+
+  const handleRemoteCartChange = useCallback(async (newVioletCartId: string) => {
+    await SecureStore.setItemAsync(VIOLET_CART_KEY, newVioletCartId);
+    setCurrentVioletCartId(newVioletCartId);
+    setCartSyncTrigger((prev) => prev + 1);
+  }, []);
+
+  useCartSync({
+    supabase: supabaseClient,
+    userId: syncUserId,
+    currentVioletCartId,
+    onCartUpdated: handleCartUpdated,
+    onRemoteCartChange: handleRemoteCartChange,
+  });
 
   // Show biometric prompt when: user previously logged in with biometric enabled,
   // but current session is anonymous (app was restarted)

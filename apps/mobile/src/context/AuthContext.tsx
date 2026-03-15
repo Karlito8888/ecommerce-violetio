@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import * as SecureStore from "expo-secure-store";
 import { createSupabaseClient, getBiometricPreference } from "@ecommerce/shared";
 import type { AuthSession, BiometricStatus, BiometricAuthResult } from "@ecommerce/shared";
 import { initAnonymousSession } from "../utils/authInit";
@@ -34,6 +35,12 @@ const defaultBiometricSession: BiometricAuthSession = {
 
 const AuthContext = createContext<BiometricAuthSession>(defaultBiometricSession);
 
+const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
+  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/cart`
+  : null;
+
+const VIOLET_CART_KEY = "violet_cart_id";
+
 /** Provides auth state (including biometric) to the entire app. */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthSession>({
@@ -44,6 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [biometricStatus, setBiometricStatus] = useState<BiometricStatus | null>(null);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+
+  // Track whether previous auth state was anonymous (for cart merge detection)
+  const wasAnonymousRef = useRef(false);
+  const mergeInProgressRef = useRef(false);
 
   useEffect(() => {
     const supabase = createSupabaseClient();
@@ -67,12 +78,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return; // Wait for SIGNED_IN from initAnonymousSession
       }
 
+      const isAnonymous = session?.user?.is_anonymous ?? false;
+
       setState({
         user: session?.user ?? null,
         session,
         isLoading: false,
-        isAnonymous: session?.user?.is_anonymous ?? false,
+        isAnonymous,
       });
+
+      // ── Cart merge on anonymous → authenticated transition (Story 4.6) ──
+      if (
+        event === "SIGNED_IN" &&
+        !isAnonymous &&
+        wasAnonymousRef.current &&
+        !mergeInProgressRef.current &&
+        EDGE_FN_BASE &&
+        session?.access_token
+      ) {
+        mergeInProgressRef.current = true;
+        const token = session.access_token;
+        const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+        try {
+          const currentVioletCartId = await SecureStore.getItemAsync(VIOLET_CART_KEY);
+          if (currentVioletCartId) {
+            // Check if user has an existing authenticated cart
+            const userCartRes = await fetch(`${EDGE_FN_BASE}/user`, {
+              method: "GET",
+              headers,
+            });
+            const { violetCartId: existingCartId } = await userCartRes.json();
+
+            if (existingCartId && existingCartId !== currentVioletCartId) {
+              // Merge anonymous items into existing cart
+              const mergeRes = await fetch(`${EDGE_FN_BASE}/merge`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                  anonymousVioletCartId: currentVioletCartId,
+                  targetVioletCartId: existingCartId,
+                }),
+              });
+              const mergeResult = await mergeRes.json();
+              if (mergeResult.success) {
+                await SecureStore.setItemAsync(VIOLET_CART_KEY, existingCartId);
+              }
+            } else if (!existingCartId) {
+              // No existing cart → claim the anonymous cart
+              await fetch(`${EDGE_FN_BASE}/claim`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ violetCartId: currentVioletCartId }),
+              });
+              // Keep same violet_cart_id in SecureStore
+            }
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("[cart-sync] merge/claim failed:", err);
+        } finally {
+          mergeInProgressRef.current = false;
+        }
+      }
+
+      wasAnonymousRef.current = isAnonymous;
 
       // Check biometric preference when a registered user is detected
       const user = session?.user;

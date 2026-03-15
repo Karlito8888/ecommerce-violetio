@@ -14,3 +14,4 @@ export {
   getCartItemCount,
 } from "./useCart.js";
 export type { CartFetchFn, AddToCartFn, UpdateCartItemFn, RemoveFromCartFn } from "./useCart.js";
+export { useCartSync } from "./useCartSync.js";

@@ -20,6 +20,9 @@
  * | POST   | /cart/{id}/billing_address    | Set billing address         |
  * | POST   | /cart/{id}/submit             | Submit order                |
  * | GET    | /orders/{orderId}             | Fetch order details         |
+ * | GET    | /cart/user                    | Get user's active cart      |
+ * | POST   | /cart/merge                   | Merge anonymous→auth cart   |
+ * | POST   | /cart/claim                   | Claim anonymous cart        |
  *
  * ## Authentication
  *
@@ -245,6 +248,154 @@ Deno.serve(async (req: Request) => {
         status: "active",
       },
       error: null,
+    });
+  }
+
+  // ── Route: GET /cart/user — get authenticated user's active cart (Story 4.6) ──
+  // MUST be before GET /cart/{id} to avoid matching "user" as a cart ID
+  if (req.method === "GET" && path === "/user") {
+    const supabase = getSupabaseAdmin();
+    const { data: userCart } = await supabase
+      .from("carts")
+      .select("violet_cart_id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return json({ violetCartId: userCart?.violet_cart_id ?? null });
+  }
+
+  // ── Route: POST /cart/claim — transfer anonymous cart ownership (Story 4.6) ──
+  // MUST be before POST /cart/{id}/skus to avoid matching "claim" as a cart ID
+  if (req.method === "POST" && path === "/claim") {
+    const claimBody = await req.json();
+    const claimVioletCartId = claimBody.violetCartId;
+    if (!claimVioletCartId) {
+      return errorResponse("CART.MISSING_CART_ID", "violetCartId is required", 400);
+    }
+
+    // Only claim carts with no owner (anonymous) — prevents cart theft via sequential ID guessing
+    const supabase = getSupabaseAdmin();
+    const { error: claimError } = await supabase
+      .from("carts")
+      .update({ user_id: userId, session_id: null })
+      .eq("violet_cart_id", claimVioletCartId)
+      .is("user_id", null);
+
+    if (claimError) {
+      return errorResponse("CART.CLAIM_FAILED", `Failed to claim cart: ${claimError.message}`, 500);
+    }
+    return json({ success: true });
+  }
+
+  // ── Route: POST /cart/merge — merge anonymous cart into authenticated (Story 4.6) ──
+  // MUST be before POST /cart/{id}/skus to avoid matching "merge" as a cart ID
+  if (req.method === "POST" && path === "/merge") {
+    const mergeBody = await req.json();
+    const anonymousVioletCartId = mergeBody.anonymousVioletCartId;
+    const mergeTargetVioletCartId = mergeBody.targetVioletCartId;
+    if (!anonymousVioletCartId || !mergeTargetVioletCartId) {
+      return errorResponse(
+        "CART.MISSING_PARAMS",
+        "anonymousVioletCartId and targetVioletCartId are required",
+        400,
+      );
+    }
+
+    // Fetch both carts from Violet
+    const [anonRes, targetRes] = await Promise.all([
+      fetch(`${VIOLET_API_BASE}/checkout/cart/${anonymousVioletCartId}`, {
+        method: "GET",
+        headers: violetHeaders,
+      }),
+      fetch(`${VIOLET_API_BASE}/checkout/cart/${mergeTargetVioletCartId}`, {
+        method: "GET",
+        headers: violetHeaders,
+      }),
+    ]);
+
+    if (!anonRes.ok) {
+      return errorResponse("CART.FETCH_FAILED", "Failed to fetch anonymous cart", 500);
+    }
+    if (!targetRes.ok) {
+      return errorResponse("CART.FETCH_FAILED", "Failed to fetch target cart", 500);
+    }
+
+    const anonCart = transformCart(await anonRes.json());
+    const targetCart = transformCart(await targetRes.json());
+
+    // Extract typed bag/item arrays from transformed carts
+    type MergeBag = { items: Array<{ skuId: string; quantity: number }> };
+    const anonBags = (anonCart.bags ?? []) as MergeBag[];
+    const targetBags = (targetCart.bags ?? []) as MergeBag[];
+
+    // Build map of existing SKUs in target
+    const existingSkus = new Map<string, number>();
+    for (const bag of targetBags) {
+      for (const item of bag.items) {
+        existingSkus.set(item.skuId, item.quantity);
+      }
+    }
+
+    // Merge items: add new SKUs or increase quantity for existing ones
+    const mergeErrors: string[] = [];
+    let mergedCount = 0;
+    for (const bag of anonBags) {
+      for (const item of bag.items) {
+        const skuId = item.skuId;
+        const qty = item.quantity;
+        const existingQty = existingSkus.get(skuId);
+
+        if (existingQty !== undefined) {
+          const mergeRes = await fetch(
+            `${VIOLET_API_BASE}/checkout/cart/${mergeTargetVioletCartId}/skus/${skuId}`,
+            {
+              method: "PUT",
+              headers: violetHeaders,
+              body: JSON.stringify({ quantity: existingQty + qty }),
+            },
+          );
+          if (!mergeRes.ok) mergeErrors.push(`Failed to update qty for SKU ${skuId}`);
+          else mergedCount++;
+        } else {
+          const mergeRes = await fetch(
+            `${VIOLET_API_BASE}/checkout/cart/${mergeTargetVioletCartId}/skus`,
+            {
+              method: "POST",
+              headers: violetHeaders,
+              body: JSON.stringify({
+                sku_id: skuId,
+                quantity: qty,
+                app_id: Number(appId),
+              }),
+            },
+          );
+          if (!mergeRes.ok) mergeErrors.push(`Failed to add SKU ${skuId}`);
+          else mergedCount++;
+        }
+      }
+    }
+
+    // Only mark anonymous cart as merged if at least one item was transferred.
+    // If all items failed, keep the anonymous cart active so the user can retry.
+    const mergeSupa = getSupabaseAdmin();
+    if (mergedCount > 0) {
+      await mergeSupa
+        .from("carts")
+        .update({ status: "merged" })
+        .eq("violet_cart_id", anonymousVioletCartId);
+    }
+
+    // Touch the target cart so Realtime fires
+    await upsertCart(mergeTargetVioletCartId, userId);
+
+    return json({
+      success: mergedCount > 0,
+      targetVioletCartId: mergeTargetVioletCartId,
+      mergedItemCount: mergedCount,
+      errors: mergeErrors.length > 0 ? mergeErrors : undefined,
     });
   }
 

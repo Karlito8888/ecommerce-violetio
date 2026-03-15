@@ -56,7 +56,7 @@ export interface Cart {
   /** Total in integer cents */
   total: number;
   currency: string;
-  status: "active" | "completed" | "abandoned";
+  status: "active" | "completed" | "abandoned" | "merged";
   /**
    * Stripe PaymentIntent client secret — only present when cart was created
    * with `wallet_based_checkout: true` in the Violet API.
@@ -94,6 +94,24 @@ export interface CartItemInput {
   productName?: string;
   /** Product thumbnail URL to store in Supabase cart_items for display purposes */
   thumbnailUrl?: string;
+}
+
+// ─── Cart Sync (Story 4.6) ──────────────────────────────────────────────────
+
+/**
+ * Supabase Realtime event for cart changes — used as a cache-invalidation signal.
+ *
+ * With RLS enabled on the `carts` table, Supabase Realtime only sends the
+ * primary key to clients. We use this event to know THAT a cart changed,
+ * then refetch the actual data from Violet (source of truth).
+ */
+export interface CartSyncEvent {
+  /** Supabase cart UUID (primary key from the Realtime payload) */
+  cartId: string;
+  /** Violet cart ID for API calls */
+  violetCartId: string;
+  /** Event type from Supabase Realtime */
+  eventType: "INSERT" | "UPDATE" | "DELETE";
 }
 
 /** Input for creating a new cart (caller provides session context). */

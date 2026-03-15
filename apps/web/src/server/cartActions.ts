@@ -236,6 +236,13 @@ export const updateCartItemFn = createServerFn({ method: "POST" })
       .eq("cart_id", supabaseCartId)
       .eq("sku_id", data.skuId);
 
+    // Touch carts row so Supabase Realtime fires for cross-device sync (Story 4.6).
+    // The updated_at trigger auto-updates the timestamp on any row modification.
+    await supabase
+      .from("carts")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", supabaseCartId);
+
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
   });
 
@@ -270,6 +277,12 @@ export const removeFromCartFn = createServerFn({ method: "POST" })
       .delete()
       .eq("cart_id", supabaseCartId)
       .eq("sku_id", data.skuId);
+
+    // Touch carts row so Supabase Realtime fires for cross-device sync (Story 4.6).
+    await supabase
+      .from("carts")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", supabaseCartId);
 
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
   });

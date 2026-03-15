@@ -27,6 +27,7 @@ export type {
   ShippingMethodsAvailable,
   ShippingAddressInput,
   SetShippingMethodInput,
+  CartSyncEvent,
 } from "./cart.types.js";
 export type {
   Order,

@@ -10,6 +10,7 @@ import { AppBannerContext, useAppBannerProvider } from "../hooks/useAppBanner";
 import { initAnonymousSession } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../utils/supabase";
 import { CartProvider } from "../contexts/CartContext";
+import { useAuthSession } from "../hooks/useAuthSession";
 import CartDrawer from "../features/cart/CartDrawer";
 import {
   getCartFn,
@@ -77,12 +78,18 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   // without waiting for a client-side fetch.
   const { initialVioletCartId } = Route.useLoaderData();
 
+  // Auth session for Realtime subscription (Story 4.6)
+  const { user, isAnonymous } = useAuthSession();
+  const supabase = getSupabaseBrowserClient();
+  // Only provide userId for non-anonymous authenticated users — anonymous users don't sync
+  const syncUserId = user && !isAnonymous ? user.id : null;
+
   useEffect(() => {
-    initAnonymousSession(getSupabaseBrowserClient()).catch((err) => {
+    initAnonymousSession(supabase).catch((err) => {
       // eslint-disable-next-line no-console
       console.warn("[auth] initAnonymousSession error:", err);
     });
-  }, []);
+  }, [supabase]);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -91,7 +98,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <CartProvider initialVioletCartId={initialVioletCartId}>
+        <CartProvider
+          initialVioletCartId={initialVioletCartId}
+          supabase={supabase}
+          userId={syncUserId}
+        >
           <AppBannerContext.Provider value={appBanner}>
             <a href="#main-content" className="sr-only sr-only--focusable">
               Skip to content

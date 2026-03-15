@@ -1,4 +1,8 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCartSync } from "@ecommerce/shared";
+import { getUserCartFn, mergeAnonymousCartFn, claimCartFn } from "../server/cartSync";
 
 /**
  * CartContext — manages cart ID state and drawer visibility app-wide.
@@ -20,12 +24,17 @@ import { createContext, useContext, useState } from "react";
  * - **Drawer state**: Lives exclusively here. No component-local state for the
  *   drawer — any component (ProductDetail, Header badge) can call `openDrawer()`.
  *
+ * - **Cross-device sync (Story 4.6)**: `useCartSync` subscribes to Supabase
+ *   Realtime when `userId` is set. Cart merge runs when `userId` transitions
+ *   from null → non-null (anonymous → authenticated).
+ *
  * ## CartProvider mounting
  * `<CartDrawer />` is rendered INSIDE `CartProvider` so it can access context.
  * Wrap `<CartProvider>` around the app shell in `__root.tsx`, above `<Header>`.
  *
  * @see apps/web/src/routes/__root.tsx — loader reads cookie, passes initialVioletCartId
  * @see apps/web/src/server/cartActions.ts — createCartFn sets the HttpOnly cookie
+ * @see apps/web/src/server/cartSync.ts — merge/claim server functions
  */
 
 interface CartContextValue {
@@ -59,6 +68,10 @@ interface CartProviderProps {
   initialCartId?: string | null;
   /** Initial violetCartId from server-read HttpOnly cookie. */
   initialVioletCartId?: string | null;
+  /** Supabase browser client for Realtime subscription (Story 4.6) */
+  supabase: SupabaseClient;
+  /** Authenticated (non-anonymous) user ID for Realtime subscription (Story 4.6). Null = no sync. */
+  userId?: string | null;
 }
 
 /**
@@ -72,6 +85,8 @@ export function CartProvider({
   children,
   initialCartId = null,
   initialVioletCartId = null,
+  supabase,
+  userId = null,
 }: CartProviderProps) {
   const [cartId, setCartId] = useState<string | null>(initialCartId);
   const [violetCartId, setVioletCartId] = useState<string | null>(initialVioletCartId);
@@ -89,6 +104,91 @@ export function CartProvider({
     setCartId(null);
     setVioletCartId(null);
   };
+
+  const queryClient = useQueryClient();
+
+  // Invalidate all cart queries when another device modifies the cart
+  const handleCartUpdated = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["cart"] });
+  }, [queryClient]);
+
+  // Called when another device changes the cart's violet_cart_id (e.g., merge)
+  const handleRemoteCartChange = useCallback(
+    (newVioletCartId: string) => {
+      setVioletCartId(newVioletCartId);
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+    },
+    [queryClient],
+  );
+
+  // Subscribe to Realtime cart changes for authenticated users (Story 4.6)
+  useCartSync({
+    supabase,
+    userId,
+    currentVioletCartId: violetCartId,
+    onCartUpdated: handleCartUpdated,
+    onRemoteCartChange: handleRemoteCartChange,
+  });
+
+  // ── Cart merge on anonymous → authenticated transition (Story 4.6) ──
+  // When userId changes from null to a value and we have an anonymous cart,
+  // merge or claim the cart so it's associated with the authenticated user.
+  // Initialize prevUserIdRef with userId to avoid triggering on initial mount
+  // when the user is already authenticated (e.g., page refresh).
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+  const mergeInProgressRef = useRef(false);
+
+  useEffect(() => {
+    const prevUserId = prevUserIdRef.current;
+    prevUserIdRef.current = userId;
+
+    // Skip initial mount (undefined → any), only trigger on null → non-null transition
+    if (
+      prevUserId === undefined ||
+      !userId ||
+      prevUserId !== null ||
+      !violetCartId ||
+      mergeInProgressRef.current
+    ) {
+      return;
+    }
+
+    mergeInProgressRef.current = true;
+
+    (async () => {
+      try {
+        // Check if user already has an authenticated cart
+        const { violetCartId: existingCartId } = await getUserCartFn({
+          data: { userId },
+        });
+
+        if (existingCartId && existingCartId !== violetCartId) {
+          // User has an existing cart → merge anonymous items into it
+          const result = await mergeAnonymousCartFn({
+            data: {
+              anonymousVioletCartId: violetCartId,
+              targetVioletCartId: existingCartId,
+            },
+          });
+          if (result.success) {
+            setVioletCartId(existingCartId);
+          }
+        } else if (!existingCartId) {
+          // No existing cart → claim the anonymous cart (transfer ownership)
+          await claimCartFn({
+            data: { violetCartId, userId },
+          });
+          // Keep using the same violetCartId — ownership transferred server-side
+        }
+        // If existingCartId === violetCartId, no action needed (already the same cart)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[cart-sync] merge/claim failed:", err);
+      } finally {
+        mergeInProgressRef.current = false;
+      }
+    })();
+  }, [userId, violetCartId]);
 
   return (
     <CartContext.Provider
