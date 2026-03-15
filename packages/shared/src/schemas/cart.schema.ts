@@ -36,11 +36,36 @@ export const violetBagSchema = z.object({
   errors: z.array(violetBagErrorSchema).optional().default([]),
 });
 
-/** Validates a full Violet cart response. */
+/**
+ * Validates a full Violet cart response.
+ *
+ * ## Story 4.4 additions
+ * - `total`: cart grand total in cents — used for PaymentIntent amount display
+ * - `payment_intent_client_secret`: Stripe PI secret — only present when the cart
+ *   was created with `wallet_based_checkout: true`. Required for Stripe PaymentElement.
+ * - `stripe_key`: Stripe publishable key returned by Violet (same as our env var).
+ *   Informational only — we use `VITE_STRIPE_PUBLISHABLE_KEY` instead.
+ *
+ * @see https://docs.violet.io/guides/checkout/payments — wallet-based checkout
+ */
 export const violetCartResponseSchema = z.object({
   id: z.number(),
   channel_id: z.number().optional(),
   currency: z.string().optional().default("USD"),
+  /** Cart grand total in integer cents (sum of all bags: subtotal + tax + shipping). */
+  total: z.number().optional(),
+  /**
+   * Stripe PaymentIntent client secret — only present when cart was created
+   * with `wallet_based_checkout: true`. Pass to `<Elements options={{ clientSecret }}>`.
+   *
+   * @see https://docs.violet.io/guides/checkout/payments
+   */
+  payment_intent_client_secret: z.string().optional(),
+  /**
+   * Stripe publishable key from Violet (same as our VITE_STRIPE_PUBLISHABLE_KEY).
+   * We don't use this — prefer the env var to avoid exposing it via API responses.
+   */
+  stripe_key: z.string().optional(),
   bags: z.array(violetBagSchema).optional().default([]),
   /** CRITICAL: check this array even on HTTP 200 */
   errors: z.array(violetBagErrorSchema).optional().default([]),

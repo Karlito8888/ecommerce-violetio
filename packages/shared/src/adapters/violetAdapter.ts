@@ -13,8 +13,11 @@ import type {
   CartItem,
   CartItemInput,
   CreateCartInput,
+  CustomerInput,
   PaymentIntent,
   Order,
+  OrderStatus,
+  OrderSubmitResult,
   WebhookEvent,
   SearchResult,
   SearchFilters,
@@ -784,6 +787,229 @@ export class VioletAdapter implements SupplierAdapter {
     return this.parseAndTransformCart(result.data);
   }
 
+  // ─── Checkout — Customer & Billing (Story 4.4) ───────────────────
+
+  /**
+   * Sets guest customer info on the cart via POST /checkout/cart/{id}/customer.
+   *
+   * ## Violet API field mapping
+   * - `email`     → `email`
+   * - `firstName` → `first_name`
+   * - `lastName`  → `last_name`
+   * - `marketingConsent` → `communication_preferences: [{ enabled: true }]`
+   *   (only included when user opted in; omitted otherwise)
+   *
+   * ## Why this returns `ApiResponse<void>`
+   * Violet's response is a 200 with the customer object, not a full cart.
+   * We don't need the response data — the caller proceeds to billing/payment.
+   *
+   * @see https://docs.violet.io/api-reference/checkout-cart/apply-guest-customer-to-cart
+   * @see Story 4.4 AC#1, AC#2
+   */
+  async setCustomer(violetCartId: string, customer: CustomerInput): Promise<ApiResponse<void>> {
+    const body: Record<string, unknown> = {
+      email: customer.email,
+      first_name: customer.firstName,
+      last_name: customer.lastName,
+    };
+
+    /**
+     * Marketing consent maps to Violet's `communication_preferences` array.
+     * Only included when the user explicitly opted in (checkbox checked).
+     * This is per-merchant (per-bag) in Violet's model, but we send a single
+     * preference that applies to all merchants.
+     *
+     * Note: Violet's exact schema for this field is not fully documented.
+     * If the API rejects it, remove from body — consent can be tracked in
+     * Supabase as a fallback.
+     *
+     * @see Story 4.4 C9 — marketing consent field mapping
+     */
+    if (customer.marketingConsent) {
+      body.communication_preferences = [{ enabled: true }];
+    }
+
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/customer`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+    if (result.error) return { data: null, error: result.error };
+    return { data: undefined, error: null };
+  }
+
+  /**
+   * Sets a billing address different from the shipping address.
+   *
+   * ## Violet billing_address body (confirmed from official docs)
+   * `address_1`, `city`, `state`, `postal_code`, `country`.
+   *
+   * Note: `phone` is NOT part of billing_address (unlike shipping_address).
+   * We reuse `ShippingAddressInput` but intentionally omit `phone` in the body.
+   *
+   * @see https://docs.violet.io/api-reference/checkout-cart/set-billing-address
+   * @see Story 4.4 AC#3
+   */
+  async setBillingAddress(
+    violetCartId: string,
+    address: ShippingAddressInput,
+  ): Promise<ApiResponse<void>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/billing_address`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          address_1: address.address1,
+          city: address.city,
+          state: address.state,
+          postal_code: address.postalCode,
+          country: address.country,
+          // phone is NOT included in billing_address per Violet docs
+        }),
+      },
+    );
+    if (result.error) return { data: null, error: result.error };
+    return { data: undefined, error: null };
+  }
+
+  // ─── Checkout — Payment (Story 4.4) ─────────────────────────────
+
+  /**
+   * Retrieves the Stripe PaymentIntent client secret from the cart.
+   *
+   * ## Why GET /cart instead of a dedicated endpoint
+   * Violet doesn't have a separate PaymentIntent endpoint. When a cart is created
+   * with `wallet_based_checkout: true`, the `payment_intent_client_secret` field
+   * is included in every GET /checkout/cart/{id} response.
+   *
+   * ## Error: VIOLET.NO_PAYMENT_INTENT
+   * If the cart was created WITHOUT `wallet_based_checkout: true`, this field is
+   * absent. The user must abandon the cart and create a fresh one. This error
+   * should not occur in normal flow (createCart always sends the flag now).
+   *
+   * @see https://docs.violet.io/guides/checkout/payments
+   * @see Story 4.4 C2 — implementation reference
+   */
+  async getPaymentIntent(violetCartId: string): Promise<ApiResponse<PaymentIntent>> {
+    const result = await this.fetchWithRetry(`${this.apiBase}/checkout/cart/${violetCartId}`, {
+      method: "GET",
+    });
+    if (result.error) return { data: null, error: result.error };
+
+    const parsed = violetCartResponseSchema.safeParse(result.data);
+    if (!parsed.success) {
+      return {
+        data: null,
+        error: { code: "VIOLET.VALIDATION_ERROR", message: "Invalid cart response" },
+      };
+    }
+
+    const secret = parsed.data.payment_intent_client_secret;
+    if (!secret) {
+      return {
+        data: null,
+        error: {
+          code: "VIOLET.NO_PAYMENT_INTENT",
+          message: "Cart was not created with wallet_based_checkout: true. Recreate the cart.",
+        },
+      };
+    }
+
+    return {
+      data: {
+        id: `pi_from_cart_${violetCartId}`,
+        clientSecret: secret,
+        amount: parsed.data.total ?? 0,
+        currency: parsed.data.currency ?? "USD",
+      },
+      error: null,
+    };
+  }
+
+  /**
+   * Submits the order to Violet after Stripe payment authorization.
+   *
+   * ## Flow
+   * 1. Client calls `stripe.confirmPayment()` (authorizes, does NOT charge)
+   * 2. This method calls POST /checkout/cart/{id}/submit with `{ app_order_id }`
+   * 3. Violet charges the card and returns the order status
+   *
+   * ## Status handling
+   * - `COMPLETED`: order successful, card charged
+   * - `REQUIRES_ACTION`: 3DS challenge needed — return `paymentIntentClientSecret`
+   *   so caller can run `stripe.handleNextAction()` then re-submit
+   * - `REJECTED`: payment rejected, show error to user
+   *
+   * ## 200-with-errors pattern
+   * Violet may return HTTP 200 with `errors[]` — always check this array.
+   *
+   * ## Idempotency
+   * `appOrderId` (from `crypto.randomUUID()`) ensures duplicate submissions
+   * (e.g., after 3DS retry) don't create multiple orders.
+   *
+   * @see https://docs.violet.io/api-reference/checkout-cart/submit-cart
+   * @see Story 4.4 C5 — implementation reference
+   */
+  async submitOrder(
+    violetCartId: string,
+    appOrderId: string,
+  ): Promise<ApiResponse<OrderSubmitResult>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/submit`,
+      {
+        method: "POST",
+        body: JSON.stringify({ app_order_id: appOrderId }),
+      },
+    );
+
+    if (result.error) return { data: null, error: result.error };
+
+    const data = result.data as {
+      id?: number;
+      status?: string;
+      payment_status?: string;
+      payment_intent_client_secret?: string;
+      bags?: Array<{
+        id?: number;
+        status?: string;
+        financial_status?: string;
+        total?: number;
+      }>;
+      errors?: unknown[];
+    };
+
+    // Check 200-with-errors pattern — Violet returns HTTP 200 with errors[]
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      const firstError = data.errors[0] as { message?: string } | undefined;
+      return {
+        data: null,
+        error: {
+          code: "VIOLET.ORDER_ERROR",
+          message: firstError?.message
+            ? `Order failed: ${firstError.message}`
+            : "Order submission failed with errors",
+        },
+      };
+    }
+
+    return {
+      data: {
+        id: String(data.id ?? ""),
+        status: (data.status ?? "COMPLETED") as OrderStatus,
+        paymentIntentClientSecret: data.payment_intent_client_secret,
+        bags: (data.bags ?? []).map((b) => ({
+          id: String(b.id ?? ""),
+          status: b.status ?? "",
+          financialStatus: b.financial_status ?? "",
+          total: b.total ?? 0,
+        })),
+      },
+      error: null,
+    };
+  }
+
   // ─── Not implemented (future stories) ─────────────────────────────
 
   /**
@@ -844,9 +1070,25 @@ export class VioletAdapter implements SupplierAdapter {
       };
     }
 
+    /**
+     * `wallet_based_checkout: true` tells Violet to create a Stripe PaymentIntent
+     * at cart creation time. Without this flag, `payment_intent_client_secret` is
+     * NOT returned in cart responses, and Stripe's PaymentElement cannot initialize.
+     *
+     * This is a one-way door: once a cart is created with this flag, the PaymentIntent
+     * exists for the cart's lifetime. Old sandbox carts created without it must be
+     * abandoned — start a fresh cart for testing.
+     *
+     * @see https://docs.violet.io/guides/checkout/payments — wallet-based checkout flow
+     * @see Story 4.4 AC#5, AC#12 — payment_intent_client_secret dependency
+     */
     const result = await this.fetchWithRetry(`${this.apiBase}/checkout/cart`, {
       method: "POST",
-      body: JSON.stringify({ channel_id: Number(appId), currency: "USD" }),
+      body: JSON.stringify({
+        channel_id: Number(appId),
+        currency: "USD",
+        wallet_based_checkout: true,
+      }),
     });
 
     if (result.error) return { data: null, error: result.error };
@@ -978,6 +1220,14 @@ export class VioletAdapter implements SupplierAdapter {
         total,
         currency: violet.currency,
         status: "active",
+        /**
+         * Maps Violet's `payment_intent_client_secret` (snake_case) to our
+         * internal `paymentIntentClientSecret` (camelCase). Only present when
+         * cart was created with `wallet_based_checkout: true`.
+         *
+         * @see Story 4.4 — used by getPaymentIntentFn to initialize Stripe Elements
+         */
+        paymentIntentClientSecret: violet.payment_intent_client_secret,
       },
       error: null,
     };
@@ -1021,14 +1271,6 @@ export class VioletAdapter implements SupplierAdapter {
     // VioletTokenManager stores config — we access it via the stored apiBase
     // The appId is available in process.env on the server
     return (typeof process !== "undefined" && process.env?.VIOLET_APP_ID) || null;
-  }
-
-  async getPaymentIntent(_cartId: string): Promise<ApiResponse<PaymentIntent>> {
-    throw new Error("Not implemented — Story 4.4");
-  }
-
-  async submitOrder(_cartId: string): Promise<ApiResponse<Order>> {
-    throw new Error("Not implemented — Story 4.4");
   }
 
   async getOrder(_orderId: string): Promise<ApiResponse<Order>> {

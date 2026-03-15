@@ -1,21 +1,24 @@
 /**
- * Checkout screen — shipping address + method selection (Story 4.3).
+ * Checkout screen — full checkout flow: address → methods → guest info → payment.
  *
  * ## Architecture
  * Calls the Supabase Edge Function `/cart/{id}/...` for all Violet API calls.
  * The Violet token NEVER reaches this client — it stays in the Edge Function.
  *
  * ## Flow (enforced by component state)
- * 1. Address form → POST /{cartId}/shipping_address
- * 2. GET /{cartId}/shipping/available (slow: 2–5s, show per-bag skeleton)
- * 3. Per-bag method selection → POST /{cartId}/shipping (returns priced cart)
- * 4. Navigate to payment stub (Story 4.4)
+ * Story 4.3: address → methods (shipping)
+ * Story 4.4: guestInfo → billing → payment (customer + billing + Stripe PaymentSheet)
  *
- * @see supabase/functions/cart/index.ts — shipping routes
+ * ## Stripe PaymentSheet
+ * Mobile uses `@stripe/stripe-react-native` PaymentSheet — a native UI that
+ * handles card input, Apple Pay, and Google Pay. Much simpler than web's
+ * PaymentElement because it's a pre-built modal.
+ *
+ * @see supabase/functions/cart/index.ts — Edge Function routes
  * @see apps/web/src/routes/checkout/index.tsx — web equivalent
  */
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -27,6 +30,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+import { useStripe } from "@stripe/stripe-react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -60,10 +64,11 @@ interface AddressFields {
   country: string;
 }
 
-type CheckoutStep = "address" | "methods" | "confirmed";
+type CheckoutStep = "address" | "methods" | "guestInfo" | "billing" | "payment";
 
 export default function CheckoutScreen() {
   const [step, setStep] = useState<CheckoutStep>("address");
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   // ── Address state ───────────────────────────────────────────────────
   const [address, setAddress] = useState<AddressFields>({
@@ -80,18 +85,42 @@ export default function CheckoutScreen() {
   const [availableMethods, setAvailableMethods] = useState<ShippingMethodsAvailable[]>([]);
   const [isLoadingMethods, setIsLoadingMethods] = useState(false);
   const [methodsError, setMethodsError] = useState<string | null>(null);
-  /**
-   * Per-bag error state (key = bagId).
-   * Set for bags that return 0 shipping methods — shown with a per-bag retry button.
-   * Satisfies AC#10: "retry button and clear error message per Bag (not a global error)".
-   */
   const [bagErrorState, setBagErrorState] = useState<Record<string, string>>({});
-  /** Selected shipping method per bag (key = bagId) */
   const [selectedMethods, setSelectedMethods] = useState<Record<string, string>>({});
 
   // ── Payment CTA state ───────────────────────────────────────────────
   const [isSubmittingShipping, setIsSubmittingShipping] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
+
+  // ── Guest info (Story 4.4) ──────────────────────────────────────────
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestFirstName, setGuestFirstName] = useState("");
+  const [guestLastName, setGuestLastName] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const [isGuestSubmitting, setIsGuestSubmitting] = useState(false);
+
+  // ── Billing address (Story 4.4) ────────────────────────────────────
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
+  const [billingAddress, setBillingAddress] = useState({
+    address1: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "US",
+  });
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [isBillingSubmitting, setIsBillingSubmitting] = useState(false);
+
+  // ── Payment (Story 4.4) ─────────────────────────────────────────────
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  /**
+   * Stable order ID for idempotency — generated once per checkout session.
+   * Reused for retries to prevent duplicate orders.
+   */
+  const appOrderIdRef = useRef(crypto.randomUUID());
 
   const allBagsSelected =
     availableMethods.length > 0 &&
@@ -111,8 +140,6 @@ export default function CheckoutScreen() {
     setBagErrorState({});
 
     try {
-      // This call is intentionally slow (2–5s) — Violet queries carrier APIs.
-      // The ActivityIndicator and skeleton below covers this wait.
       const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping/available`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
@@ -125,14 +152,9 @@ export default function CheckoutScreen() {
       }
 
       const json = await res.json();
-      // Edge Function transforms Violet snake_case → ShippingMethodsAvailable[]
-      // (bag_id → bagId, shipping_methods → shippingMethods, shipping_method_id → id)
       const methods: ShippingMethodsAvailable[] = json.data ?? [];
       setAvailableMethods(methods);
 
-      // Per-bag error state (AC#10): flag bags that returned 0 shipping methods.
-      // Violet may return an empty array for a bag if the carrier API failed —
-      // show a per-bag error with retry instead of a global error.
       const bagErrors: Record<string, string> = {};
       for (const bag of methods) {
         if (bag.shippingMethods.length === 0) {
@@ -160,7 +182,6 @@ export default function CheckoutScreen() {
 
   // ── Address submit ──────────────────────────────────────────────────
   const handleAddressSubmit = useCallback(async () => {
-    // Basic validation
     if (
       !address.address1.trim() ||
       !address.city.trim() ||
@@ -195,12 +216,8 @@ export default function CheckoutScreen() {
     try {
       const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping_address`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          // Violet snake_case field names (Edge Function forwards body as-is)
           address_1: address.address1,
           city: address.city,
           state: address.state,
@@ -215,7 +232,6 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Address accepted — fetch available methods
       setStep("methods");
       await fetchAvailableShippingMethods(violetCartId);
     } catch {
@@ -231,11 +247,9 @@ export default function CheckoutScreen() {
     if (violetCartId) await fetchAvailableShippingMethods(violetCartId);
   }, [fetchAvailableShippingMethods]);
 
-  // ── Continue to payment ─────────────────────────────────────────────
-  const handleContinueToPayment = useCallback(async () => {
-    if (!allBagsSelected) return;
-
-    if (!EDGE_FN_BASE) return;
+  // ── Continue to guest info (shipping confirm) ───────────────────────
+  const handleContinueToGuestInfo = useCallback(async () => {
+    if (!allBagsSelected || !EDGE_FN_BASE) return;
 
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
     if (!violetCartId) return;
@@ -247,8 +261,6 @@ export default function CheckoutScreen() {
     setShippingError(null);
 
     try {
-      // Build selections array: one per bag
-      // Violet format: [{ bag_id: number, shipping_method_id: string }]
       const selections = Object.entries(selectedMethods).map(([bagId, shippingMethodId]) => ({
         bag_id: Number(bagId),
         shipping_method_id: shippingMethodId,
@@ -256,10 +268,7 @@ export default function CheckoutScreen() {
 
       const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(selections),
       });
 
@@ -269,15 +278,231 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Shipping confirmed — navigate to payment stub (Story 4.4)
-      setStep("confirmed");
-      // Story 4.4 will add: router.push("/payment");
+      setStep("guestInfo");
     } catch {
       setShippingError("Network error. Please try again.");
     } finally {
       setIsSubmittingShipping(false);
     }
   }, [allBagsSelected, selectedMethods]);
+
+  // ── Guest info submit → billing step ─────────────────────────────────
+  const handleGuestInfoSubmit = useCallback(async () => {
+    if (!guestEmail.trim() || !guestFirstName.trim() || !guestLastName.trim()) {
+      setGuestError("Email, first name, and last name are required.");
+      return;
+    }
+
+    if (!EDGE_FN_BASE) return;
+
+    const violetCartId = await SecureStore.getItemAsync(CART_KEY);
+    if (!violetCartId) return;
+
+    const token = await getSessionToken();
+    if (!token) {
+      setGuestError("Not authenticated. Please restart the app.");
+      return;
+    }
+
+    setIsGuestSubmitting(true);
+    setGuestError(null);
+
+    try {
+      const customerBody: Record<string, unknown> = {
+        email: guestEmail,
+        first_name: guestFirstName,
+        last_name: guestLastName,
+      };
+      if (marketingConsent) {
+        customerBody.communication_preferences = [{ enabled: true }];
+      }
+
+      const customerRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/customer`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(customerBody),
+      });
+
+      if (!customerRes.ok) {
+        const text = await customerRes.text().catch(() => "");
+        setGuestError(`Failed to save customer info (${customerRes.status}): ${text}`);
+        return;
+      }
+
+      setStep("billing");
+    } catch {
+      setGuestError("Network error. Please try again.");
+    } finally {
+      setIsGuestSubmitting(false);
+    }
+  }, [guestEmail, guestFirstName, guestLastName, marketingConsent]);
+
+  // ── Billing confirm → initiate payment ──────────────────────────────
+  const handleBillingConfirm = useCallback(async () => {
+    if (!EDGE_FN_BASE) return;
+
+    const violetCartId = await SecureStore.getItemAsync(CART_KEY);
+    if (!violetCartId) return;
+
+    const token = await getSessionToken();
+    if (!token) {
+      setBillingError("Not authenticated. Please restart the app.");
+      return;
+    }
+
+    setIsBillingSubmitting(true);
+    setBillingError(null);
+
+    try {
+      // If different billing address, send to Violet
+      if (!billingSameAsShipping) {
+        if (
+          !billingAddress.address1.trim() ||
+          !billingAddress.city.trim() ||
+          !billingAddress.state.trim() ||
+          !billingAddress.postalCode.trim() ||
+          !billingAddress.country.trim()
+        ) {
+          setBillingError("All billing address fields are required.");
+          setIsBillingSubmitting(false);
+          return;
+        }
+
+        const billingRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/billing_address`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address_1: billingAddress.address1,
+            city: billingAddress.city,
+            state: billingAddress.state,
+            postal_code: billingAddress.postalCode,
+            country: billingAddress.country,
+          }),
+        });
+
+        if (!billingRes.ok) {
+          const text = await billingRes.text().catch(() => "");
+          setBillingError(`Failed to set billing address (${billingRes.status}): ${text}`);
+          setIsBillingSubmitting(false);
+          return;
+        }
+      }
+
+      // Get cart to extract payment_intent_client_secret
+      const cartRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!cartRes.ok) {
+        setBillingError("Failed to load payment information.");
+        setIsBillingSubmitting(false);
+        return;
+      }
+
+      const cartJson = await cartRes.json();
+      const clientSecret = cartJson.data?.paymentIntentClientSecret;
+
+      if (!clientSecret) {
+        setBillingError("Payment not available. Cart may need to be recreated.");
+        setIsBillingSubmitting(false);
+        return;
+      }
+
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: "E-commerce",
+        paymentIntentClientSecret: clientSecret,
+        allowsDelayedPaymentMethods: false,
+      });
+
+      if (initError) {
+        setBillingError(`Payment setup failed: ${initError.message}`);
+        setIsBillingSubmitting(false);
+        return;
+      }
+
+      setStep("payment");
+    } catch {
+      setBillingError("Network error. Please try again.");
+    } finally {
+      setIsBillingSubmitting(false);
+    }
+  }, [billingSameAsShipping, billingAddress, initPaymentSheet]);
+
+  // ── Present PaymentSheet and submit order ───────────────────────────
+  const handlePayment = useCallback(async () => {
+    if (!EDGE_FN_BASE) return;
+
+    setIsPaymentProcessing(true);
+    setPaymentError(null);
+
+    try {
+      /**
+       * Present the native Stripe PaymentSheet modal.
+       *
+       * PaymentSheet handles card input and 3DS natively — unlike web,
+       * we don't need to call `handleNextAction()` separately.
+       *
+       * If the user cancels, `error` is set with `code: "Canceled"`.
+       */
+      const { error: sheetError } = await presentPaymentSheet();
+
+      if (sheetError) {
+        if (sheetError.code !== "Canceled") {
+          setPaymentError(sheetError.message ?? "Payment failed. Please try again.");
+        }
+        setIsPaymentProcessing(false);
+        return;
+      }
+
+      // PaymentSheet success — submit to Violet
+      const violetCartId = await SecureStore.getItemAsync(CART_KEY);
+      if (!violetCartId) return;
+
+      const token = await getSessionToken();
+      if (!token) return;
+
+      const submitRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/submit`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ app_order_id: appOrderIdRef.current }),
+      });
+
+      if (!submitRes.ok) {
+        const text = await submitRes.text().catch(() => "");
+        setPaymentError(`Order submission failed (${submitRes.status}): ${text}`);
+        setIsPaymentProcessing(false);
+        return;
+      }
+
+      const submitJson = await submitRes.json();
+      const orderData = submitJson.data;
+
+      if (orderData?.status === "REJECTED") {
+        setPaymentError("Your order was rejected. Please try a different payment method.");
+        setIsPaymentProcessing(false);
+        return;
+      }
+
+      if (orderData?.status === "REQUIRES_ACTION") {
+        /**
+         * REQUIRES_ACTION from submit is rare with PaymentSheet (it handles 3DS
+         * natively). If it does occur, we can't call handleNextAction from
+         * PaymentSheet — show error and ask user to retry.
+         */
+        setPaymentError("Additional verification required. Please try again.");
+        setIsPaymentProcessing(false);
+        return;
+      }
+
+      // Success — navigate to confirmation stub (Story 4.5)
+      router.push("/");
+    } catch {
+      setPaymentError("Network error. Please try again.");
+    } finally {
+      setIsPaymentProcessing(false);
+    }
+  }, [presentPaymentSheet]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -370,7 +595,6 @@ export default function CheckoutScreen() {
           <ThemedView style={styles.section}>
             <ThemedText style={styles.sectionTitle}>SHIPPING METHOD</ThemedText>
 
-            {/* Global loading state (AC#12) */}
             {isLoadingMethods && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" />
@@ -381,7 +605,6 @@ export default function CheckoutScreen() {
               </View>
             )}
 
-            {/* Error with retry (AC#10) */}
             {!isLoadingMethods && methodsError && (
               <View style={styles.bagError}>
                 <ThemedText style={styles.errorText}>{methodsError}</ThemedText>
@@ -391,14 +614,12 @@ export default function CheckoutScreen() {
               </View>
             )}
 
-            {/* Shipping options per bag — with per-bag error/retry (AC#10) */}
             {!isLoadingMethods &&
               !methodsError &&
               availableMethods.map((bagMethods) => (
                 <View key={bagMethods.bagId} style={styles.bagSection}>
                   <ThemedText style={styles.bagTitle}>Bag {bagMethods.bagId}</ThemedText>
 
-                  {/* Per-bag error with retry (AC#10) */}
                   {bagErrorState[bagMethods.bagId] ? (
                     <View style={styles.bagError}>
                       <ThemedText style={styles.errorText}>
@@ -470,13 +691,10 @@ export default function CheckoutScreen() {
               </ThemedText>
             )}
 
-            {step === "confirmed" && (
-              <ThemedText style={styles.confirmedText}>
-                ✓ Shipping confirmed. Payment coming soon.
-              </ThemedText>
+            {step !== "methods" && (
+              <ThemedText style={styles.confirmedText}>✓ Shipping confirmed.</ThemedText>
             )}
 
-            {/* Continue to Payment CTA */}
             {step === "methods" && (
               <TouchableOpacity
                 style={[
@@ -484,7 +702,7 @@ export default function CheckoutScreen() {
                   (!allBagsSelected || isSubmittingShipping) && styles.buttonDisabled,
                   { marginTop: Spacing.three },
                 ]}
-                onPress={handleContinueToPayment}
+                onPress={handleContinueToGuestInfo}
                 disabled={!allBagsSelected || isSubmittingShipping}
                 accessibilityState={{ disabled: !allBagsSelected }}
               >
@@ -498,6 +716,210 @@ export default function CheckoutScreen() {
           </ThemedView>
         )}
 
+        {/* ── Guest info section (Story 4.4) ── */}
+        {(step === "guestInfo" || step === "billing" || step === "payment") && (
+          <ThemedView style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>CONTACT INFORMATION</ThemedText>
+
+            <ThemedText style={styles.fieldLabel}>Email</ThemedText>
+            <TextInput
+              style={styles.input}
+              value={guestEmail}
+              onChangeText={setGuestEmail}
+              placeholder="you@example.com"
+              autoComplete="email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={step === "guestInfo"}
+            />
+
+            <View style={styles.row}>
+              <View style={styles.rowFieldWide}>
+                <ThemedText style={styles.fieldLabel}>First Name</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={guestFirstName}
+                  onChangeText={setGuestFirstName}
+                  autoComplete="given-name"
+                  editable={step === "guestInfo"}
+                />
+              </View>
+              <View style={styles.rowFieldNarrow}>
+                <ThemedText style={styles.fieldLabel}>Last Name</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={guestLastName}
+                  onChangeText={setGuestLastName}
+                  autoComplete="family-name"
+                  editable={step === "guestInfo"}
+                />
+              </View>
+            </View>
+
+            {/* Marketing consent toggle — unchecked by default per FR20 */}
+            <TouchableOpacity
+              style={styles.consentRow}
+              onPress={() => step === "guestInfo" && setMarketingConsent((v) => !v)}
+              disabled={step !== "guestInfo"}
+            >
+              <View style={[styles.consentCheckbox, marketingConsent && styles.consentChecked]}>
+                {marketingConsent && <ThemedText style={styles.consentCheckmark}>✓</ThemedText>}
+              </View>
+              <ThemedText style={styles.consentLabel}>
+                Receive updates and offers from merchants
+              </ThemedText>
+            </TouchableOpacity>
+
+            {guestError && <ThemedText style={styles.errorText}>{guestError}</ThemedText>}
+
+            {step === "guestInfo" && (
+              <TouchableOpacity
+                style={[styles.primaryButton, isGuestSubmitting && styles.buttonDisabled]}
+                onPress={handleGuestInfoSubmit}
+                disabled={isGuestSubmitting}
+              >
+                {isGuestSubmitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <ThemedText style={styles.primaryButtonText}>Continue to Payment →</ThemedText>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {(step === "billing" || step === "payment") && (
+              <ThemedText style={styles.confirmedText}>
+                ✓ {guestEmail} · {guestFirstName} {guestLastName}
+              </ThemedText>
+            )}
+          </ThemedView>
+        )}
+
+        {/* ── Billing address section (Story 4.4) ── */}
+        {(step === "billing" || step === "payment") && (
+          <ThemedView style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>BILLING ADDRESS</ThemedText>
+
+            <TouchableOpacity
+              style={styles.consentRow}
+              onPress={() => step === "billing" && setBillingSameAsShipping((v) => !v)}
+              disabled={step !== "billing"}
+            >
+              <View
+                style={[styles.consentCheckbox, billingSameAsShipping && styles.consentChecked]}
+              >
+                {billingSameAsShipping && (
+                  <ThemedText style={styles.consentCheckmark}>✓</ThemedText>
+                )}
+              </View>
+              <ThemedText style={styles.consentLabel}>Same as shipping address</ThemedText>
+            </TouchableOpacity>
+
+            {!billingSameAsShipping && step === "billing" && (
+              <>
+                <ThemedText style={styles.fieldLabel}>Street Address</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={billingAddress.address1}
+                  onChangeText={(v) => setBillingAddress((p) => ({ ...p, address1: v }))}
+                  placeholder="123 Main Street"
+                />
+
+                <View style={styles.row}>
+                  <View style={styles.rowFieldWide}>
+                    <ThemedText style={styles.fieldLabel}>City</ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      value={billingAddress.city}
+                      onChangeText={(v) => setBillingAddress((p) => ({ ...p, city: v }))}
+                    />
+                  </View>
+                  <View style={styles.rowFieldNarrow}>
+                    <ThemedText style={styles.fieldLabel}>State</ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      value={billingAddress.state}
+                      onChangeText={(v) => setBillingAddress((p) => ({ ...p, state: v }))}
+                    />
+                  </View>
+                </View>
+
+                <ThemedText style={styles.fieldLabel}>ZIP / Postal Code</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={billingAddress.postalCode}
+                  onChangeText={(v) => setBillingAddress((p) => ({ ...p, postalCode: v }))}
+                  keyboardType="numbers-and-punctuation"
+                />
+
+                <ThemedText style={styles.fieldLabel}>Country</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={billingAddress.country}
+                  onChangeText={(v) =>
+                    setBillingAddress((p) => ({ ...p, country: v.toUpperCase() }))
+                  }
+                  placeholder="US"
+                  autoCapitalize="characters"
+                  maxLength={2}
+                />
+              </>
+            )}
+
+            {billingError && <ThemedText style={styles.errorText}>{billingError}</ThemedText>}
+
+            {step === "billing" && (
+              <TouchableOpacity
+                style={[styles.primaryButton, isBillingSubmitting && styles.buttonDisabled]}
+                onPress={handleBillingConfirm}
+                disabled={isBillingSubmitting}
+              >
+                {isBillingSubmitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <ThemedText style={styles.primaryButtonText}>Continue to Payment →</ThemedText>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {step === "payment" && (
+              <ThemedText style={styles.confirmedText}>
+                {billingSameAsShipping
+                  ? "✓ Same as shipping address"
+                  : `✓ ${billingAddress.address1}, ${billingAddress.city}`}
+              </ThemedText>
+            )}
+          </ThemedView>
+        )}
+
+        {/* ── Payment section (Story 4.4) ── */}
+        {step === "payment" && (
+          <ThemedView style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>PAYMENT</ThemedText>
+
+            <ThemedText style={styles.paymentInfo}>
+              Tap the button below to enter your payment details securely via Stripe.
+            </ThemedText>
+
+            {paymentError && (
+              <ThemedText style={[styles.errorText, { marginBottom: Spacing.two }]}>
+                {paymentError}
+              </ThemedText>
+            )}
+
+            <TouchableOpacity
+              style={[styles.placeOrderButton, isPaymentProcessing && styles.buttonDisabled]}
+              onPress={handlePayment}
+              disabled={isPaymentProcessing}
+            >
+              {isPaymentProcessing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <ThemedText style={styles.placeOrderText}>Place Order</ThemedText>
+              )}
+            </TouchableOpacity>
+          </ThemedView>
+        )}
+
         {/* Affiliate disclosure */}
         <ThemedText style={styles.affiliate}>
           We earn a commission on purchases — this doesn't affect your price.
@@ -508,30 +930,17 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    padding: Spacing.three,
-    paddingBottom: Spacing.five,
-  },
+  safeArea: { flex: 1 },
+  container: { padding: Spacing.three, paddingBottom: Spacing.five },
   header: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: Spacing.three,
     gap: Spacing.two,
   },
-  backButton: {
-    paddingVertical: Spacing.one,
-    paddingRight: Spacing.two,
-  },
-  backText: {
-    fontSize: 14,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "600",
-  },
+  backButton: { paddingVertical: Spacing.one, paddingRight: Spacing.two },
+  backText: { fontSize: 14 },
+  title: { fontSize: 24, fontWeight: "600" },
   section: {
     borderRadius: 12,
     borderWidth: 1,
@@ -546,12 +955,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
     opacity: 0.6,
   },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: "500",
-    marginBottom: Spacing.one,
-    opacity: 0.8,
-  },
+  fieldLabel: { fontSize: 13, fontWeight: "500", marginBottom: Spacing.one, opacity: 0.8 },
   input: {
     borderWidth: 1,
     borderColor: "#d5cec6",
@@ -562,21 +966,10 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
     backgroundColor: "#fff",
   },
-  row: {
-    flexDirection: "row",
-    gap: Spacing.two,
-  },
-  rowFieldWide: {
-    flex: 2,
-  },
-  rowFieldNarrow: {
-    flex: 1,
-  },
-  errorText: {
-    color: "#b54a4a",
-    fontSize: 13,
-    marginTop: Spacing.one,
-  },
+  row: { flexDirection: "row", gap: Spacing.two },
+  rowFieldWide: { flex: 2 },
+  rowFieldNarrow: { flex: 1 },
+  errorText: { color: "#b54a4a", fontSize: 13, marginTop: Spacing.one },
   primaryButton: {
     backgroundColor: "#2c2c2c",
     borderRadius: 8,
@@ -584,31 +977,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: Spacing.two,
   },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  loadingContainer: {
-    alignItems: "center",
-    paddingVertical: Spacing.four,
-    gap: Spacing.two,
-  },
-  loadingText: {
-    fontSize: 14,
-    textAlign: "center",
-  },
-  loadingSubText: {
-    fontSize: 12,
-    opacity: 0.6,
-    textAlign: "center",
-  },
-  bagError: {
-    gap: Spacing.two,
-  },
+  primaryButtonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  buttonDisabled: { opacity: 0.5 },
+  loadingContainer: { alignItems: "center", paddingVertical: Spacing.four, gap: Spacing.two },
+  loadingText: { fontSize: 14, textAlign: "center" },
+  loadingSubText: { fontSize: 12, opacity: 0.6, textAlign: "center" },
+  bagError: { gap: Spacing.two },
   retryButton: {
     borderWidth: 1,
     borderColor: "#b54a4a",
@@ -617,13 +991,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     alignSelf: "flex-start",
   },
-  retryButtonText: {
-    color: "#b54a4a",
-    fontSize: 13,
-  },
-  bagSection: {
-    marginBottom: Spacing.three,
-  },
+  retryButtonText: { color: "#b54a4a", fontSize: 13 },
+  bagSection: { marginBottom: Spacing.three },
   bagTitle: {
     fontSize: 12,
     fontWeight: "600",
@@ -632,21 +1001,14 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     textTransform: "uppercase",
   },
-  autoSelectNote: {
-    fontSize: 12,
-    opacity: 0.6,
-    marginBottom: Spacing.one,
-  },
+  autoSelectNote: { fontSize: 12, opacity: 0.6, marginBottom: Spacing.one },
   methodOption: {
     borderWidth: 1,
     borderColor: "#d5cec6",
     borderRadius: 8,
     marginBottom: Spacing.one,
   },
-  methodOptionSelected: {
-    borderColor: "#8b7355",
-    backgroundColor: "rgba(139, 115, 85, 0.05)",
-  },
+  methodOptionSelected: { borderColor: "#8b7355", backgroundColor: "rgba(139, 115, 85, 0.05)" },
   methodOptionContent: {
     flexDirection: "row",
     alignItems: "center",
@@ -662,41 +1024,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  methodRadioInner: {
-    width: 8,
-    height: 8,
+  methodRadioInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: "transparent" },
+  methodRadioInnerSelected: { backgroundColor: "#8b7355" },
+  methodInfo: { flex: 1 },
+  methodName: { fontSize: 15, fontWeight: "500" },
+  methodDelivery: { fontSize: 12, opacity: 0.6, marginTop: 2 },
+  methodPrice: { fontSize: 15, fontWeight: "500" },
+  confirmedText: { color: "#5a7a4a", fontWeight: "500", fontSize: 14, marginTop: Spacing.two },
+  // ── Story 4.4 additions ──
+  consentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.two,
+  },
+  consentCheckbox: {
+    width: 20,
+    height: 20,
     borderRadius: 4,
-    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: "#8b7355",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  methodRadioInnerSelected: {
-    backgroundColor: "#8b7355",
+  consentChecked: { backgroundColor: "#8b7355" },
+  consentCheckmark: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  consentLabel: { fontSize: 13, flex: 1, opacity: 0.8 },
+  paymentInfo: { fontSize: 14, opacity: 0.7, marginBottom: Spacing.three, lineHeight: 20 },
+  placeOrderButton: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 8,
+    padding: Spacing.three,
+    alignItems: "center",
   },
-  methodInfo: {
-    flex: 1,
-  },
-  methodName: {
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  methodDelivery: {
-    fontSize: 12,
-    opacity: 0.6,
-    marginTop: 2,
-  },
-  methodPrice: {
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  confirmedText: {
-    color: "#5a7a4a",
-    fontWeight: "500",
-    fontSize: 14,
-    marginTop: Spacing.two,
-  },
-  affiliate: {
-    fontSize: 12,
-    opacity: 0.5,
-    textAlign: "center",
-    marginTop: Spacing.two,
-  },
+  placeOrderText: { color: "#fff", fontSize: 16, fontWeight: "700", letterSpacing: 0.5 },
+  affiliate: { fontSize: 12, opacity: 0.5, textAlign: "center", marginTop: Spacing.two },
 });

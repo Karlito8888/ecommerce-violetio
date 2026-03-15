@@ -16,6 +16,9 @@
  * | POST   | /cart/{id}/shipping_address   | Set shipping address        |
  * | GET    | /cart/{id}/shipping/available | Get available shipping      |
  * | POST   | /cart/{id}/shipping           | Set shipping methods        |
+ * | POST   | /cart/{id}/customer           | Set guest customer info     |
+ * | POST   | /cart/{id}/billing_address    | Set billing address         |
+ * | POST   | /cart/{id}/submit             | Submit order                |
  *
  * ## Authentication
  *
@@ -200,10 +203,22 @@ Deno.serve(async (req: Request) => {
   if (req.method === "POST" && (path === "" || path === "/")) {
     if (!appId) return errorResponse("VIOLET.CONFIG_MISSING", "VIOLET_APP_ID not configured", 500);
 
+    /**
+     * `wallet_based_checkout: true` — Violet creates a Stripe PaymentIntent at cart
+     * creation time. Without this, `payment_intent_client_secret` is absent from
+     * cart responses, breaking the Stripe PaymentElement/PaymentSheet flow.
+     *
+     * @see https://docs.violet.io/guides/checkout/payments — wallet-based checkout
+     * @see Story 4.4 AC#5, AC#12
+     */
     const res = await fetch(`${VIOLET_API_BASE}/checkout/cart`, {
       method: "POST",
       headers: violetHeaders,
-      body: JSON.stringify({ channel_id: Number(appId), currency: "USD" }),
+      body: JSON.stringify({
+        channel_id: Number(appId),
+        currency: "USD",
+        wallet_based_checkout: true,
+      }),
     });
 
     if (!res.ok) {
@@ -461,6 +476,104 @@ Deno.serve(async (req: Request) => {
     return json({ data: transformed, error: null });
   }
 
+  // ── Route: POST /cart/{id}/customer — set customer info (Story 4.4) ──
+  // MUST be checked before /submit to avoid path conflict.
+  const customerMatch = path.match(/^\/([^/]+)\/customer$/);
+  if (req.method === "POST" && customerMatch) {
+    const violetCartId = customerMatch[1];
+    const body = await req.json();
+
+    /**
+     * Forward to Violet POST /checkout/cart/{id}/customer.
+     * Mobile sends snake_case directly (email, first_name, last_name).
+     *
+     * @see https://docs.violet.io/api-reference/checkout-cart/apply-guest-customer-to-cart
+     */
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/customer`, {
+      method: "POST",
+      headers: violetHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Set customer failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    return new Response(null, { status: 200, headers: jsonHeaders });
+  }
+
+  // ── Route: POST /cart/{id}/billing_address — set billing (Story 4.4) ──
+  // MUST be checked before /submit to avoid path conflict.
+  const billingAddressMatch = path.match(/^\/([^/]+)\/billing_address$/);
+  if (req.method === "POST" && billingAddressMatch) {
+    const violetCartId = billingAddressMatch[1];
+    const body = await req.json();
+
+    /**
+     * Forward to Violet POST /checkout/cart/{id}/billing_address.
+     * Same body shape as shipping_address but WITHOUT phone.
+     *
+     * @see https://docs.violet.io/api-reference/checkout-cart/set-billing-address
+     */
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/billing_address`, {
+      method: "POST",
+      headers: violetHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Set billing address failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    return new Response(null, { status: 200, headers: jsonHeaders });
+  }
+
+  // ── Route: POST /cart/{id}/submit — submit order (Story 4.4) ──────
+  const submitMatch = path.match(/^\/([^/]+)\/submit$/);
+  if (req.method === "POST" && submitMatch) {
+    const violetCartId = submitMatch[1];
+    const body = await req.json();
+
+    /**
+     * Forward to Violet POST /checkout/cart/{id}/submit.
+     * Body: { app_order_id: "uuid" }
+     *
+     * Returns order status:
+     * - COMPLETED: card charged, order placed
+     * - REQUIRES_ACTION: 3DS needed (payment_intent_client_secret in response)
+     * - REJECTED: payment rejected
+     *
+     * @see https://docs.violet.io/api-reference/checkout-cart/submit-cart
+     */
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/submit`, {
+      method: "POST",
+      headers: violetHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Submit order failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    const orderData = await res.json();
+    return json({ data: orderData, error: null });
+  }
+
   return errorResponse("CART.NOT_FOUND", "Route not found", 404);
 });
 
@@ -593,5 +706,14 @@ function transformCart(raw: unknown): Record<string, unknown> {
     total,
     currency: String(r.currency ?? "USD"),
     status: "active",
+    /**
+     * Stripe PaymentIntent client secret — present when cart was created with
+     * `wallet_based_checkout: true`. Mobile uses this to init PaymentSheet.
+     *
+     * @see Story 4.4 AC#5
+     */
+    paymentIntentClientSecret: r.payment_intent_client_secret
+      ? String(r.payment_intent_client_secret)
+      : undefined,
   };
 }

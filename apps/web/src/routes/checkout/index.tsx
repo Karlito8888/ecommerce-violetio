@@ -1,38 +1,44 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useCartContext } from "../../contexts/CartContext";
 import { useCartQuery, queryKeys, formatPrice } from "@ecommerce/shared";
 import type {
   CartFetchFn,
   ShippingMethodsAvailable,
   ShippingAddressInput,
+  CustomerInput,
 } from "@ecommerce/shared";
 import { getCartFn } from "../../server/cartActions";
 import {
   setShippingAddressFn,
   getAvailableShippingMethodsFn,
   setShippingMethodsFn,
+  setCustomerFn,
+  setBillingAddressFn,
+  getPaymentIntentFn,
+  submitOrderFn,
+  clearCartCookieFn,
 } from "../../server/checkout";
 
 /**
- * /checkout — Shipping address + method selection (CSR, Story 4.3).
+ * /checkout — Full checkout flow: address → methods → guest info → billing → payment.
  *
  * ## Why no loader (CSR-only)
- * Stripe Elements (Story 4.4) requires client-side rendering. Keeping checkout
- * CSR also avoids server-side cart state management complexity.
+ * Stripe Elements requires client-side rendering. `loadStripe()` and `<Elements>`
+ * cannot run server-side. Keeping checkout CSR also avoids server-side cart state
+ * management complexity.
  *
- * ## Flow enforced by this component
- * 1. Address form → `setShippingAddressFn` → `getAvailableShippingMethodsFn`
- * 2. Per-bag method selection
- * 3. "Continue to Payment" → `setShippingMethodsFn` → cart totals update
+ * ## Checkout step machine
+ * address → methods → confirmed → guestInfo → billing → payment → complete
  *
- * The address MUST be submitted before methods are fetched — Violet's
- * `GET /shipping/available` returns empty results without a prior address.
+ * - Steps address/methods/confirmed are Story 4.3 (shipping)
+ * - Steps guestInfo/billing/payment are Story 4.4 (customer + payment)
  *
  * @see apps/web/src/server/checkout.ts — Server Functions
  * @see apps/web/src/styles/pages/checkout.css — BEM styles
- * @see https://docs.violet.io/api-reference/checkout/cart/set-shipping-address
  */
 export const Route = createFileRoute("/checkout/")({
   component: CheckoutPage,
@@ -41,10 +47,23 @@ export const Route = createFileRoute("/checkout/")({
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
 
 /**
+ * Stripe instance — loaded once at module level to prevent re-initialization.
+ *
+ * `loadStripe()` returns a Promise that resolves to a Stripe object. Calling it
+ * multiple times (inside a component) would reload the Stripe SDK on every render.
+ * Module-level ensures single initialization.
+ *
+ * Uses `VITE_STRIPE_PUBLISHABLE_KEY` (Vite exposes `VITE_` prefixed env vars
+ * to the client). This is the Stripe publishable key (pk_test_... or pk_live_...),
+ * safe for client-side use.
+ *
+ * @see https://stripe.com/docs/stripe-js/react#elements-provider
+ */
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
+
+/**
  * Countries supported by Violet's Stripe platform account (US/UK/EU).
  * Used for a client-side warning — Violet enforces the real restriction server-side.
- *
- * @see Story 4.3 AC#11 — country restriction enforcement (FR21)
  */
 const SUPPORTED_COUNTRIES = [
   "US",
@@ -92,7 +111,13 @@ const EU_COUNTRY_LABELS: Record<string, string> = {
   RO: "Romania",
 };
 
-type CheckoutStep = "address" | "methods" | "confirmed";
+/**
+ * Checkout step state machine.
+ *
+ * Story 4.3: address → methods → confirmed
+ * Story 4.4: confirmed → guestInfo → billing → payment → complete
+ */
+type CheckoutStep = "address" | "methods" | "confirmed" | "guestInfo" | "billing" | "payment";
 
 interface AddressFormState {
   address1: string;
@@ -110,9 +135,164 @@ interface AddressFormErrors {
   country?: string;
 }
 
+// ─── PaymentForm ──────────────────────────────────────────────────────────
+// Extracted as a child component because `useStripe()` and `useElements()`
+// hooks MUST be called inside an `<Elements>` provider. They throw if called
+// in the same component that renders `<Elements>`.
+
+/**
+ * Inner payment form rendered inside `<Elements>` provider.
+ *
+ * ## Stripe hooks requirement
+ * `useStripe()` and `useElements()` only work inside an `<Elements>` provider.
+ * This is a Stripe architectural constraint — the hooks access the Stripe
+ * instance from React context provided by `<Elements>`.
+ *
+ * ## Submit flow
+ * 1. `stripe.confirmPayment({ redirect: "if_required" })` — authorizes card
+ * 2. On success: call `submitOrderFn` — Violet charges the card
+ * 3. If REQUIRES_ACTION: `stripe.handleNextAction()` for 3DS, then re-submit
+ * 4. If COMPLETED: navigate to confirmation
+ * 5. If REJECTED: show error
+ *
+ * @see Story 4.4 C3 — complete submit flow reference
+ */
+function PaymentForm({
+  appOrderId,
+  onSuccess,
+}: {
+  appOrderId: string;
+  onSuccess: (orderId: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  async function handlePlaceOrder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    /**
+     * Step 1: Confirm payment client-side.
+     *
+     * `redirect: "if_required"` prevents Stripe from redirecting for standard
+     * card payments. For Apple Pay / Google Pay, Stripe handles natively.
+     * This call AUTHORIZES the card but does NOT charge it.
+     *
+     * @see https://docs.violet.io/guides/checkout/payments
+     */
+    const { error: stripeError } = await stripe.confirmPayment({
+      elements,
+      redirect: "if_required",
+    });
+
+    if (stripeError) {
+      setSubmitError(stripeError.message ?? "Payment authorization failed");
+      setIsSubmitting(false);
+      return;
+    }
+
+    /**
+     * Step 2: Submit to Violet — this charges the card.
+     *
+     * Uses the same `appOrderId` for idempotency. If the user clicks submit
+     * twice, or retries after 3DS, Violet deduplicates via this ID.
+     */
+    const result = await submitOrderFn({ data: { appOrderId } });
+
+    if (result.error) {
+      setSubmitError(result.error.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    /**
+     * Step 3: Handle 3D Secure challenge if needed.
+     *
+     * When Violet returns REQUIRES_ACTION, the bank requires additional
+     * authentication. `stripe.handleNextAction()` opens the 3DS challenge
+     * modal. After resolution, re-submit with the same appOrderId.
+     */
+    if (result.data?.status === "REQUIRES_ACTION") {
+      const secret = result.data.paymentIntentClientSecret;
+      if (!secret) {
+        setSubmitError("3D Secure required but no client secret returned");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const { error: actionError } = await stripe.handleNextAction({
+        clientSecret: secret,
+      });
+
+      if (actionError) {
+        setSubmitError(actionError.message ?? "3D Secure authentication failed");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Re-submit after 3DS success (reuse same appOrderId for idempotency)
+      const retryResult = await submitOrderFn({ data: { appOrderId } });
+      if (retryResult.error || retryResult.data?.status === "REJECTED") {
+        setSubmitError(
+          retryResult.error?.message ?? "Order was rejected after 3D Secure verification",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      onSuccess(retryResult.data?.id ?? "");
+      return;
+    }
+
+    if (result.data?.status === "REJECTED") {
+      setSubmitError("Your order was rejected. Please try a different payment method.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Success — COMPLETED status
+    onSuccess(result.data?.id ?? "");
+  }
+
+  return (
+    <form onSubmit={handlePlaceOrder}>
+      <PaymentElement />
+
+      {submitError && (
+        <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
+          {submitError}
+        </p>
+      )}
+
+      <button
+        type="submit"
+        className={`checkout__submit checkout__submit--place-order${isSubmitting ? " checkout__submit--loading" : ""}`}
+        disabled={isSubmitting || !stripe || !elements}
+        style={{ marginTop: "1.5rem" }}
+      >
+        {isSubmitting ? (
+          <span className="checkout__submit-spinner" aria-label="Processing payment…">
+            Processing…
+          </span>
+        ) : (
+          "Place Order"
+        )}
+      </button>
+    </form>
+  );
+}
+
+// ─── CheckoutPage ─────────────────────────────────────────────────────────
+
 function CheckoutPage() {
   const { violetCartId } = useCartContext();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: cartResponse, isLoading: isCartLoading } = useCartQuery(violetCartId, fetchCart);
   const cart = cartResponse?.data ?? null;
 
@@ -133,18 +313,50 @@ function CheckoutPage() {
 
   // ── Shipping methods ────────────────────────────────────────────────
   const [availableMethods, setAvailableMethods] = useState<ShippingMethodsAvailable[]>([]);
-  /** Tracks loading state per bag (key = bagId) */
   const [bagLoadingState, setBagLoadingState] = useState<Record<string, boolean>>({});
-  /** Tracks error state per bag (key = bagId) */
   const [bagErrorState, setBagErrorState] = useState<Record<string, string>>({});
-  /** Selected shipping method ID per bag (key = bagId) */
   const [selectedMethods, setSelectedMethods] = useState<Record<string, string>>({});
 
   // ── Continue to payment ─────────────────────────────────────────────
   const [isSubmittingShipping, setIsSubmittingShipping] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
 
-  // All bags must have a selection before enabling "Continue to Payment"
+  // ── Guest info (Story 4.4) ──────────────────────────────────────────
+  const [guestInfo, setGuestInfo] = useState<CustomerInput>({
+    email: "",
+    firstName: "",
+    lastName: "",
+    marketingConsent: false,
+  });
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const [isGuestSubmitting, setIsGuestSubmitting] = useState(false);
+
+  // ── Billing address (Story 4.4) ─────────────────────────────────────
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
+  const [billingAddress, setBillingAddress] = useState<AddressFormState>({
+    address1: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "US",
+  });
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [isBillingSubmitting, setIsBillingSubmitting] = useState(false);
+
+  // ── Stripe payment (Story 4.4) ──────────────────────────────────────
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  /**
+   * Stable order ID for idempotency — generated once per checkout session.
+   *
+   * `useRef` ensures the UUID persists across re-renders without triggering
+   * re-renders itself. Reused for 3DS retries to prevent duplicate orders.
+   *
+   * @see Story 4.4 AC#13 — idempotency via appOrderId
+   */
+  const appOrderIdRef = useRef(crypto.randomUUID());
+
   const allBagsSelected =
     availableMethods.length > 0 &&
     availableMethods.every((bag) => Boolean(selectedMethods[bag.bagId]));
@@ -152,8 +364,6 @@ function CheckoutPage() {
   // ── Address field change ────────────────────────────────────────────
   function handleAddressChange(field: keyof AddressFormState, value: string) {
     setAddress((prev) => ({ ...prev, [field]: value }));
-
-    // Clear error on change
     if (addressErrors[field]) {
       setAddressErrors((prev) => ({ ...prev, [field]: undefined }));
     }
@@ -171,11 +381,10 @@ function CheckoutPage() {
     return Object.keys(errors).length === 0;
   }
 
-  // ── Fetch available methods for all bags ────────────────────────────
+  // ── Fetch available methods ─────────────────────────────────────────
   async function fetchAvailableShippingMethods() {
     if (!cart) return;
 
-    // Mark all bags as loading
     const loadingMap: Record<string, boolean> = {};
     cart.bags.forEach((b) => (loadingMap[b.id] = true));
     setBagLoadingState(loadingMap);
@@ -184,7 +393,6 @@ function CheckoutPage() {
     const result = await getAvailableShippingMethodsFn();
 
     if (result.error) {
-      // Mark all bags with error if the call itself fails
       const errorMap: Record<string, string> = {};
       cart.bags.forEach((b) => (errorMap[b.id] = result.error!.message));
       setBagErrorState(errorMap);
@@ -194,11 +402,8 @@ function CheckoutPage() {
 
     const methods = result.data ?? [];
     setAvailableMethods(methods);
-
-    // Clear loading state for all bags
     setBagLoadingState({});
 
-    // Mark bags with no methods as errors
     const errorMap: Record<string, string> = {};
     cart.bags.forEach((b) => {
       const found = methods.find((m) => m.bagId === b.id);
@@ -220,7 +425,7 @@ function CheckoutPage() {
     }
   }
 
-  // ── Address form submit ─────────────────────────────────────────────
+  // ── Address submit ──────────────────────────────────────────────────
   async function handleAddressSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validateAddress()) return;
@@ -244,16 +449,12 @@ function CheckoutPage() {
       return;
     }
 
-    // Address accepted — now fetch available shipping methods
     setStep("methods");
     setIsAddressSubmitting(false);
     await fetchAvailableShippingMethods();
   }
 
-  // ── Retry shipping methods for a specific bag ───────────────────────
-  // Violet's API doesn't support per-bag retries — we refetch all bags.
-  // `fetchAvailableShippingMethods` resets the full bagLoadingState immediately,
-  // so we only clear the error for the retried bag before calling it.
+  // ── Retry shipping methods ──────────────────────────────────────────
   async function handleRetryBag(bagId: string) {
     setBagErrorState((prev) => {
       const next = { ...prev };
@@ -263,7 +464,7 @@ function CheckoutPage() {
     await fetchAvailableShippingMethods();
   }
 
-  // ── Continue to payment ─────────────────────────────────────────────
+  // ── Continue to payment (shipping confirm) ──────────────────────────
   async function handleContinueToPayment() {
     if (!allBagsSelected) return;
 
@@ -283,22 +484,112 @@ function CheckoutPage() {
       return;
     }
 
-    // Invalidate cart query so CartDrawer and other consumers see updated shippingTotal
     if (violetCartId) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.cart.detail(violetCartId) });
     }
 
-    setStep("confirmed");
+    setStep("guestInfo");
     setIsSubmittingShipping(false);
   }
 
-  // Aggregate totals for sidebar
+  // ── Guest info submit ───────────────────────────────────────────────
+  async function handleGuestInfoSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!guestInfo.email.trim() || !guestInfo.firstName.trim() || !guestInfo.lastName.trim()) {
+      setGuestError("Email, first name, and last name are required.");
+      return;
+    }
+
+    setIsGuestSubmitting(true);
+    setGuestError(null);
+
+    const result = await setCustomerFn({ data: guestInfo });
+
+    if (result.error) {
+      setGuestError(result.error.message);
+      setIsGuestSubmitting(false);
+      return;
+    }
+
+    setStep("billing");
+    setIsGuestSubmitting(false);
+  }
+
+  // ── Billing address confirm ─────────────────────────────────────────
+  async function handleBillingConfirm(e: React.FormEvent) {
+    e.preventDefault();
+
+    setIsBillingSubmitting(true);
+    setBillingError(null);
+
+    // If different billing address, send it to Violet
+    if (!billingSameAsShipping) {
+      if (
+        !billingAddress.address1.trim() ||
+        !billingAddress.city.trim() ||
+        !billingAddress.state.trim() ||
+        !billingAddress.postalCode.trim() ||
+        !billingAddress.country
+      ) {
+        setBillingError("All billing address fields are required.");
+        setIsBillingSubmitting(false);
+        return;
+      }
+
+      const billingResult = await setBillingAddressFn({
+        data: {
+          address1: billingAddress.address1,
+          city: billingAddress.city,
+          state: billingAddress.state,
+          postalCode: billingAddress.postalCode,
+          country: billingAddress.country,
+        },
+      });
+
+      if (billingResult.error) {
+        setBillingError(billingResult.error.message);
+        setIsBillingSubmitting(false);
+        return;
+      }
+    }
+
+    // Fetch PaymentIntent client secret from Violet (GET /cart → extract secret)
+    setPaymentError(null);
+    const piResult = await getPaymentIntentFn();
+
+    if (piResult.error) {
+      setPaymentError(piResult.error.message);
+      setIsBillingSubmitting(false);
+      return;
+    }
+
+    setClientSecret(piResult.data!.clientSecret);
+    setStep("payment");
+    setIsBillingSubmitting(false);
+  }
+
+  // ── Order success handler ───────────────────────────────────────────
+  async function handleOrderSuccess(orderId: string) {
+    // Clear cart cookie so next addToCart creates a fresh cart
+    await clearCartCookieFn();
+
+    // Clear cart state so CartDrawer shows empty
+    if (violetCartId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cart.detail(violetCartId) });
+    }
+
+    // Navigate to order confirmation (Story 4.5 stub)
+    navigate({ to: `/order/${orderId}/confirmation` as string });
+  }
+
+  // ── Aggregate totals ───────────────────────────────────────────────
   const subtotalAll = cart?.bags.reduce((sum, b) => sum + b.subtotal, 0) ?? 0;
   const taxAll = cart?.bags.reduce((sum, b) => sum + b.tax, 0) ?? 0;
   const shippingAll = cart?.bags.reduce((sum, b) => sum + b.shippingTotal, 0) ?? 0;
   const totalAll = subtotalAll + taxAll + shippingAll;
 
-  // ── Empty / loading states ──────────────────────────────────────────
+  // ── Loading / empty states ──────────────────────────────────────────
   if (isCartLoading) {
     return (
       <div className="page-wrap">
@@ -448,7 +739,6 @@ function CheckoutPage() {
                   )}
                 </div>
 
-                {/* Address submission error */}
                 {addressError && (
                   <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
                     {addressError}
@@ -486,6 +776,7 @@ function CheckoutPage() {
                       setStep("address");
                       setAvailableMethods([]);
                       setSelectedMethods({});
+                      setClientSecret(null);
                     }}
                   >
                     Edit
@@ -494,7 +785,7 @@ function CheckoutPage() {
               )}
             </section>
 
-            {/* ── Section 2: Shipping methods (shown after address submitted) ── */}
+            {/* ── Section 2: Shipping methods ── */}
             {step !== "address" && (
               <section className="checkout__section" aria-labelledby="checkout-methods-title">
                 <h2 className="checkout__section-title" id="checkout-methods-title">
@@ -513,7 +804,6 @@ function CheckoutPage() {
                           {bag.merchantName || `Merchant ${bag.merchantId}`}
                         </p>
 
-                        {/* Per-bag loading skeleton (AC#12) */}
                         {isLoading && (
                           <div
                             className="checkout__bag-loading"
@@ -524,7 +814,6 @@ function CheckoutPage() {
                           </div>
                         )}
 
-                        {/* Per-bag error with retry (AC#10) */}
                         {!isLoading && error && (
                           <div className="checkout__bag-error" role="alert">
                             <span>{error}</span>
@@ -538,7 +827,6 @@ function CheckoutPage() {
                           </div>
                         )}
 
-                        {/* Shipping method options */}
                         {!isLoading && !error && bagMethods && (
                           <div role="group" aria-label={`Shipping options for ${bag.merchantName}`}>
                             {bagMethods.shippingMethods.length === 1 && (
@@ -601,19 +889,14 @@ function CheckoutPage() {
                   })}
                 </div>
 
-                {/* Shipping submission error */}
                 {shippingError && (
-                  <p
-                    className="checkout__field-error"
-                    role="alert"
-                    style={{ marginTop: "1rem", marginBottom: "1rem" }}
-                  >
+                  <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
                     {shippingError}
                   </p>
                 )}
 
-                {/* Confirmation message after successful selection */}
-                {step === "confirmed" && (
+                {/* Show confirmed state or Continue button */}
+                {step !== "methods" && (
                   <p
                     style={{
                       marginTop: "1rem",
@@ -622,11 +905,10 @@ function CheckoutPage() {
                       fontSize: "0.875rem",
                     }}
                   >
-                    ✓ Shipping confirmed. Payment coming in the next step.
+                    ✓ Shipping confirmed.
                   </p>
                 )}
 
-                {/* Continue to Payment CTA — disabled until all bags selected (AC#4, #5) */}
                 {step === "methods" && (
                   <button
                     type="button"
@@ -641,13 +923,285 @@ function CheckoutPage() {
                 )}
               </section>
             )}
+
+            {/* ── Section 3: Guest info (Story 4.4) ── */}
+            {(step === "guestInfo" || step === "billing" || step === "payment") && (
+              <section
+                className="checkout__section checkout__customer"
+                aria-labelledby="checkout-guest-title"
+              >
+                <h2 className="checkout__section-title" id="checkout-guest-title">
+                  Contact Information
+                </h2>
+
+                <form onSubmit={handleGuestInfoSubmit} noValidate>
+                  <div className="checkout__field">
+                    <label className="checkout__field-label" htmlFor="guest-email">
+                      Email
+                    </label>
+                    <input
+                      id="guest-email"
+                      className="checkout__field-input"
+                      type="email"
+                      value={guestInfo.email}
+                      onChange={(e) => setGuestInfo((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      required
+                      disabled={step !== "guestInfo"}
+                    />
+                  </div>
+
+                  <div className="checkout__field-row">
+                    <div className="checkout__field">
+                      <label className="checkout__field-label" htmlFor="guest-first">
+                        First Name
+                      </label>
+                      <input
+                        id="guest-first"
+                        className="checkout__field-input"
+                        type="text"
+                        value={guestInfo.firstName}
+                        onChange={(e) =>
+                          setGuestInfo((prev) => ({ ...prev, firstName: e.target.value }))
+                        }
+                        autoComplete="given-name"
+                        required
+                        disabled={step !== "guestInfo"}
+                      />
+                    </div>
+                    <div className="checkout__field">
+                      <label className="checkout__field-label" htmlFor="guest-last">
+                        Last Name
+                      </label>
+                      <input
+                        id="guest-last"
+                        className="checkout__field-input"
+                        type="text"
+                        value={guestInfo.lastName}
+                        onChange={(e) =>
+                          setGuestInfo((prev) => ({ ...prev, lastName: e.target.value }))
+                        }
+                        autoComplete="family-name"
+                        required
+                        disabled={step !== "guestInfo"}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Marketing consent — unchecked by default per FR20 / UX spec */}
+                  <label className="checkout__consent">
+                    <input
+                      type="checkbox"
+                      checked={guestInfo.marketingConsent ?? false}
+                      onChange={(e) =>
+                        setGuestInfo((prev) => ({ ...prev, marketingConsent: e.target.checked }))
+                      }
+                      disabled={step !== "guestInfo"}
+                    />
+                    <span>Receive updates and offers from merchants</span>
+                  </label>
+
+                  {guestError && (
+                    <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
+                      {guestError}
+                    </p>
+                  )}
+
+                  {step === "guestInfo" && (
+                    <button
+                      type="submit"
+                      className="checkout__address-submit"
+                      disabled={isGuestSubmitting}
+                    >
+                      {isGuestSubmitting ? "Saving…" : "Continue →"}
+                    </button>
+                  )}
+                </form>
+
+                {step !== "guestInfo" && (
+                  <p
+                    style={{ fontSize: "0.875rem", color: "var(--color-steel)", marginTop: "1rem" }}
+                  >
+                    {guestInfo.email} · {guestInfo.firstName} {guestInfo.lastName}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* ── Section 4: Billing address (Story 4.4) ── */}
+            {(step === "billing" || step === "payment") && (
+              <section
+                className="checkout__section checkout__billing"
+                aria-labelledby="checkout-billing-title"
+              >
+                <h2 className="checkout__section-title" id="checkout-billing-title">
+                  Billing Address
+                </h2>
+
+                <form onSubmit={handleBillingConfirm} noValidate>
+                  <label className="checkout__consent">
+                    <input
+                      type="checkbox"
+                      checked={billingSameAsShipping}
+                      onChange={(e) => setBillingSameAsShipping(e.target.checked)}
+                      disabled={step !== "billing"}
+                    />
+                    <span>Same as shipping address</span>
+                  </label>
+
+                  {!billingSameAsShipping && step === "billing" && (
+                    <div style={{ marginTop: "1rem" }}>
+                      <div className="checkout__field">
+                        <label className="checkout__field-label" htmlFor="billing-address1">
+                          Street Address
+                        </label>
+                        <input
+                          id="billing-address1"
+                          className="checkout__field-input"
+                          type="text"
+                          value={billingAddress.address1}
+                          onChange={(e) =>
+                            setBillingAddress((p) => ({ ...p, address1: e.target.value }))
+                          }
+                          autoComplete="billing street-address"
+                        />
+                      </div>
+
+                      <div className="checkout__field-row checkout__field-row--3col">
+                        <div className="checkout__field">
+                          <label className="checkout__field-label" htmlFor="billing-city">
+                            City
+                          </label>
+                          <input
+                            id="billing-city"
+                            className="checkout__field-input"
+                            type="text"
+                            value={billingAddress.city}
+                            onChange={(e) =>
+                              setBillingAddress((p) => ({ ...p, city: e.target.value }))
+                            }
+                            autoComplete="billing address-level2"
+                          />
+                        </div>
+                        <div className="checkout__field">
+                          <label className="checkout__field-label" htmlFor="billing-state">
+                            State
+                          </label>
+                          <input
+                            id="billing-state"
+                            className="checkout__field-input"
+                            type="text"
+                            value={billingAddress.state}
+                            onChange={(e) =>
+                              setBillingAddress((p) => ({ ...p, state: e.target.value }))
+                            }
+                            autoComplete="billing address-level1"
+                          />
+                        </div>
+                        <div className="checkout__field">
+                          <label className="checkout__field-label" htmlFor="billing-postal">
+                            ZIP / Postal
+                          </label>
+                          <input
+                            id="billing-postal"
+                            className="checkout__field-input"
+                            type="text"
+                            value={billingAddress.postalCode}
+                            onChange={(e) =>
+                              setBillingAddress((p) => ({ ...p, postalCode: e.target.value }))
+                            }
+                            autoComplete="billing postal-code"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="checkout__field">
+                        <label className="checkout__field-label" htmlFor="billing-country">
+                          Country
+                        </label>
+                        <select
+                          id="billing-country"
+                          className="checkout__field-select"
+                          value={billingAddress.country}
+                          onChange={(e) =>
+                            setBillingAddress((p) => ({ ...p, country: e.target.value }))
+                          }
+                          autoComplete="billing country"
+                        >
+                          <option value="">Select a country…</option>
+                          {SUPPORTED_COUNTRIES.map((code) => (
+                            <option key={code} value={code}>
+                              {EU_COUNTRY_LABELS[code] ?? code}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {billingError && (
+                    <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
+                      {billingError}
+                    </p>
+                  )}
+                  {paymentError && (
+                    <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
+                      {paymentError}
+                    </p>
+                  )}
+
+                  {step === "billing" && (
+                    <button
+                      type="submit"
+                      className="checkout__address-submit"
+                      disabled={isBillingSubmitting}
+                      style={{ marginTop: "1rem" }}
+                    >
+                      {isBillingSubmitting ? "Loading payment…" : "Continue to Payment →"}
+                    </button>
+                  )}
+                </form>
+
+                {step === "payment" && (
+                  <p
+                    style={{ fontSize: "0.875rem", color: "var(--color-steel)", marginTop: "1rem" }}
+                  >
+                    {billingSameAsShipping
+                      ? "Same as shipping address"
+                      : `${billingAddress.address1}, ${billingAddress.city}`}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* ── Section 5: Stripe payment (Story 4.4) ── */}
+            {step === "payment" && clientSecret && (
+              <section
+                className="checkout__section checkout__payment"
+                aria-labelledby="checkout-payment-title"
+              >
+                <h2 className="checkout__section-title" id="checkout-payment-title">
+                  Payment
+                </h2>
+
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret,
+                    appearance: { theme: "flat" },
+                  }}
+                >
+                  <PaymentForm appOrderId={appOrderIdRef.current} onSuccess={handleOrderSuccess} />
+                </Elements>
+              </section>
+            )}
           </div>
 
           {/* ── Right: Order summary sidebar ── */}
           <aside className="checkout__summary" aria-label="Order summary">
             <h2 className="checkout__summary-title">Order Summary</h2>
 
-            {/* Items grouped by bag */}
             {cart.bags.map((bag) =>
               bag.items.map((item) => (
                 <div key={item.skuId} className="checkout__summary-item">
@@ -672,7 +1226,6 @@ function CheckoutPage() {
               )),
             )}
 
-            {/* Pricing totals */}
             <div className="checkout__summary-totals">
               <div className="checkout__summary-line">
                 <span>Subtotal</span>
@@ -692,7 +1245,6 @@ function CheckoutPage() {
               </div>
             </div>
 
-            {/* Affiliate disclosure */}
             <p className="checkout__affiliate">
               We earn a commission on purchases — this doesn&apos;t affect your price.
             </p>

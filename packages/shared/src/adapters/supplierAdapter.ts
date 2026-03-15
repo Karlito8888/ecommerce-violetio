@@ -6,8 +6,10 @@ import type {
   Cart,
   CartItemInput,
   CreateCartInput,
+  CustomerInput,
   PaymentIntent,
   Order,
+  OrderSubmitResult,
   WebhookEvent,
   SearchResult,
   SearchFilters,
@@ -83,9 +85,53 @@ export interface SupplierAdapter {
     selections: SetShippingMethodInput[],
   ): Promise<ApiResponse<Cart>>;
 
+  // Checkout — Customer & Billing (Story 4.4)
+
+  /**
+   * Sets guest customer info on the cart (email, name, optional marketing consent).
+   *
+   * Must be called after shipping address is set. The customer info is required
+   * before Violet will accept a `/submit` call.
+   *
+   * @see https://docs.violet.io/api-reference/checkout-cart/apply-guest-customer-to-cart
+   */
+  setCustomer(violetCartId: string, customer: CustomerInput): Promise<ApiResponse<void>>;
+
+  /**
+   * Sets a billing address different from the shipping address.
+   *
+   * Optional — if billing matches shipping, skip this call. Violet defaults
+   * billing to shipping address when this is not explicitly set.
+   *
+   * @see https://docs.violet.io/api-reference/checkout-cart/set-billing-address
+   */
+  setBillingAddress(
+    violetCartId: string,
+    address: ShippingAddressInput,
+  ): Promise<ApiResponse<void>>;
+
   // Checkout — Payment (Story 4.4)
-  getPaymentIntent(cartId: string): Promise<ApiResponse<PaymentIntent>>;
-  submitOrder(cartId: string): Promise<ApiResponse<Order>>;
+
+  /**
+   * Retrieves the Stripe PaymentIntent from the cart.
+   *
+   * Violet does not have a dedicated PaymentIntent endpoint — this performs a
+   * GET /checkout/cart/{id} and extracts `payment_intent_client_secret`.
+   * Only works for carts created with `wallet_based_checkout: true`.
+   *
+   * @see https://docs.violet.io/guides/checkout/payments
+   */
+  getPaymentIntent(violetCartId: string): Promise<ApiResponse<PaymentIntent>>;
+
+  /**
+   * Submits the order to Violet after Stripe payment authorization.
+   *
+   * Call `stripe.confirmPayment()` first (client-side), then this endpoint.
+   * `appOrderId` provides idempotency for retries (e.g., after 3DS challenge).
+   *
+   * @see https://docs.violet.io/api-reference/checkout-cart/submit-cart
+   */
+  submitOrder(violetCartId: string, appOrderId: string): Promise<ApiResponse<OrderSubmitResult>>;
 
   // Orders
   getOrder(orderId: string): Promise<ApiResponse<Order>>;

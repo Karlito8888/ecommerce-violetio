@@ -57,6 +57,19 @@ export interface Cart {
   total: number;
   currency: string;
   status: "active" | "completed" | "abandoned";
+  /**
+   * Stripe PaymentIntent client secret — only present when cart was created
+   * with `wallet_based_checkout: true` in the Violet API.
+   *
+   * Used to initialize Stripe's `<Elements>` provider on the checkout page.
+   * This value is fetched server-side (via `getPaymentIntentFn`) and passed
+   * to the client only for Stripe SDK consumption — never stored in cookies
+   * or localStorage.
+   *
+   * @see https://docs.violet.io/guides/checkout/payments
+   * @see Story 4.4 AC#5
+   */
+  paymentIntentClientSecret?: string;
 }
 
 /** A single line item in a cart bag. */
@@ -89,6 +102,32 @@ export interface CreateCartInput {
   userId: string | null;
   /** Anonymous session ID for guest carts */
   sessionId: string | null;
+}
+
+// ─── Customer (Story 4.4) ──────────────────────────────────────────────────
+
+/**
+ * Guest customer information sent to Violet before payment.
+ *
+ * ## Violet API mapping (camelCase → snake_case on the wire)
+ * - `email`      → `email`
+ * - `firstName`  → `first_name`
+ * - `lastName`   → `last_name`
+ *
+ * ## Marketing consent (FR20)
+ * `marketingConsent` maps to Violet's `communication_preferences` array,
+ * which is per-merchant (per-bag). When true, we include `[{ enabled: true }]`
+ * for all bags. The checkbox is unchecked by default per UX spec.
+ *
+ * @see https://docs.violet.io/api-reference/checkout-cart/apply-guest-customer-to-cart
+ * @see Story 4.4 AC#1, AC#2
+ */
+export interface CustomerInput {
+  email: string;
+  firstName: string;
+  lastName: string;
+  /** Per-merchant marketing opt-in (FR20). false by default. */
+  marketingConsent?: boolean;
 }
 
 // ─── Shipping (Story 4.3) ──────────────────────────────────────────────────

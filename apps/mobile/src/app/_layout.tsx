@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native
 import Constants from "expo-constants";
 import React, { useState } from "react";
 import { useColorScheme } from "react-native";
+import { StripeProvider } from "@stripe/stripe-react-native";
 
 import { configureEnv } from "@ecommerce/shared";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
@@ -52,13 +53,27 @@ function AppContent() {
   );
 }
 
+/**
+ * Root layout — wraps the app with required providers.
+ *
+ * ## StripeProvider (Story 4.4)
+ * Wraps the entire app so that `useStripe()` hooks work in the checkout screen.
+ * Uses `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` from the environment — this is the
+ * Stripe publishable key (pk_test_... or pk_live_...), safe for client-side use.
+ *
+ * @see https://stripe.com/docs/payments/accept-a-payment?platform=react-native
+ */
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const stripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <AppContent />
-      </ThemeProvider>
+      <StripeProvider publishableKey={stripeKey}>
+        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <AppContent />
+        </ThemeProvider>
+      </StripeProvider>
     </AuthProvider>
   );
 }
