@@ -75,3 +75,4 @@ export type {
   BiometricErrorCode,
 } from "./biometric.types.js";
 export { BiometricType } from "./biometric.types.js";
+export type { CheckoutError, CartHealthStatus, ErrorLogEntry } from "./error.types.js";

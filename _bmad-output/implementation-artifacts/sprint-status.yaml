@@ -78,7 +78,7 @@ development_status:
   4-4-one-step-checkout-with-stripe-payment: done
   4-5-payment-confirmation-3d-secure-handling: done
   4-6-cross-device-cart-sync: done
-  4-7-checkout-error-handling-edge-cases: backlog
+  4-7-checkout-error-handling-edge-cases: done
   epic-4-retrospective: optional
 
   # Epic 5: Order Management & Tracking

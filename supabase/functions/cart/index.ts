@@ -74,6 +74,30 @@ function errorResponse(code: string, message: string, status = 400): Response {
   return json({ data: null, error: { code, message } }, status);
 }
 
+/**
+ * Fire-and-forget error logging to Supabase error_logs table (Story 4.7).
+ * Never blocks the response — errors in logging are silently ignored.
+ */
+async function logEdgeFunctionError(
+  code: string,
+  message: string,
+  context?: Record<string, unknown>,
+  userId?: string,
+): Promise<void> {
+  try {
+    const supabase = getSupabaseAdmin();
+    await supabase.from("error_logs").insert({
+      source: "edge-function",
+      error_type: code,
+      message,
+      context,
+      user_id: userId ?? null,
+    });
+  } catch {
+    // Silently ignore — logging failure must never break the request
+  }
+}
+
 /** Validates the caller's Supabase JWT and returns the user ID, or null. */
 async function validateUser(req: Request): Promise<string | null> {
   const authHeader = req.headers.get("Authorization");
@@ -227,6 +251,13 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      /** Log Violet API error (Code Review Fix — M2). */
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Cart creation failed (${res.status}): ${text}`,
+        { route: "POST /cart", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Cart creation failed (${res.status}): ${text}`,
@@ -409,6 +440,12 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!res.ok) {
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Fetch cart failed (${res.status})`,
+        { violetCartId, route: "GET /cart/{id}", httpStatus: res.status },
+        userId,
+      );
       return errorResponse("VIOLET.API_ERROR", `Fetch cart failed (${res.status})`, res.status);
     }
 
@@ -455,6 +492,13 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      /** Log Violet API error (Code Review Fix — M2). */
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Add SKU failed (${res.status}): ${text}`,
+        { violetCartId, route: "POST /cart/{id}/skus", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Add SKU failed (${res.status}): ${text}`,
@@ -501,6 +545,13 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      /** Log Violet API error (Code Review Fix — M2). */
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Update SKU failed (${res.status}): ${text}`,
+        { violetCartId, skuId, route: "PUT /cart/{id}/skus/{skuId}", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Update SKU failed (${res.status}): ${text}`,
@@ -524,6 +575,13 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      /** Log Violet API error (Code Review Fix — M2). */
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Remove SKU failed (${res.status}): ${text}`,
+        { violetCartId, skuId, route: "DELETE /cart/{id}/skus/{skuId}", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Remove SKU failed (${res.status}): ${text}`,
@@ -558,6 +616,12 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Set shipping address failed (${res.status}): ${text}`,
+        { violetCartId, route: "POST /cart/{id}/shipping_address", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Set shipping address failed (${res.status}): ${text}`,
@@ -582,6 +646,12 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Get available shipping failed (${res.status}): ${text}`,
+        { violetCartId, route: "GET /cart/{id}/shipping/available", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Get available shipping failed (${res.status}): ${text}`,
@@ -614,6 +684,12 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Set shipping methods failed (${res.status}): ${text}`,
+        { violetCartId, route: "POST /cart/{id}/shipping", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Set shipping methods failed (${res.status}): ${text}`,
@@ -649,6 +725,12 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Set customer failed (${res.status}): ${text}`,
+        { violetCartId, route: "POST /cart/{id}/customer", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Set customer failed (${res.status}): ${text}`,
@@ -680,6 +762,12 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Set billing address failed (${res.status}): ${text}`,
+        { violetCartId, route: "POST /cart/{id}/billing_address", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Set billing address failed (${res.status}): ${text}`,
@@ -715,6 +803,12 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Submit order failed (${res.status}): ${text}`,
+        { violetCartId, route: "POST /cart/{id}/submit", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.API_ERROR",
         `Submit order failed (${res.status}): ${text}`,

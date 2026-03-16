@@ -1,0 +1,490 @@
+/* ─── Checkout Error Components ──────────────────────────────────────────────
+ * BEM blocks for checkout error handling UI (Story 4.7).
+ *
+ * Blocks:
+ * - .checkout-error — Cart-level error banner
+ * - .bag-error — Per-merchant bag-level errors
+ * - .inventory-alert — Pre-submit inventory validation overlay
+ * - .retry-prompt — Network timeout retry UI
+ * - .cart-recovery — Cart expired/invalid recovery dialog
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── .checkout-error — Cart-level error banner at top of checkout ── */
+
+.checkout-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: rgba(181, 74, 74, 0.06);
+  border: 1px solid rgba(181, 74, 74, 0.2);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-6);
+}
+
+.checkout-error--boundary {
+  text-align: center;
+  padding: var(--space-12) var(--space-8);
+  margin-top: var(--space-12);
+}
+
+.checkout-error__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+.checkout-error__message {
+  font-size: 0.875rem;
+  color: var(--color-charcoal);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.checkout-error__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  justify-content: center;
+}
+
+.checkout-error__action {
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.checkout-error__action--primary {
+  background: var(--color-midnight);
+  color: #fff;
+  border: none;
+}
+
+.checkout-error__action--primary:hover {
+  background: var(--color-charcoal);
+}
+
+.checkout-error__action--secondary {
+  background: transparent;
+  color: var(--color-charcoal);
+  border: 1px solid var(--color-stone);
+}
+
+.checkout-error__action--secondary:hover {
+  background: var(--color-linen);
+}
+
+/* ── .bag-error — Per-merchant bag-level error block ── */
+
+.bag-error {
+  padding: var(--space-4);
+  background: rgba(181, 74, 74, 0.04);
+  border: 1px solid rgba(181, 74, 74, 0.15);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-3);
+}
+
+.bag-error__heading {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-error);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.bag-error__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bag-error__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(181, 74, 74, 0.04);
+  border-radius: var(--radius-sm);
+}
+
+.bag-error__item--inventory {
+  background: rgba(193, 122, 42, 0.06);
+}
+
+.bag-error__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bag-error__item-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.bag-error__item-message {
+  font-size: 0.75rem;
+  color: var(--color-error);
+}
+
+.bag-error__item-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.bag-error__action {
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-family: var(--font-body);
+}
+
+.bag-error__action--update {
+  background: transparent;
+  border: 1px solid var(--color-sienna);
+  color: var(--color-sienna);
+}
+
+.bag-error__action--update:hover {
+  background: rgba(139, 115, 85, 0.08);
+}
+
+.bag-error__action--remove {
+  background: transparent;
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+}
+
+.bag-error__action--remove:hover {
+  background: rgba(181, 74, 74, 0.08);
+}
+
+/* ── .inventory-alert — Pre-submit inventory validation overlay ── */
+
+.inventory-alert {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.inventory-alert__content {
+  background: var(--color-ivory);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  max-width: 480px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.inventory-alert__title {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.inventory-alert__description {
+  font-size: 0.875rem;
+  color: var(--color-charcoal);
+  line-height: 1.5;
+  margin: 0 0 var(--space-5) 0;
+}
+
+.inventory-alert__bag {
+  margin-bottom: var(--space-4);
+}
+
+.inventory-alert__merchant {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-steel);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.inventory-alert__items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.inventory-alert__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-sand);
+}
+
+.inventory-alert__item--unavailable {
+  background: rgba(181, 74, 74, 0.04);
+  border-color: rgba(181, 74, 74, 0.15);
+}
+
+.inventory-alert__item--reduced {
+  background: rgba(193, 122, 42, 0.04);
+  border-color: rgba(193, 122, 42, 0.15);
+}
+
+.inventory-alert__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inventory-alert__item-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.inventory-alert__item-status {
+  font-size: 0.75rem;
+  color: var(--color-error);
+}
+
+.inventory-alert__item-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.inventory-alert__action {
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.75rem;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.inventory-alert__action--update {
+  background: transparent;
+  border: 1px solid var(--color-sienna);
+  color: var(--color-sienna);
+}
+
+.inventory-alert__action--remove {
+  background: transparent;
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+}
+
+.inventory-alert__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inventory-alert__continue {
+  display: block;
+  width: 100%;
+  padding: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
+  background: var(--color-midnight);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.inventory-alert__continue:hover:not(:disabled) {
+  background: var(--color-charcoal);
+}
+
+.inventory-alert__continue:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── .retry-prompt — Network timeout retry UI ── */
+
+.retry-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: rgba(193, 122, 42, 0.06);
+  border: 1px solid rgba(193, 122, 42, 0.2);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-4);
+}
+
+.retry-prompt__icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.retry-prompt__body {
+  flex: 1;
+}
+
+.retry-prompt__message {
+  font-size: 0.8125rem;
+  color: var(--color-charcoal);
+  margin: 0 0 var(--space-3) 0;
+  line-height: 1.5;
+}
+
+.retry-prompt__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.retry-prompt__action {
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.retry-prompt__action--retry {
+  background: var(--color-sienna);
+  color: #fff;
+  border: none;
+}
+
+.retry-prompt__action--retry:hover:not(:disabled) {
+  background: var(--color-amber);
+}
+
+.retry-prompt__action--cancel {
+  background: transparent;
+  color: var(--color-charcoal);
+  border: 1px solid var(--color-stone);
+}
+
+.retry-prompt__action--cancel:hover:not(:disabled) {
+  background: var(--color-linen);
+}
+
+.retry-prompt__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── .cart-recovery — Cart expired/invalid recovery dialog ── */
+
+.cart-recovery {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-8);
+  text-align: center;
+}
+
+.cart-recovery--stale {
+  gap: var(--space-4);
+}
+
+.cart-recovery__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-sand);
+  border-top-color: var(--color-sienna);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cart-recovery__message {
+  font-size: 0.875rem;
+  color: var(--color-steel);
+  margin: 0;
+}
+
+.cart-recovery__content {
+  max-width: 400px;
+}
+
+.cart-recovery__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.cart-recovery__description {
+  font-size: 0.875rem;
+  color: var(--color-charcoal);
+  line-height: 1.5;
+  margin: 0 0 var(--space-6) 0;
+}
+
+.cart-recovery__actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+.cart-recovery__action {
+  padding: var(--space-3) var(--space-5);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.cart-recovery__action--primary {
+  background: var(--color-midnight);
+  color: #fff;
+  border: none;
+}
+
+.cart-recovery__action--primary:hover {
+  background: var(--color-charcoal);
+}
+
+.cart-recovery__action--secondary {
+  background: transparent;
+  color: var(--color-charcoal);
+  border: 1px solid var(--color-stone);
+}
+
+.cart-recovery__action--secondary:hover {
+  background: var(--color-linen);
+}

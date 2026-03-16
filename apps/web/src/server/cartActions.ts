@@ -46,6 +46,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
 import type { ApiResponse, Cart, CartItemInput, CreateCartInput } from "@ecommerce/shared";
+import { logError } from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
 
@@ -119,6 +120,14 @@ export const createCartFn = createServerFn({ method: "POST" })
     // Persist to Supabase
     const supabaseCartId = await upsertSupabaseCart(violetCartId, input);
     if (!supabaseCartId) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "DB.CART_PERSIST_FAILED",
+        message: "Failed to persist cart to database",
+        context: { violetCartId, operation: "createCart" },
+        user_id: input.userId ?? undefined,
+        session_id: input.sessionId ?? undefined,
+      });
       return {
         data: null,
         error: { code: "DB.CART_PERSIST_FAILED", message: "Failed to persist cart to database" },
@@ -221,6 +230,17 @@ export const updateCartItemFn = createServerFn({ method: "POST" })
 
     const supabaseCartId = await getSupabaseCartId(data.violetCartId);
     if (!supabaseCartId) {
+      /**
+       * Log DB.CART_NOT_FOUND for debugging (Code Review Fix — H3).
+       * The original implementation returned the error without logging it.
+       * Without logging, cart-not-found errors are invisible to the admin dashboard.
+       */
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "DB.CART_NOT_FOUND",
+        message: "Cart not found in database",
+        context: { violetCartId: data.violetCartId, operation: "updateCartItem" },
+      });
       return {
         data: null,
         error: { code: "DB.CART_NOT_FOUND", message: "Cart not found in database" },
@@ -262,6 +282,13 @@ export const removeFromCartFn = createServerFn({ method: "POST" })
 
     const supabaseCartId = await getSupabaseCartId(data.violetCartId);
     if (!supabaseCartId) {
+      /** Log DB.CART_NOT_FOUND for debugging (Code Review Fix — H3). */
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "DB.CART_NOT_FOUND",
+        message: "Cart not found in database",
+        context: { violetCartId: data.violetCartId, operation: "removeFromCart" },
+      });
       return {
         data: null,
         error: { code: "DB.CART_NOT_FOUND", message: "Cart not found in database" },
@@ -300,6 +327,13 @@ export const getCartFn = createServerFn({ method: "GET" })
 
     const supabaseCartId = await getSupabaseCartId(violetCartId);
     if (!supabaseCartId) {
+      /** Log DB.CART_NOT_FOUND for debugging (Code Review Fix — H3). */
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "DB.CART_NOT_FOUND",
+        message: "Cart not found in database",
+        context: { violetCartId, operation: "getCart" },
+      });
       return {
         data: null,
         error: { code: "DB.CART_NOT_FOUND", message: "Cart not found in database" },

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -10,8 +10,9 @@ import type {
   ShippingMethodsAvailable,
   ShippingAddressInput,
   CustomerInput,
+  CheckoutError,
 } from "@ecommerce/shared";
-import { getCartFn } from "../../server/cartActions";
+import { getCartFn, updateCartItemFn, removeFromCartFn } from "../../server/cartActions";
 import {
   setShippingAddressFn,
   getAvailableShippingMethodsFn,
@@ -22,6 +23,11 @@ import {
   submitOrderFn,
   clearCartCookieFn,
 } from "../../server/checkout";
+import { CheckoutErrorBoundary } from "../../components/checkout/CheckoutErrorBoundary";
+import { BagErrors } from "../../components/checkout/BagErrors";
+import { InventoryAlert } from "../../components/checkout/InventoryAlert";
+import { CartRecovery } from "../../components/checkout/CartRecovery";
+import { RetryPrompt } from "../../components/checkout/RetryPrompt";
 
 /**
  * /checkout — Full checkout flow: address → methods → guest info → billing → payment.
@@ -40,8 +46,17 @@ import {
  * @see apps/web/src/server/checkout.ts — Server Functions
  * @see apps/web/src/styles/pages/checkout.css — BEM styles
  */
+function CheckoutPageWithBoundary() {
+  const navigate = useNavigate();
+  return (
+    <CheckoutErrorBoundary onNavigateToCart={() => navigate({ to: "/cart" })}>
+      <CheckoutPage />
+    </CheckoutErrorBoundary>
+  );
+}
+
 export const Route = createFileRoute("/checkout/")({
-  component: CheckoutPage,
+  component: CheckoutPageWithBoundary,
 });
 
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
@@ -159,10 +174,27 @@ interface AddressFormErrors {
  */
 function PaymentForm({
   appOrderId,
+  violetCartId,
   onSuccess,
+  onPreSubmitValidation,
 }: {
   appOrderId: string;
+  /**
+   * Violet cart ID — needed for lost confirmation polling (Story 4.7 AC#3).
+   *
+   * ## Why this prop exists (Code Review Fix — C2)
+   * The original implementation passed `appOrderId` (a UUID v4 idempotency key) to
+   * `getCartFn()` during polling, but `getCartFn` expects a Violet cart integer ID.
+   * This caused the polling to always 404 — making lost confirmation recovery useless.
+   *
+   * `violetCartId` must be the Violet integer cart ID (as string), NOT the UUID.
+   * PaymentForm cannot access CartContext directly because it renders inside
+   * `<Elements>` (Stripe provider), so we pass it explicitly from the parent.
+   */
+  violetCartId: string;
   onSuccess: (orderId: string) => void;
+  /** Story 4.7: Pre-submit inventory validation callback */
+  onPreSubmitValidation?: () => Promise<boolean>;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -171,10 +203,19 @@ function PaymentForm({
 
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || isSubmitting) return;
 
     setIsSubmitting(true);
     setSubmitError(null);
+
+    // Story 4.7: Pre-submit inventory validation (FR18)
+    if (onPreSubmitValidation) {
+      const isValid = await onPreSubmitValidation();
+      if (!isValid) {
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     /**
      * Step 1: Confirm payment client-side.
@@ -205,6 +246,37 @@ function PaymentForm({
     const result = await submitOrderFn({ data: { appOrderId } });
 
     if (result.error) {
+      /**
+       * Story 4.7 AC#3: Lost confirmation polling.
+       *
+       * When submit returns a network/timeout error (not a Violet business error),
+       * the order may have actually been placed. Before showing an error, we poll
+       * the cart status to check if it transitioned to "completed".
+       *
+       * ## Why `violetCartId` and not `appOrderId` (Code Review Fix — C2)
+       * `getCartFn` calls Violet's GET /checkout/cart/{id} which expects the
+       * numeric Violet cart ID. `appOrderId` is a UUID v4 used only for
+       * idempotency — passing it here would always 404.
+       */
+      if (
+        result.error.code === "VIOLET.API_ERROR" ||
+        result.error.message.toLowerCase().includes("timeout")
+      ) {
+        for (let i = 0; i < 5; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const cartCheck = await getCartFn({ data: violetCartId });
+          if (cartCheck.data?.status === "completed") {
+            onSuccess(cartCheck.data.id);
+            return;
+          }
+        }
+        setSubmitError(
+          "Your order may have been placed. Please check your email for confirmation before trying again.",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
       setSubmitError(result.error.message);
       setIsSubmitting(false);
       return;
@@ -335,7 +407,7 @@ function PaymentForm({
 // ─── CheckoutPage ─────────────────────────────────────────────────────────
 
 function CheckoutPage() {
-  const { violetCartId } = useCartContext();
+  const { violetCartId, cartHealth, setCartHealth, resetCart } = useCartContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: cartResponse, isLoading: isCartLoading } = useCartQuery(violetCartId, fetchCart);
@@ -343,6 +415,206 @@ function CheckoutPage() {
 
   // ── Checkout flow step ──────────────────────────────────────────────
   const [step, setStep] = useState<CheckoutStep>("address");
+
+  // ── Story 4.7: Checkout error state ─────────────────────────────────
+  const [checkoutErrors, setCheckoutErrors] = useState<CheckoutError[]>([]);
+  const [showInventoryAlert, setShowInventoryAlert] = useState(false);
+  const [isRevalidating, setIsRevalidating] = useState(false);
+
+  /**
+   * Detect cart-level errors from the cart response (Violet 200-with-errors or API failure).
+   *
+   * ## Why useEffect instead of render-phase check (Code Review Fix — M1)
+   * The original implementation called setState during render (before JSX return).
+   * While React batches render-phase state updates to avoid infinite loops, this
+   * pattern is fragile:
+   * - React StrictMode calls render twice in dev, potentially double-triggering
+   * - It makes the data flow harder to reason about (side effects hidden in render)
+   * - useEffect is the idiomatic way to react to prop/state changes
+   *
+   * The guards are still necessary: `cartHealth === "healthy"` and
+   * `checkoutErrors.length === 0` prevent re-setting state when it's already set.
+   */
+  useEffect(() => {
+    if (!cartResponse?.error || cartHealth !== "healthy") return;
+
+    if (
+      cartResponse.error.code === "VIOLET.NOT_FOUND" ||
+      cartResponse.error.code === "DB.CART_NOT_FOUND"
+    ) {
+      setCartHealth("expired");
+    } else if (checkoutErrors.length === 0) {
+      setCheckoutErrors([
+        {
+          code: cartResponse.error.code,
+          message: cartResponse.error.message,
+          severity: "error",
+          retryable: true,
+        },
+      ]);
+    }
+  }, [cartResponse?.error, cartHealth, checkoutErrors.length, setCartHealth]);
+
+  // ── Story 4.7: Retry prompt state ───────────────────────────────────
+  const [retryState, setRetryState] = useState<{
+    show: boolean;
+    operationName: string;
+    retryCount: number;
+    retryFn: (() => Promise<void>) | null;
+    cancelFn: (() => void) | null;
+  }>({ show: false, operationName: "", retryCount: 0, retryFn: null, cancelFn: null });
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  /**
+   * Wraps a Server Function call with timeout detection and retry prompt wiring.
+   *
+   * ## Why this exists (Code Review Fix — H2)
+   * The original implementation created the RetryPrompt component and state but never
+   * triggered it. No Server Function call had timeout detection, making the retry UX
+   * dead code. This helper:
+   * 1. Races the Server Function against a timeout (default 30s — Violet's max response time)
+   * 2. On timeout: shows the RetryPrompt overlay (user-initiated retry, NOT automatic)
+   * 3. Preserves all form state (the caller's local state is untouched)
+   * 4. Returns the server result on success, or null on timeout (caller checks retryState)
+   *
+   * @param operationName - Human-readable label for the retry prompt (e.g., "saving your address")
+   * @param serverCall - The Server Function call (async)
+   * @param onCancel - Called when user cancels from retry prompt (e.g., go back to previous step)
+   * @param timeoutMs - Timeout in milliseconds (default 30000)
+   * @returns The server result, or `null` if timed out (retry prompt is now showing)
+   */
+  const withTimeoutRetry = useCallback(
+    async <T,>(
+      operationName: string,
+      serverCall: () => Promise<T>,
+      onCancel: () => void,
+      timeoutMs = 30000,
+    ): Promise<T | null> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const result = await Promise.race([
+          serverCall(),
+          new Promise<never>((_resolve, reject) => {
+            controller.signal.addEventListener("abort", () => reject(new Error("TIMEOUT")));
+          }),
+        ]);
+        clearTimeout(timeout);
+        return result;
+      } catch (err) {
+        clearTimeout(timeout);
+        if (err instanceof Error && err.message === "TIMEOUT") {
+          setRetryState((prev) => ({
+            show: true,
+            operationName,
+            retryCount: prev.retryCount + 1,
+            retryFn: async () => {
+              const retryResult = await withTimeoutRetry(
+                operationName,
+                serverCall,
+                onCancel,
+                timeoutMs,
+              );
+              if (retryResult !== null) {
+                setRetryState((p) => ({ ...p, show: false }));
+              }
+            },
+            cancelFn: onCancel,
+          }));
+          return null;
+        }
+        throw err;
+      }
+    },
+    [],
+  );
+
+  // ── Story 4.7: Cart recovery ────────────────────────────────────────
+  const handleCartRecoveryRetry = useCallback(async () => {
+    if (!violetCartId) return;
+    setCartHealth("stale");
+    const result = await getCartFn({ data: violetCartId });
+    if (result.error) {
+      setCartHealth("expired");
+    } else {
+      setCartHealth("healthy");
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+    }
+  }, [violetCartId, setCartHealth, queryClient]);
+
+  const handleStartFresh = useCallback(() => {
+    resetCart();
+    navigate({ to: "/" });
+  }, [resetCart, navigate]);
+
+  // ── Story 4.7: Item action handlers for error components ────────────
+  const handleRemoveItem = useCallback(
+    async (skuId: string) => {
+      if (!violetCartId) return;
+      await removeFromCartFn({ data: { violetCartId, skuId } });
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+    },
+    [violetCartId, queryClient],
+  );
+
+  const handleUpdateQuantity = useCallback(
+    async (skuId: string, quantity: number) => {
+      if (!violetCartId) return;
+      await updateCartItemFn({ data: { violetCartId, skuId, quantity } });
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+    },
+    [violetCartId, queryClient],
+  );
+
+  // ── Story 4.7: Pre-submit inventory validation ──────────────────────
+  const validateInventoryBeforeSubmit = useCallback(async (): Promise<boolean> => {
+    if (!violetCartId) return false;
+    setIsRevalidating(true);
+    const result = await getCartFn({ data: violetCartId });
+    setIsRevalidating(false);
+
+    if (result.error) {
+      setCartHealth("expired");
+      return false;
+    }
+
+    const bagsWithErrors = result.data?.bags.filter((b) => b.errors.length > 0) ?? [];
+    if (bagsWithErrors.length > 0) {
+      setShowInventoryAlert(true);
+      return false;
+    }
+
+    return true;
+  }, [violetCartId, setCartHealth]);
+
+  /**
+   * Re-validates cart inventory after a user action (remove/update) in the InventoryAlert overlay.
+   *
+   * ## Why this exists (Code Review Fix — H1)
+   * After removing or updating an item to resolve an inventory issue, we must re-fetch
+   * the cart from Violet to check if OTHER items still have errors. Without this,
+   * the overlay would close immediately — and the user could proceed to checkout with
+   * remaining inventory problems (e.g., 2 items out of stock, user removes 1, the other
+   * is still broken but the overlay disappeared).
+   *
+   * @returns `true` if there are still bags with errors, `false` if all clear
+   */
+  const revalidateAfterInventoryAction = useCallback(async (): Promise<boolean> => {
+    if (!violetCartId) return false;
+    setIsRevalidating(true);
+    queryClient.invalidateQueries({ queryKey: ["cart"] });
+    const result = await getCartFn({ data: violetCartId });
+    setIsRevalidating(false);
+
+    if (result.error) {
+      setCartHealth("expired");
+      return false;
+    }
+
+    const bagsWithErrors = result.data?.bags.filter((b) => b.errors.length > 0) ?? [];
+    return bagsWithErrors.length > 0;
+  }, [violetCartId, setCartHealth, queryClient]);
 
   // ── Address form ────────────────────────────────────────────────────
   const [address, setAddress] = useState<AddressFormState>({
@@ -486,7 +758,18 @@ function CheckoutPage() {
       country: address.country,
     };
 
-    const result = await setShippingAddressFn({ data: addressInput });
+    /**
+     * Wrapped with timeout detection (Code Review Fix — H2).
+     * If Violet's shipping address API takes > 30s, the retry prompt appears
+     * instead of leaving the user staring at a spinner indefinitely.
+     */
+    const result = await withTimeoutRetry(
+      "saving your address",
+      () => setShippingAddressFn({ data: addressInput }),
+      () => setIsAddressSubmitting(false),
+    );
+
+    if (!result) return; // Timeout — retry prompt is showing
 
     if (result.error) {
       setAddressError(result.error.message);
@@ -521,7 +804,14 @@ function CheckoutPage() {
       shippingMethodId,
     }));
 
-    const result = await setShippingMethodsFn({ data: { selections } });
+    /** Wrapped with timeout detection (Code Review Fix — H2). */
+    const result = await withTimeoutRetry(
+      "confirming shipping",
+      () => setShippingMethodsFn({ data: { selections } }),
+      () => setIsSubmittingShipping(false),
+    );
+
+    if (!result) return; // Timeout — retry prompt showing
 
     if (result.error) {
       setShippingError(result.error.message);
@@ -549,7 +839,14 @@ function CheckoutPage() {
     setIsGuestSubmitting(true);
     setGuestError(null);
 
-    const result = await setCustomerFn({ data: guestInfo });
+    /** Wrapped with timeout detection (Code Review Fix — H2). */
+    const result = await withTimeoutRetry(
+      "saving your contact info",
+      () => setCustomerFn({ data: guestInfo }),
+      () => setIsGuestSubmitting(false),
+    );
+
+    if (!result) return; // Timeout — retry prompt showing
 
     if (result.error) {
       setGuestError(result.error.message);
@@ -649,6 +946,22 @@ function CheckoutPage() {
     );
   }
 
+  // ── Story 4.7: Cart recovery overlay ──────────────────────────────
+  if (cartHealth !== "healthy") {
+    return (
+      <div className="page-wrap">
+        <div className="checkout">
+          <h1 className="checkout__title">Checkout</h1>
+          <CartRecovery
+            cartHealth={cartHealth}
+            onStartFresh={handleStartFresh}
+            onRetry={handleCartRecoveryRetry}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (!violetCartId || !cart || cart.bags.length === 0) {
     return (
       <div className="page-wrap">
@@ -664,6 +977,67 @@ function CheckoutPage() {
     <div className="page-wrap">
       <div className="checkout">
         <h1 className="checkout__title">Checkout</h1>
+
+        {/* Story 4.7: Cart-level error banner */}
+        {checkoutErrors.length > 0 && (
+          <div className="checkout-error" role="alert">
+            {checkoutErrors.map((err, idx) => (
+              <p key={idx} className="checkout-error__message">
+                {err.message}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* Story 4.7: Inventory validation overlay */}
+        {/**
+         * Story 4.7 AC#1: Inventory validation overlay.
+         *
+         * ## Re-validation after actions (Code Review Fix — H1)
+         * The original implementation closed the overlay immediately after
+         * remove/update without re-checking if OTHER items still had errors.
+         * Now: after each action, we re-fetch the cart from Violet and only
+         * close the overlay when all bags have zero errors.
+         *
+         * Flow: user action → server mutation → re-fetch cart → check errors →
+         *   if clean: close overlay. If still errors: keep overlay open with updated data.
+         */}
+        {showInventoryAlert && cart && (
+          <InventoryAlert
+            bags={cart.bags}
+            onRemoveItem={async (skuId) => {
+              await handleRemoveItem(skuId);
+              const stillHasErrors = await revalidateAfterInventoryAction();
+              if (!stillHasErrors) setShowInventoryAlert(false);
+            }}
+            onUpdateQuantity={async (skuId, qty) => {
+              await handleUpdateQuantity(skuId, qty);
+              const stillHasErrors = await revalidateAfterInventoryAction();
+              if (!stillHasErrors) setShowInventoryAlert(false);
+            }}
+            onDismiss={() => setShowInventoryAlert(false)}
+            isRevalidating={isRevalidating}
+          />
+        )}
+
+        {/* Story 4.7: Retry prompt */}
+        {retryState.show && (
+          <RetryPrompt
+            operationName={retryState.operationName}
+            retryCount={retryState.retryCount}
+            isRetrying={isRetrying}
+            onRetry={async () => {
+              setIsRetrying(true);
+              if (retryState.retryFn) await retryState.retryFn();
+              setIsRetrying(false);
+              setRetryState((prev) => ({ ...prev, show: false }));
+            }}
+            onCancel={() => {
+              if (retryState.cancelFn) retryState.cancelFn();
+              setRetryState((prev) => ({ ...prev, show: false }));
+            }}
+          />
+        )}
 
         <div className="checkout__layout">
           {/* ── Left: form ── */}
@@ -1237,7 +1611,12 @@ function CheckoutPage() {
                     appearance: { theme: "flat" },
                   }}
                 >
-                  <PaymentForm appOrderId={appOrderIdRef.current} onSuccess={handleOrderSuccess} />
+                  <PaymentForm
+                    appOrderId={appOrderIdRef.current}
+                    violetCartId={violetCartId!}
+                    onSuccess={handleOrderSuccess}
+                    onPreSubmitValidation={validateInventoryBeforeSubmit}
+                  />
                 </Elements>
               </section>
             )}
@@ -1247,29 +1626,40 @@ function CheckoutPage() {
           <aside className="checkout__summary" aria-label="Order summary">
             <h2 className="checkout__summary-title">Order Summary</h2>
 
-            {cart.bags.map((bag) =>
-              bag.items.map((item) => (
-                <div key={item.skuId} className="checkout__summary-item">
-                  {item.thumbnailUrl && (
-                    <img
-                      src={item.thumbnailUrl}
-                      alt=""
-                      className="checkout__summary-item-img"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <div className="checkout__summary-item-info">
-                    <p className="checkout__summary-item-name">
-                      {item.name ?? `SKU ${item.skuId}`}
-                    </p>
-                    <p className="checkout__summary-item-qty">Qty: {item.quantity}</p>
+            {cart.bags.map((bag) => (
+              <div key={bag.id}>
+                {bag.items.map((item) => (
+                  <div key={item.skuId} className="checkout__summary-item">
+                    {item.thumbnailUrl && (
+                      <img
+                        src={item.thumbnailUrl}
+                        alt=""
+                        className="checkout__summary-item-img"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <div className="checkout__summary-item-info">
+                      <p className="checkout__summary-item-name">
+                        {item.name ?? `SKU ${item.skuId}`}
+                      </p>
+                      <p className="checkout__summary-item-qty">Qty: {item.quantity}</p>
+                    </div>
+                    <span className="checkout__summary-item-price">
+                      {formatPrice(item.unitPrice * item.quantity)}
+                    </span>
                   </div>
-                  <span className="checkout__summary-item-price">
-                    {formatPrice(item.unitPrice * item.quantity)}
-                  </span>
-                </div>
-              )),
-            )}
+                ))}
+
+                {/* Story 4.7: Per-bag errors from Violet 200-with-errors */}
+                <BagErrors
+                  errors={bag.errors}
+                  items={bag.items}
+                  merchantName={bag.merchantName}
+                  onRemoveItem={handleRemoveItem}
+                  onUpdateQuantity={handleUpdateQuantity}
+                />
+              </div>
+            ))}
 
             <div className="checkout__summary-totals">
               <div className="checkout__summary-line">

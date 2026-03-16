@@ -9,3 +9,4 @@ export {
   buildWebSiteJsonLd,
 } from "./seo.js";
 export type { MetaTag, PageMetaOptions } from "./seo.js";
+export { logError } from "./errorLogger.js";

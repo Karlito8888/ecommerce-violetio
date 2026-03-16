@@ -35,7 +35,9 @@ import type {
   ShippingMethodsAvailable,
   SetShippingMethodInput,
 } from "@ecommerce/shared";
+import { logError } from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
+import { getSupabaseServer } from "./supabaseServer";
 
 /**
  * Sets the shipping address for the active cart.
@@ -59,7 +61,18 @@ export const setShippingAddressFn = createServerFn({ method: "POST" })
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    return adapter.setShippingAddress(violetCartId, address);
+    const result = await adapter.setShippingAddress(violetCartId, address);
+
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: result.error.code,
+        message: result.error.message,
+        context: { violetCartId, step: "setShippingAddress" },
+      });
+    }
+
+    return result;
   });
 
 /**
@@ -183,7 +196,18 @@ export const getPaymentIntentFn = createServerFn({ method: "GET" }).handler(
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    return adapter.getPaymentIntent(violetCartId);
+    const result = await adapter.getPaymentIntent(violetCartId);
+
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: result.error.code,
+        message: result.error.message,
+        context: { violetCartId, step: "getPaymentIntent" },
+      });
+    }
+
+    return result;
   },
 );
 
@@ -210,7 +234,23 @@ export const submitOrderFn = createServerFn({ method: "POST" })
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    return adapter.submitOrder(violetCartId, data.appOrderId);
+    const result = await adapter.submitOrder(violetCartId, data.appOrderId);
+
+    // Story 4.7: Log submission errors for debugging
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: result.error.code,
+        message: result.error.message,
+        context: {
+          violetCartId,
+          appOrderId: data.appOrderId,
+          step: "submitOrder",
+        },
+      });
+    }
+
+    return result;
   });
 
 // ─── Story 4.5: Order Details for Confirmation Page ──────────────────
@@ -243,6 +283,42 @@ export const getOrderDetailsFn = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<ApiResponse<OrderDetail>> => {
     const adapter = getAdapter();
     return adapter.getOrder(data.orderId);
+  });
+
+/**
+ * Logs an error from client-side code to the `error_logs` table.
+ *
+ * ## Why this exists (Story 4.7 Code Review Fix — C1)
+ * Client-side components (like `CheckoutErrorBoundary`) cannot call `logError()`
+ * directly because it requires a service-role `SupabaseClient` that only exists
+ * server-side. This Server Function bridges the gap: the client sends error data,
+ * and we persist it using the service-role client.
+ *
+ * ## Fire-and-forget on both sides
+ * - Server: `logError()` catches its own errors (console.error fallback)
+ * - Client: the caller should NOT await this — UI must never block on logging
+ *
+ * @see packages/shared/src/utils/errorLogger.ts — `logError()` implementation
+ * @see apps/web/src/components/checkout/CheckoutErrorBoundary.tsx — primary consumer
+ */
+export const logClientErrorFn = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      error_type: string;
+      message: string;
+      stack_trace?: string;
+      context?: Record<string, unknown>;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    logError(getSupabaseServer(), {
+      source: "web",
+      error_type: data.error_type,
+      message: data.message,
+      stack_trace: data.stack_trace,
+      context: data.context,
+    });
+    return { data: null, error: null };
   });
 
 /**

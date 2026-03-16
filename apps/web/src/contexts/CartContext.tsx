@@ -2,7 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCartSync } from "@ecommerce/shared";
+import type { CartHealthStatus } from "@ecommerce/shared";
 import { getUserCartFn, mergeAnonymousCartFn, claimCartFn } from "../server/cartSync";
+import { clearCartCookieFn } from "../server/checkout";
 
 /**
  * CartContext — manages cart ID state and drawer visibility app-wide.
@@ -43,10 +45,16 @@ interface CartContextValue {
   /** Violet cart integer ID as string — used for Violet API calls */
   violetCartId: string | null;
   isDrawerOpen: boolean;
+  /** Cart health for recovery logic (Story 4.7) */
+  cartHealth: CartHealthStatus;
   openDrawer: () => void;
   closeDrawer: () => void;
   setCart: (cartId: string, violetCartId: string) => void;
   clearCart: () => void;
+  /** Set cart health status (Story 4.7) */
+  setCartHealth: (status: CartHealthStatus) => void;
+  /** Clear cart and cookie, guide user to start fresh (Story 4.7) */
+  resetCart: () => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -91,6 +99,7 @@ export function CartProvider({
   const [cartId, setCartId] = useState<string | null>(initialCartId);
   const [violetCartId, setVioletCartId] = useState<string | null>(initialVioletCartId);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [cartHealth, setCartHealth] = useState<CartHealthStatus>("healthy");
 
   const openDrawer = () => setIsDrawerOpen(true);
   const closeDrawer = () => setIsDrawerOpen(false);
@@ -98,12 +107,21 @@ export function CartProvider({
   const setCart = (newCartId: string, newVioletCartId: string) => {
     setCartId(newCartId);
     setVioletCartId(newVioletCartId);
+    setCartHealth("healthy");
   };
 
   const clearCart = () => {
     setCartId(null);
     setVioletCartId(null);
   };
+
+  /** Clear cart + cookie and reset health — for expired/invalid cart recovery (Story 4.7) */
+  const resetCart = useCallback(async () => {
+    setCartId(null);
+    setVioletCartId(null);
+    setCartHealth("healthy");
+    await clearCartCookieFn();
+  }, []);
 
   const queryClient = useQueryClient();
 
@@ -192,7 +210,18 @@ export function CartProvider({
 
   return (
     <CartContext.Provider
-      value={{ cartId, violetCartId, isDrawerOpen, openDrawer, closeDrawer, setCart, clearCart }}
+      value={{
+        cartId,
+        violetCartId,
+        isDrawerOpen,
+        cartHealth,
+        openDrawer,
+        closeDrawer,
+        setCart,
+        clearCart,
+        setCartHealth,
+        resetCart,
+      }}
     >
       {children}
     </CartContext.Provider>
