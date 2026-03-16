@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useMobileTracking } from "@/hooks/useMobileTracking";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -30,6 +31,23 @@ const FALLBACK_CATEGORIES = [
  */
 export default function HomeScreen() {
   const [activeCategory, setActiveCategory] = useState<string | undefined>(undefined);
+
+  // Track category browsing (Story 6.2)
+  const { trackEvent } = useMobileTracking();
+  const prevCategory = useRef(activeCategory);
+  useEffect(() => {
+    if (activeCategory && activeCategory !== prevCategory.current) {
+      prevCategory.current = activeCategory;
+      const cat = FALLBACK_CATEGORIES.find((c) => c.filter === activeCategory);
+      trackEvent({
+        event_type: "category_view",
+        payload: {
+          category_id: activeCategory,
+          category_name: cat?.label ?? activeCategory,
+        },
+      });
+    }
+  }, [activeCategory, trackEvent]);
 
   // TODO(Story 3.2-mobile): Wire up actual data fetching via Edge Function
   const products: Product[] = [];

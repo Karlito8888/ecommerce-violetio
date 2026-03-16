@@ -31,3 +31,9 @@ export type {
 export type { OrderRefundRow } from "../types/orderPersistence.types.js";
 export { useUser, useLogin, useRegister, useLogout } from "./useAuth.js";
 export { profileQueryOptions, useProfile, useUpdateProfile, profileKeys } from "./useProfile.js";
+export { useTracking, getDedupKey } from "./useTracking.js";
+export {
+  useBrowsingHistory,
+  browsingHistoryKeys,
+  browsingHistoryQueryOptions,
+} from "./useBrowsingHistory.js";

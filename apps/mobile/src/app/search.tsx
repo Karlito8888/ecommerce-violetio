@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   StyleSheet,
   TextInput,
@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useSearch, createSupabaseClient, formatPrice } from "@ecommerce/shared";
 import type { ProductMatch } from "@ecommerce/shared";
+import { useMobileTracking } from "@/hooks/useMobileTracking";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -46,6 +47,19 @@ export default function SearchScreen() {
 
   const products = data?.products ?? [];
   const explanations = data?.explanations ?? {};
+
+  // Track search queries when results load (Story 6.2)
+  const { trackEvent } = useMobileTracking();
+  const lastTrackedQuery = useRef("");
+  useEffect(() => {
+    if (!isLoading && query.length >= 2 && query !== lastTrackedQuery.current) {
+      lastTrackedQuery.current = query;
+      trackEvent({
+        event_type: "search",
+        payload: { query, result_count: products.length },
+      });
+    }
+  }, [isLoading, query, products.length, trackEvent]);
 
   const handleProductPress = useCallback((productId: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes not yet regenerated

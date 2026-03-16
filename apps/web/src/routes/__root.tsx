@@ -11,6 +11,7 @@ import { initAnonymousSession } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../utils/supabase";
 import { CartProvider } from "../contexts/CartContext";
 import { useAuthSession } from "../hooks/useAuthSession";
+import { useTrackingListener } from "../hooks/useTrackingListener";
 import CartDrawer from "../features/cart/CartDrawer";
 import {
   getCartFn,
@@ -83,6 +84,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const supabase = getSupabaseBrowserClient();
   // Only provide userId for non-anonymous authenticated users — anonymous users don't sync
   const syncUserId = user && !isAnonymous ? user.id : null;
+
+  // Browsing history tracking (Story 6.2) — only for authenticated users
+  useTrackingListener(syncUserId ?? undefined);
 
   useEffect(() => {
     initAnonymousSession(supabase).catch((err) => {

@@ -1,7 +1,8 @@
-import { Stack, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import { Stack, useLocalSearchParams, useFocusEffect } from "expo-router";
+import React, { useState, useCallback } from "react";
 import { ActivityIndicator, TouchableOpacity, View, StyleSheet } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import { useTrackProductView } from "@/hooks/useMobileTracking";
 
 import { ThemedText } from "@/components/themed-text";
 import { Spacing } from "@/constants/theme";
@@ -56,6 +57,14 @@ async function getSessionToken(): Promise<string | null> {
 export default function ProductDetailScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
   const [addState, setAddState] = useState<"idle" | "loading" | "added">("idle");
+
+  // Track product view on screen focus (Story 6.2)
+  const trackProductView = useTrackProductView(productId);
+  useFocusEffect(
+    useCallback(() => {
+      trackProductView();
+    }, [trackProductView]),
+  );
 
   /**
    * Add to cart via the Supabase Edge Function.

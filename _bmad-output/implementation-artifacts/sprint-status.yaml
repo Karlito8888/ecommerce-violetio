@@ -94,7 +94,7 @@ development_status:
   # Epic 6: Personalization & Engagement
   epic-6: in-progress
   6-1-user-account-profile-management: done
-  6-2-browsing-history-preference-tracking: backlog
+  6-2-browsing-history-preference-tracking: done
   6-3-personalized-search-results: backlog
   6-4-wishlist-saved-items: backlog
   6-5-product-recommendations: backlog

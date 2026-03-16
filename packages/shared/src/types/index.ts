@@ -89,3 +89,12 @@ export type {
   PersistOrderItemInput,
   PersistOrderResult,
 } from "./orderPersistence.types.js";
+export type {
+  TrackingEventType,
+  TrackingEvent,
+  TrackingPayload,
+  UserEvent,
+  ProductViewPayload,
+  SearchPayload,
+  CategoryViewPayload,
+} from "./tracking.types.js";

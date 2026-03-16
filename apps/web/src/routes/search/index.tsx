@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { searchQueryOptions, useSearch, buildPageMeta } from "@ecommerce/shared";
 import type { SearchFilters } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
+import { useAuthSession } from "../../hooks/useAuthSession";
+import { useWebTracking } from "../../hooks/useTrackingListener";
 import SearchBar from "../../components/search/SearchBar";
 import SearchResults, { SearchResultsSkeleton } from "../../components/search/SearchResults";
 import CategoryChips from "../../components/product/CategoryChips";
@@ -171,6 +173,14 @@ function SearchPage() {
 
   const supabase = getSupabaseBrowserClient();
 
+  // ── Search tracking (H2 code-review fix) ──────────────────────────────────
+  // Search events are tracked HERE (not in useTrackingListener) because only
+  // this component knows the actual result_count (AC #2). The router listener
+  // fires on navigation but has no access to search results.
+  const { user, isAnonymous } = useAuthSession();
+  const trackingUserId = user && !isAnonymous ? user.id : undefined;
+  const { trackEvent } = useWebTracking(trackingUserId);
+
   /**
    * M4 code-review fix — memoize filters object.
    *
@@ -189,6 +199,26 @@ function SearchPage() {
   }, [category, minPrice, maxPrice, inStock]);
 
   const { data, isLoading, error } = useSearch({ query: q ?? "", filters }, supabase);
+
+  /**
+   * Track search events with actual result_count (H2 code-review fix).
+   *
+   * Fires once per unique query after results load. Uses a ref to prevent
+   * re-tracking the same query on re-renders. The `useTracking` hook's
+   * 60-second dedup window provides additional protection.
+   *
+   * This mirrors the mobile pattern in `apps/mobile/src/app/search.tsx`.
+   */
+  const lastTrackedQuery = useRef("");
+  useEffect(() => {
+    if (!isLoading && q && q.length >= 2 && q !== lastTrackedQuery.current && !error) {
+      lastTrackedQuery.current = q;
+      trackEvent({
+        event_type: "search",
+        payload: { query: q, result_count: data?.products?.length ?? 0 },
+      });
+    }
+  }, [isLoading, q, data?.products?.length, error, trackEvent]);
 
   /**
    * M3 code-review fix — preserve existing price/stock filters on category change.
