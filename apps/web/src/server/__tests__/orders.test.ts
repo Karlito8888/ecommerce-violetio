@@ -26,7 +26,7 @@ vi.mock("../supabaseServer", () => ({
 
 // ─── Import handlers after mocks ──────────────────────────────────────────────
 
-import { ordersHandler, orderDetailHandler } from "../orders";
+import { ordersHandler, orderDetailHandler } from "../orderHandlers";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 

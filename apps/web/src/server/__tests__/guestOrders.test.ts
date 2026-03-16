@@ -38,7 +38,7 @@ vi.mock("@ecommerce/shared/server/utils", () => ({
 
 // ─── Import handlers after mocks ──────────────────────────────────────────────
 
-import { lookupOrderByTokenHandler, lookupOrdersByEmailHandler } from "../guestOrders";
+import { lookupOrderByTokenHandler, lookupOrdersByEmailHandler } from "../guestOrderHandlers";
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
