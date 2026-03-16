@@ -15,3 +15,16 @@ export {
 } from "./useCart.js";
 export type { CartFetchFn, AddToCartFn, UpdateCartItemFn, RemoveFromCartFn } from "./useCart.js";
 export { useCartSync } from "./useCartSync.js";
+export {
+  ordersQueryOptions,
+  orderDetailQueryOptions,
+  useOrderRealtime,
+  createOrdersRealtimeChannel,
+} from "./useOrders.js";
+export type {
+  OrdersFetchFn,
+  OrderDetailFetchFn,
+  OrderWithBagCount,
+  OrderBagWithItems,
+  OrderWithBagsAndItems,
+} from "./useOrders.js";

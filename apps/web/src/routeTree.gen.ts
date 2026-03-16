@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as AccountRouteRouteImport } from './routes/account/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
@@ -19,11 +20,18 @@ import { Route as ProductsProductIdRouteImport } from './routes/products/$produc
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
 import { Route as OrderOrderIdConfirmationRouteImport } from './routes/order/$orderId/confirmation'
+import { Route as AccountOrdersOrderIdRouteImport } from './routes/account/orders/$orderId'
 
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRouteRoute = AccountRouteRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -71,15 +79,26 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountOrdersIndexRoute = AccountOrdersIndexRouteImport.update({
+  id: '/orders/',
+  path: '/orders/',
+  getParentRoute: () => AccountRouteRoute,
+} as any)
 const OrderOrderIdConfirmationRoute =
   OrderOrderIdConfirmationRouteImport.update({
     id: '/order/$orderId/confirmation',
     path: '/order/$orderId/confirmation',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AccountOrdersOrderIdRoute = AccountOrdersOrderIdRouteImport.update({
+  id: '/orders/$orderId',
+  path: '/orders/$orderId',
+  getParentRoute: () => AccountRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
@@ -89,10 +108,13 @@ export interface FileRoutesByFullPath {
   '/checkout/': typeof CheckoutIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
+  '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
+  '/account/orders/': typeof AccountOrdersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
@@ -102,11 +124,14 @@ export interface FileRoutesByTo {
   '/checkout': typeof CheckoutIndexRoute
   '/products': typeof ProductsIndexRoute
   '/search': typeof SearchIndexRoute
+  '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
+  '/account/orders': typeof AccountOrdersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
@@ -116,12 +141,15 @@ export interface FileRoutesById {
   '/checkout/': typeof CheckoutIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
+  '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
+  '/account/orders/': typeof AccountOrdersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account'
     | '/about'
     | '/auth/login'
     | '/auth/signup'
@@ -131,10 +159,13 @@ export interface FileRouteTypes {
     | '/checkout/'
     | '/products/'
     | '/search/'
+    | '/account/orders/$orderId'
     | '/order/$orderId/confirmation'
+    | '/account/orders/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account'
     | '/about'
     | '/auth/login'
     | '/auth/signup'
@@ -144,10 +175,13 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/products'
     | '/search'
+    | '/account/orders/$orderId'
     | '/order/$orderId/confirmation'
+    | '/account/orders'
   id:
     | '__root__'
     | '/'
+    | '/account'
     | '/about'
     | '/auth/login'
     | '/auth/signup'
@@ -157,11 +191,14 @@ export interface FileRouteTypes {
     | '/checkout/'
     | '/products/'
     | '/search/'
+    | '/account/orders/$orderId'
     | '/order/$orderId/confirmation'
+    | '/account/orders/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRouteRoute: typeof AccountRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
@@ -181,6 +218,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -246,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/orders/': {
+      id: '/account/orders/'
+      path: '/orders'
+      fullPath: '/account/orders/'
+      preLoaderRoute: typeof AccountOrdersIndexRouteImport
+      parentRoute: typeof AccountRouteRoute
+    }
     '/order/$orderId/confirmation': {
       id: '/order/$orderId/confirmation'
       path: '/order/$orderId/confirmation'
@@ -253,11 +304,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderOrderIdConfirmationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/orders/$orderId': {
+      id: '/account/orders/$orderId'
+      path: '/orders/$orderId'
+      fullPath: '/account/orders/$orderId'
+      preLoaderRoute: typeof AccountOrdersOrderIdRouteImport
+      parentRoute: typeof AccountRouteRoute
+    }
   }
 }
 
+interface AccountRouteRouteChildren {
+  AccountOrdersOrderIdRoute: typeof AccountOrdersOrderIdRoute
+  AccountOrdersIndexRoute: typeof AccountOrdersIndexRoute
+}
+
+const AccountRouteRouteChildren: AccountRouteRouteChildren = {
+  AccountOrdersOrderIdRoute: AccountOrdersOrderIdRoute,
+  AccountOrdersIndexRoute: AccountOrdersIndexRoute,
+}
+
+const AccountRouteRouteWithChildren = AccountRouteRoute._addFileChildren(
+  AccountRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRouteRoute: AccountRouteRouteWithChildren,
   AboutRoute: AboutRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,

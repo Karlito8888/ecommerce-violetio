@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { getCookie, setCookie } from "@tanstack/react-start/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -26,4 +28,53 @@ export function getSupabaseServer(): SupabaseClient {
   });
 
   return _client;
+}
+
+/**
+ * Session-aware Supabase server client for user-facing queries.
+ *
+ * Unlike `getSupabaseServer()` (service role — bypasses RLS), this client:
+ * - Uses the anon key + user's session JWT from cookies
+ * - Respects Row Level Security policies
+ * - Must be called within a TanStack Start server function handler
+ *   (requires request context for `getCookie`/`setCookie`)
+ *
+ * Use this for any query where data access should be scoped to the
+ * authenticated user (orders, profiles, wishlists, etc.).
+ *
+ * ## Cookie reading
+ * `@supabase/ssr` stores the session in chunked cookies:
+ * `sb-{hostname}-auth-token`, `sb-{hostname}-auth-token.1`, etc.
+ * We read up to 5 chunks — sufficient for any Supabase JWT.
+ */
+export function getSupabaseSessionClient(): SupabaseClient {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables");
+  }
+
+  const host = new URL(supabaseUrl).hostname;
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        const chunks: { name: string; value: string }[] = [];
+        // @supabase/ssr stores session in "sb-{host}-auth-token" (chunk 0)
+        // and "sb-{host}-auth-token.N" for subsequent chunks
+        for (let i = 0; i < 5; i++) {
+          const name = `sb-${host}-auth-token${i === 0 ? "" : `.${i}`}`;
+          const value = getCookie(name);
+          if (value) chunks.push({ name, value });
+        }
+        return chunks;
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          setCookie(name, value, options as Parameters<typeof setCookie>[2]);
+        });
+      },
+    },
+  }) as unknown as SupabaseClient;
 }
