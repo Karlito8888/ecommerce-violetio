@@ -84,7 +84,7 @@ development_status:
   # Epic 5: Order Management & Tracking
   epic-5: in-progress
   5-1-order-confirmation-data-persistence: done
-  5-2-order-status-webhooks-processing: backlog
+  5-2-order-status-webhooks-processing: done
   5-3-unified-order-tracking-view: backlog
   5-4-guest-order-lookup: backlog
   5-5-refund-processing-communication: backlog

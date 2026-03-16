@@ -53,9 +53,28 @@ describe("webhookEventTypeSchema", () => {
     }
   });
 
-  it("rejects ORDER_* event types (not yet implemented — Story 5.2)", () => {
-    for (const type of ["ORDER_UPDATED", "ORDER_COMPLETED", "ORDER_CANCELED", "ORDER_REFUNDED"]) {
-      expect(webhookEventTypeSchema.safeParse(type).success).toBe(false);
+  it("accepts ORDER_* event types (Story 5.2)", () => {
+    for (const type of [
+      "ORDER_UPDATED",
+      "ORDER_COMPLETED",
+      "ORDER_CANCELED",
+      "ORDER_REFUNDED",
+      "ORDER_RETURNED",
+    ]) {
+      expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
+    }
+  });
+
+  it("accepts BAG_* event types (Story 5.2)", () => {
+    for (const type of [
+      "BAG_SUBMITTED",
+      "BAG_ACCEPTED",
+      "BAG_SHIPPED",
+      "BAG_COMPLETED",
+      "BAG_CANCELED",
+      "BAG_REFUNDED",
+    ]) {
+      expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
     }
   });
 
@@ -215,11 +234,11 @@ describe("violetOfferWebhookPayloadSchema", () => {
     expect(violetOfferWebhookPayloadSchema.safeParse(withoutAvailable).success).toBe(false);
   });
 
-  it("rejects invalid status value", () => {
+  it("accepts any string status value (I3 fix: z.string, not z.enum)", () => {
     expect(
       violetOfferWebhookPayloadSchema.safeParse({ ...validOfferPayload, status: "INVALID" })
         .success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("accepts all valid status values (L1 fix: includes DISABLED)", () => {

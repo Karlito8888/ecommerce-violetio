@@ -56,6 +56,8 @@ import {
   webhookEventTypeSchema,
   violetOfferWebhookPayloadSchema,
   violetSyncWebhookPayloadSchema,
+  violetOrderWebhookPayloadSchema,
+  violetBagWebhookPayloadSchema,
 } from "../_shared/schemas.ts";
 import {
   processOfferAdded,
@@ -65,6 +67,7 @@ import {
   processSyncEvent,
   updateEventStatus,
 } from "./processors.ts";
+import { processOrderUpdated, processBagUpdated, processBagShipped } from "./orderProcessors.ts";
 
 /** Standard JSON response headers for all responses. */
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
@@ -330,6 +333,64 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processSyncEvent(supabase, eventId, result.data);
+        break;
+      }
+
+      // ─── ORDER events (Story 5.2) ────────────────────────────
+      // All ORDER_* events delegate to processOrderUpdated (Violet sends final status).
+      case "ORDER_UPDATED":
+      case "ORDER_COMPLETED":
+      case "ORDER_CANCELED":
+      case "ORDER_REFUNDED":
+      case "ORDER_RETURNED": {
+        const result = violetOrderWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processOrderUpdated(supabase, eventId, result.data);
+        break;
+      }
+
+      // ─── BAG events (Story 5.2) ──────────────────────────────
+      // BAG_SHIPPED is separate — it persists tracking info (tracking_number, url, carrier).
+      case "BAG_SHIPPED": {
+        const result = violetBagWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processBagShipped(supabase, eventId, result.data);
+        break;
+      }
+
+      // All other BAG_* events use generic bag status update + order derivation.
+      case "BAG_SUBMITTED":
+      case "BAG_ACCEPTED":
+      case "BAG_COMPLETED":
+      case "BAG_CANCELED":
+      case "BAG_REFUNDED": {
+        const result = violetBagWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processBagUpdated(supabase, eventId, result.data);
         break;
       }
 

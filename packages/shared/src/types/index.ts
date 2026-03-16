@@ -43,6 +43,8 @@ export type {
   WebhookEventType,
   OfferWebhookPayload,
   SyncWebhookPayload,
+  OrderWebhookPayload,
+  BagWebhookPayload,
   PaymentIntent,
 } from "./order.types.js";
 export type {

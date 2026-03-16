@@ -23,15 +23,14 @@
 import { z } from "zod";
 
 /**
- * All webhook event types our system currently handles.
+ * All webhook event types our system handles.
  *
- * Offer events: triggered by Violet when merchant product data changes.
- * Sync events: triggered when a full catalog sync lifecycle changes.
+ * Offer events: triggered by Violet when merchant product data changes (Story 3.7).
+ * Sync events: triggered when a full catalog sync lifecycle changes (Story 3.7).
+ * Order events: triggered when an order's status changes (Story 5.2).
+ * Bag events: triggered when a per-merchant bag's status changes (Story 5.2).
  *
- * **Story 5.2 will add ORDER_* event types here.** Do NOT add them prematurely —
- * unhandled event types pass header validation but fall through to `default` in
- * the handler's switch, creating spurious "failed" rows in webhook_events and
- * polluting monitoring dashboards.
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
  *
  * @see handle-webhook/index.ts — Event routing switch statement
  */
@@ -43,6 +42,17 @@ export const webhookEventTypeSchema = z.enum([
   "PRODUCT_SYNC_STARTED",
   "PRODUCT_SYNC_COMPLETED",
   "PRODUCT_SYNC_FAILED",
+  "ORDER_UPDATED",
+  "ORDER_COMPLETED",
+  "ORDER_CANCELED",
+  "ORDER_REFUNDED",
+  "ORDER_RETURNED",
+  "BAG_SUBMITTED",
+  "BAG_ACCEPTED",
+  "BAG_SHIPPED",
+  "BAG_COMPLETED",
+  "BAG_CANCELED",
+  "BAG_REFUNDED",
 ]);
 
 /**
@@ -127,8 +137,46 @@ export const violetSyncWebhookPayloadSchema = z.object({
   total_products_synced: z.number().optional(),
 });
 
+// ─── Order/Bag Webhook Schemas (Story 5.2) ────────────────────────────
+
+/**
+ * Validates Violet ORDER_* webhook payload.
+ * Status is z.string() (not OrderStatus enum) — Violet may send undocumented values.
+ *
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ */
+export const violetOrderWebhookPayloadSchema = z.object({
+  id: z.number(),
+  status: z.string(),
+  app_order_id: z.string().optional(),
+  customer_id: z.number().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+/**
+ * Validates Violet BAG_* webhook payload.
+ * BAG_SHIPPED includes tracking_number, tracking_url, carrier.
+ * order_id links back to the parent order for status derivation.
+ *
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ */
+export const violetBagWebhookPayloadSchema = z.object({
+  id: z.number(),
+  order_id: z.number(),
+  status: z.string(),
+  financial_status: z.string().optional(),
+  merchant_id: z.number(),
+  merchant_name: z.string().optional(),
+  tracking_number: z.string().optional(),
+  tracking_url: z.string().optional(),
+  carrier: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
 export type WebhookEventType = z.infer<typeof webhookEventTypeSchema>;
 export type VioletWebhookHeaders = z.infer<typeof violetWebhookHeadersSchema>;
 export type VioletRequiredHeaders = z.infer<typeof violetRequiredHeadersSchema>;
 export type VioletOfferPayload = z.infer<typeof violetOfferWebhookPayloadSchema>;
 export type VioletSyncPayload = z.infer<typeof violetSyncWebhookPayloadSchema>;
+export type VioletOrderPayload = z.infer<typeof violetOrderWebhookPayloadSchema>;
+export type VioletBagPayload = z.infer<typeof violetBagWebhookPayloadSchema>;

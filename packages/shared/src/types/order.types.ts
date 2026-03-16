@@ -258,15 +258,12 @@ export interface OrderDetail {
 // ─── Webhook Types (Story 3.7) ───────────────────────────────────────
 
 /**
- * All webhook event types our system currently handles.
+ * All webhook event types our system handles.
  *
- * Offer events: triggered by Violet when merchant product data changes.
- * Sync events: triggered when a full catalog sync lifecycle changes.
- *
- * **Story 5.2 will add ORDER_* event types.** Do NOT add them prematurely —
- * the handle-webhook Edge Function's switch statement must have a matching case
- * for every type in this union. Unhandled types waste webhook_events rows and
- * pollute monitoring.
+ * Offer events: triggered by Violet when merchant product data changes (Story 3.7).
+ * Sync events: triggered when a full catalog sync lifecycle changes (Story 3.7).
+ * Order events: triggered by Violet when order status changes (Story 5.2).
+ * Bag events: triggered by Violet when per-merchant bag status changes (Story 5.2).
  *
  * @see https://docs.violet.io/prism/webhooks — Violet webhook event reference
  * @see packages/shared/src/schemas/webhook.schema.ts — Zod enum (must stay in sync)
@@ -278,7 +275,18 @@ export type WebhookEventType =
   | "OFFER_DELETED"
   | "PRODUCT_SYNC_STARTED"
   | "PRODUCT_SYNC_COMPLETED"
-  | "PRODUCT_SYNC_FAILED";
+  | "PRODUCT_SYNC_FAILED"
+  | "ORDER_UPDATED"
+  | "ORDER_COMPLETED"
+  | "ORDER_CANCELED"
+  | "ORDER_REFUNDED"
+  | "ORDER_RETURNED"
+  | "BAG_SUBMITTED"
+  | "BAG_ACCEPTED"
+  | "BAG_SHIPPED"
+  | "BAG_COMPLETED"
+  | "BAG_CANCELED"
+  | "BAG_REFUNDED";
 
 /**
  * Normalized webhook event used internally by our system.
@@ -341,4 +349,46 @@ export interface SyncWebhookPayload {
   status: "NOT_STARTED" | "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "ABORTED";
   total_products: number;
   total_products_synced?: number;
+}
+
+// ─── Order/Bag Webhook Types (Story 5.2) ──────────────────────────────
+
+/**
+ * Violet ORDER_* webhook payload — sent when an order's status changes.
+ *
+ * `status` is z.string() (not OrderStatus enum) because Violet may send
+ * undocumented values — same defensive pattern as OfferWebhookPayload.status.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states
+ */
+export interface OrderWebhookPayload {
+  /** Violet order ID (numeric) */
+  id: number;
+  status: string;
+  app_order_id?: string;
+  customer_id?: number;
+  date_last_modified?: string;
+}
+
+/**
+ * Violet BAG_* webhook payload — sent when a per-merchant bag's status changes.
+ *
+ * `order_id` links back to the parent order for status derivation.
+ * BAG_SHIPPED includes tracking_number, tracking_url, and carrier.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag
+ */
+export interface BagWebhookPayload {
+  /** Violet bag ID (numeric) */
+  id: number;
+  /** Violet order ID that owns this bag */
+  order_id: number;
+  status: string;
+  financial_status?: string;
+  merchant_id: number;
+  merchant_name?: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  carrier?: string;
+  date_last_modified?: string;
 }
