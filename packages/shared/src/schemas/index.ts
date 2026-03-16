@@ -47,3 +47,9 @@ export type {
   VioletOfferPayload,
   VioletSyncPayload,
 } from "./webhook.schema.js";
+export {
+  displayNameSchema,
+  avatarUrlSchema,
+  userPreferencesSchema,
+  updateProfileSchema,
+} from "./profile.schema.js";

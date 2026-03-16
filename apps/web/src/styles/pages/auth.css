@@ -145,6 +145,73 @@
   text-decoration: underline;
 }
 
+/* ── Social Login ── */
+
+.auth-form__social-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-6) 0;
+  color: var(--color-steel);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+}
+
+.auth-form__social-divider::before,
+.auth-form__social-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.auth-form__social-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.auth-form__social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border: 1px solid var(--color-stone);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.auth-form__social-btn:hover:not(:disabled) {
+  border-color: var(--color-charcoal);
+}
+
+.auth-form__social-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-form__social-btn--google {
+  background: var(--color-white, #fff);
+  color: var(--color-ink);
+}
+
+.auth-form__social-btn--apple {
+  background: var(--color-ink);
+  color: var(--color-white, #fff);
+  border-color: var(--color-ink);
+}
+
+.auth-form__social-btn--apple:hover:not(:disabled) {
+  background: var(--color-charcoal);
+  border-color: var(--color-charcoal);
+}
+
 /* ── OTP Input ── */
 
 .auth-form__input--otp {

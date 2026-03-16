@@ -10,7 +10,14 @@ import {
   ScrollView,
 } from "react-native";
 import { router, Link } from "expo-router";
-import { signUpWithEmail, createSupabaseClient, mapAuthError } from "@ecommerce/shared";
+import {
+  signUpWithEmail,
+  signInWithSocialProviderMobile,
+  createSupabaseClient,
+  mapAuthError,
+} from "@ecommerce/shared";
+import type { SocialProvider } from "@ecommerce/shared";
+import * as WebBrowser from "expo-web-browser";
 import { colors, typography, spacing } from "@ecommerce/ui";
 import { setPendingSignup } from "./_pending";
 
@@ -21,6 +28,28 @@ export default function SignupScreen() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(null);
+
+  async function handleSocialLogin(provider: SocialProvider) {
+    setError("");
+    setSocialLoading(provider);
+    try {
+      const supabase = createSupabaseClient();
+      const { data, error: oauthError } = await signInWithSocialProviderMobile(provider, supabase);
+      if (oauthError) {
+        setError(mapAuthError(oauthError.message));
+        setSocialLoading(null);
+        return;
+      }
+      if (data?.url) {
+        await WebBrowser.openAuthSessionAsync(data.url);
+      }
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setSocialLoading(null);
+    }
+  }
 
   function validate(): boolean {
     const errors: Record<string, string> = {};
@@ -127,6 +156,40 @@ export default function SignupScreen() {
           </Text>
         </Pressable>
 
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or continue with</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <Pressable
+          style={[
+            styles.socialBtn,
+            styles.socialBtnGoogle,
+            socialLoading !== null && styles.buttonDisabled,
+          ]}
+          onPress={() => handleSocialLogin("google")}
+          disabled={socialLoading !== null}
+        >
+          <Text style={styles.socialBtnGoogleText}>
+            {socialLoading === "google" ? "Redirecting..." : "Continue with Google"}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={[
+            styles.socialBtn,
+            styles.socialBtnApple,
+            socialLoading !== null && styles.buttonDisabled,
+          ]}
+          onPress={() => handleSocialLogin("apple")}
+          disabled={socialLoading !== null}
+        >
+          <Text style={styles.socialBtnAppleText}>
+            {socialLoading === "apple" ? "Redirecting..." : "Continue with Apple"}
+          </Text>
+        </Pressable>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account? </Text>
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes not yet regenerated */}
@@ -229,6 +292,46 @@ const styles = StyleSheet.create({
   footerLink: {
     color: colors.gold,
     fontSize: typography.typeScale.bodySmall.size,
+    fontWeight: "500",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.px[5],
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.stone,
+  },
+  dividerText: {
+    color: colors.steel,
+    fontSize: typography.typeScale.caption.size,
+    marginHorizontal: spacing.px[3],
+  },
+  socialBtn: {
+    borderRadius: 8,
+    padding: spacing.px[4],
+    alignItems: "center",
+    marginBottom: spacing.px[3],
+    borderWidth: 1,
+  },
+  socialBtnGoogle: {
+    backgroundColor: "#fff",
+    borderColor: colors.stone,
+  },
+  socialBtnGoogleText: {
+    color: colors.ink,
+    fontSize: typography.typeScale.body.size,
+    fontWeight: "500",
+  },
+  socialBtnApple: {
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
+  },
+  socialBtnAppleText: {
+    color: "#fff",
+    fontSize: typography.typeScale.body.size,
     fontWeight: "500",
   },
 });

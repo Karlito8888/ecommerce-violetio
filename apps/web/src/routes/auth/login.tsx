@@ -1,6 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { signInWithEmail, mapAuthError, sanitizeRedirect, buildPageMeta } from "@ecommerce/shared";
+import {
+  signInWithEmail,
+  signInWithSocialProvider,
+  mapAuthError,
+  sanitizeRedirect,
+  buildPageMeta,
+} from "@ecommerce/shared";
+import type { SocialProvider } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
@@ -40,6 +47,7 @@ function LoginPage() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(null);
 
   function validate(): boolean {
     const errors: Record<string, string> = {};
@@ -47,6 +55,27 @@ function LoginPage() {
     if (!password) errors.password = "Password is required";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
+  }
+
+  async function handleSocialLogin(provider: SocialProvider) {
+    setError("");
+    setSocialLoading(provider);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error: oauthError } = await signInWithSocialProvider(
+        provider,
+        { redirectTo: `${window.location.origin}${sanitizeRedirect(redirect)}` },
+        supabase,
+      );
+      if (oauthError) {
+        setError(mapAuthError(oauthError.message));
+        setSocialLoading(null);
+      }
+      // Browser will redirect to provider — no need to reset loading
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
+      setSocialLoading(null);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -113,6 +142,29 @@ function LoginPage() {
         <button className="auth-form__submit" type="submit" disabled={isLoading}>
           {isLoading ? "Signing in..." : "Sign In"}
         </button>
+
+        <div className="auth-form__social-divider">
+          <span>or continue with</span>
+        </div>
+
+        <div className="auth-form__social-buttons">
+          <button
+            type="button"
+            className="auth-form__social-btn auth-form__social-btn--google"
+            onClick={() => handleSocialLogin("google")}
+            disabled={socialLoading !== null}
+          >
+            {socialLoading === "google" ? "Redirecting..." : "Continue with Google"}
+          </button>
+          <button
+            type="button"
+            className="auth-form__social-btn auth-form__social-btn--apple"
+            onClick={() => handleSocialLogin("apple")}
+            disabled={socialLoading !== null}
+          >
+            {socialLoading === "apple" ? "Redirecting..." : "Continue with Apple"}
+          </button>
+        </div>
 
         <div className="auth-form__footer">
           Don&apos;t have an account?{" "}

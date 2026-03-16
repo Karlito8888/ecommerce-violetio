@@ -91,6 +91,51 @@ export async function signInWithEmail(email: string, password: string, client?: 
   return { data, error };
 }
 
+// ─── Social Login (Story 6.1) ──────────────────────────────────────────────
+
+export type SocialProvider = "google" | "apple";
+
+/**
+ * Initiates OAuth sign-in with a social provider (web).
+ * Supabase redirects the browser to the provider's consent screen.
+ * After consent, the browser is redirected back to `redirectTo` where the
+ * Supabase JS client auto-detects the token from the URL hash.
+ */
+export async function signInWithSocialProvider(
+  provider: SocialProvider,
+  options?: { redirectTo?: string },
+  client?: SupabaseClient,
+) {
+  const supabase = client ?? createSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: options?.redirectTo,
+      queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
+    },
+  });
+  return { data, error };
+}
+
+/**
+ * Initiates OAuth sign-in for mobile (Expo).
+ * Returns the OAuth URL to open in expo-web-browser instead of redirecting.
+ */
+export async function signInWithSocialProviderMobile(
+  provider: SocialProvider,
+  client?: SupabaseClient,
+) {
+  const supabase = client ?? createSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      skipBrowserRedirect: true,
+      queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
+    },
+  });
+  return { data, error };
+}
+
 /**
  * Signs out the current user, clearing the session from storage.
  */

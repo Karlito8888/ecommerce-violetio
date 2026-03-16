@@ -21,6 +21,7 @@ import { Route as OrderLookupRouteImport } from './routes/order/lookup'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AccountProfileRouteImport } from './routes/account/profile'
 import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
 import { Route as OrderOrderIdConfirmationRouteImport } from './routes/order/$orderId/confirmation'
 import { Route as AccountOrdersOrderIdRouteImport } from './routes/account/orders/$orderId'
@@ -85,6 +86,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountProfileRoute = AccountProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AccountRouteRoute,
+} as any)
 const AccountOrdersIndexRoute = AccountOrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
+  '/account/profile': typeof AccountProfileRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
+  '/account/profile': typeof AccountProfileRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
+  '/account/profile': typeof AccountProfileRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/about'
+    | '/account/profile'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/about'
+    | '/account/profile'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/about'
+    | '/account/profile'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -310,6 +322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/profile': {
+      id: '/account/profile'
+      path: '/profile'
+      fullPath: '/account/profile'
+      preLoaderRoute: typeof AccountProfileRouteImport
+      parentRoute: typeof AccountRouteRoute
+    }
     '/account/orders/': {
       id: '/account/orders/'
       path: '/orders'
@@ -335,11 +354,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AccountRouteRouteChildren {
+  AccountProfileRoute: typeof AccountProfileRoute
   AccountOrdersOrderIdRoute: typeof AccountOrdersOrderIdRoute
   AccountOrdersIndexRoute: typeof AccountOrdersIndexRoute
 }
 
 const AccountRouteRouteChildren: AccountRouteRouteChildren = {
+  AccountProfileRoute: AccountProfileRoute,
   AccountOrdersOrderIdRoute: AccountOrdersOrderIdRoute,
   AccountOrdersIndexRoute: AccountOrdersIndexRoute,
 }

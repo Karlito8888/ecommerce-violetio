@@ -11,3 +11,6 @@ export {
 } from "./auth.js";
 export { violetLogin, violetRefreshToken, VioletTokenManager } from "./violetAuth.js";
 export { getBiometricPreference, setBiometricPreference } from "./biometricAuth.js";
+export { getProfile, updateProfile } from "./profile.js";
+export type { SocialProvider } from "./auth.js";
+export { signInWithSocialProvider, signInWithSocialProviderMobile } from "./auth.js";

@@ -79,6 +79,7 @@ export type {
 } from "./biometric.types.js";
 export { BiometricType } from "./biometric.types.js";
 export type { CheckoutError, CartHealthStatus, ErrorLogEntry } from "./error.types.js";
+export type { UserProfile, UserPreferences, UpdateProfilePayload } from "./profile.types.js";
 export type {
   OrderRow,
   OrderBagRow,
