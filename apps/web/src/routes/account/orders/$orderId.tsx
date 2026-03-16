@@ -31,7 +31,7 @@ import {
   formatDate,
 } from "@ecommerce/shared";
 import { getOrderDetailFn } from "#/server/orders";
-import type { OrderBagWithItems, OrderItemRow } from "@ecommerce/shared";
+import type { OrderBagWithItems, OrderItemRow, OrderRefundRow } from "@ecommerce/shared";
 
 // Platform adapter: wrap TanStack Start Server Function as OrderDetailFetchFn
 const fetchOrderDetail = (orderId: string) => getOrderDetailFn({ data: { orderId } });
@@ -91,6 +91,31 @@ function ItemRow({ item, currency }: { item: OrderItemRow; currency: string }) {
   );
 }
 
+/**
+ * Displays refund information for a bag that has been refunded.
+ *
+ * Per Violet.io docs, CANCELED bags never have refund data — only REFUNDED or
+ * PARTIALLY_REFUNDED bags do. This component renders nothing for empty arrays,
+ * which correctly handles CANCELED bags (they always have `order_refunds: []`).
+ *
+ * Amounts are in integer cents (Violet convention), formatted by `formatPrice`.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md
+ */
+function RefundNotice({ refunds, currency }: { refunds: OrderRefundRow[]; currency: string }) {
+  if (refunds.length === 0) return null;
+  const totalRefunded = refunds.reduce((sum, r) => sum + r.amount, 0);
+  const firstReason = refunds.find((r) => r.reason)?.reason;
+  return (
+    <div className="order-detail__refund">
+      <span className="order-detail__refund-notice">
+        Refund of {formatPrice(totalRefunded, currency)} processed
+      </span>
+      {firstReason && <span className="order-detail__refund-reason">{firstReason}</span>}
+    </div>
+  );
+}
+
 function BagCard({ bag, orderCurrency }: { bag: OrderBagWithItems; orderCurrency: string }) {
   const statusLabel = BAG_STATUS_LABELS[bag.status] ?? bag.status;
 
@@ -128,13 +153,26 @@ function BagCard({ bag, orderCurrency }: { bag: OrderBagWithItems; orderCurrency
         </div>
       )}
 
+      {/* Refund notice (REFUNDED bags only) */}
+      <RefundNotice refunds={bag.order_refunds} currency={orderCurrency} />
+
       {/* Bag summary for mixed states — single bag so this applies within the order */}
       {bag.order_items.length > 0 && (
         <div className="order-detail__bag-footer">
           <span className="order-detail__bag-shipping-method">
             {bag.shipping_method && `Shipped via ${bag.shipping_method}`}
           </span>
-          <span className="order-detail__bag-total">{formatPrice(bag.total, orderCurrency)}</span>
+          <span className="order-detail__bag-total">
+            {formatPrice(bag.total, orderCurrency)}
+            {bag.order_refunds.length > 0 && (
+              <span className="order-detail__bag-refund-annotation">
+                {` — Refund: ${formatPrice(
+                  bag.order_refunds.reduce((s, r) => s + r.amount, 0),
+                  orderCurrency,
+                )}`}
+              </span>
+            )}
+          </span>
         </div>
       )}
     </div>

@@ -49,6 +49,13 @@ interface OrderItem {
   thumbnail: string | null;
 }
 
+interface OrderRefund {
+  id: string;
+  amount: number;
+  reason: string | null;
+  currency: string;
+}
+
 interface OrderBag {
   id: string;
   merchant_name: string | null;
@@ -59,6 +66,7 @@ interface OrderBag {
   carrier: string | null;
   shipping_method: string | null;
   order_items: OrderItem[];
+  order_refunds?: OrderRefund[];
 }
 
 interface GuestOrder {
@@ -142,6 +150,20 @@ function OrderDetailView({ order }: { order: GuestOrder }) {
           {bag.status === "SHIPPED" && bag.tracking_number && (
             <Text style={styles.trackingInfo}>
               {bag.carrier ? `${bag.carrier} — ` : ""}#{bag.tracking_number}
+            </Text>
+          )}
+
+          {/* Refund notice — optional chaining because older data from the Edge Function
+              may not include order_refunds yet. Per Violet docs, CANCELED bags never
+              have refund data; only REFUNDED/PARTIALLY_REFUNDED bags do.
+              @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md */}
+          {bag.order_refunds && bag.order_refunds.length > 0 && (
+            <Text style={styles.refundNotice}>
+              {`Refund of ${formatPrice(
+                bag.order_refunds.reduce((s: number, r: { amount: number }) => s + r.amount, 0),
+                order.currency,
+              )} processed`}
+              {bag.order_refunds[0]?.reason ? ` — ${bag.order_refunds[0].reason}` : ""}
             </Text>
           )}
         </View>
@@ -676,6 +698,12 @@ const styles = StyleSheet.create({
     color: colors.steel,
     marginTop: spacing.px[3],
     fontVariant: ["tabular-nums"],
+  },
+  refundNotice: {
+    fontSize: typography.typeScale.caption.size,
+    color: "#27ae60",
+    marginTop: spacing.px[3],
+    fontWeight: "500",
   },
   pricingCard: {
     backgroundColor: colors.linen,

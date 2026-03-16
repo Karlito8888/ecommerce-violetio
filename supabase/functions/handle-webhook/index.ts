@@ -67,7 +67,12 @@ import {
   processSyncEvent,
   updateEventStatus,
 } from "./processors.ts";
-import { processOrderUpdated, processBagUpdated, processBagShipped } from "./orderProcessors.ts";
+import {
+  processOrderUpdated,
+  processBagUpdated,
+  processBagShipped,
+  processBagRefunded,
+} from "./orderProcessors.ts";
 
 /** Standard JSON response headers for all responses. */
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
@@ -378,8 +383,7 @@ Deno.serve(async (req: Request) => {
       case "BAG_SUBMITTED":
       case "BAG_ACCEPTED":
       case "BAG_COMPLETED":
-      case "BAG_CANCELED":
-      case "BAG_REFUNDED": {
+      case "BAG_CANCELED": {
         const result = violetBagWebhookPayloadSchema.safeParse(payload);
         if (!result.success) {
           await updateEventStatus(
@@ -391,6 +395,23 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processBagUpdated(supabase, eventId, result.data);
+        break;
+      }
+
+      // BAG_REFUNDED — dedicated processor: fetches refund details from Violet API
+      // and stores them in order_refunds, then fires send-notification (Story 5.6).
+      case "BAG_REFUNDED": {
+        const result = violetBagWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processBagRefunded(supabase, eventId, result.data);
         break;
       }
 

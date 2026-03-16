@@ -2,7 +2,12 @@ import { queryOptions } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { SupabaseClient, RealtimeChannel } from "@supabase/supabase-js";
-import type { OrderRow, OrderBagRow, OrderItemRow } from "../types/orderPersistence.types.js";
+import type {
+  OrderRow,
+  OrderBagRow,
+  OrderItemRow,
+  OrderRefundRow,
+} from "../types/orderPersistence.types.js";
 import { queryKeys } from "../utils/constants.js";
 
 // ─── Composite Types ──────────────────────────────────────────────────────────
@@ -10,8 +15,20 @@ import { queryKeys } from "../utils/constants.js";
 /** Order from Supabase with merchant bag count for list display */
 export type OrderWithBagCount = OrderRow & { bag_count: number };
 
-/** Order bag with its line items for the detail view */
-export type OrderBagWithItems = OrderBagRow & { order_items: OrderItemRow[] };
+/**
+ * Order bag with its line items and refunds for the detail view.
+ *
+ * `order_refunds` is always an array (never null) — Supabase nested selects
+ * return `[]` when no related rows exist. CANCELED bags without a refund
+ * will always have `order_refunds: []`, so no refund UI renders for them.
+ * This aligns with Violet's distinction: CANCELED ≠ REFUNDED.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md
+ */
+export type OrderBagWithItems = OrderBagRow & {
+  order_items: OrderItemRow[];
+  order_refunds: OrderRefundRow[];
+};
 
 /** Full order from Supabase with nested bags and items for detail display */
 export type OrderWithBagsAndItems = OrderRow & { order_bags: OrderBagWithItems[] };

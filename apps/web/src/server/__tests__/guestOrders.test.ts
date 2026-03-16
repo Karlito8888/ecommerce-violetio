@@ -108,7 +108,9 @@ describe("lookupOrderByTokenHandler — token found", () => {
     await lookupOrderByTokenHandler("my-secret-token");
 
     expect(mockServerFrom).toHaveBeenCalledWith("orders");
-    expect(mockQuery.select).toHaveBeenCalledWith("*, order_bags(*, order_items(*))");
+    expect(mockQuery.select).toHaveBeenCalledWith(
+      "*, order_bags(*, order_items(*), order_refunds(*))",
+    );
   });
 });
 

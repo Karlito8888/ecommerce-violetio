@@ -59,6 +59,16 @@ export async function ordersHandler(): Promise<OrderWithBagCount[]> {
  * Core logic for fetching a single order with bags and items.
  * Exported for unit testing — call this directly in tests instead of `getOrderDetailFn`.
  *
+ * ## Nested select: `order_refunds (*)`
+ * The Supabase select includes `order_refunds (*)` to fetch refund details alongside
+ * bag data. Refund rows are populated by the `processBagRefunded` webhook handler
+ * after fetching from Violet's Refund API. If no refunds exist, `order_refunds`
+ * is an empty array — never null (Supabase nested select semantics).
+ *
+ * ## RLS coverage
+ * `order_refunds` RLS policy `users_read_own_order_refunds` allows authenticated
+ * users to read refunds for their own bags (join through order_bags → orders).
+ *
  * @param orderId - Supabase order UUID (NOT the Violet order ID)
  * @throws Error("Not authenticated") when no valid user session exists
  */
@@ -79,7 +89,8 @@ export async function orderDetailHandler(orderId: string): Promise<OrderWithBags
       *,
       order_bags (
         *,
-        order_items (*)
+        order_items (*),
+        order_refunds (*)
       )
     `,
     )

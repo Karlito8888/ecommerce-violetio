@@ -28,6 +28,7 @@
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import type { VioletOrderPayload, VioletBagPayload } from "../_shared/schemas.ts";
 import { updateEventStatus } from "./processors.ts";
+import { getVioletHeaders } from "../_shared/violetAuth.ts";
 
 /**
  * Derives the overall order status from its bags' statuses and updates the order row.
@@ -248,5 +249,170 @@ export const processBagCompleted = processBagUpdated;
 /** BAG_CANCELED — delegates to processBagUpdated (CANCELED ≠ REFUNDED per AC#3). */
 export const processBagCanceled = processBagUpdated;
 
-/** BAG_REFUNDED — delegates to processBagUpdated. */
-export const processBagRefunded = processBagUpdated;
+/**
+ * Fetches refund details from the Violet API and upserts them into order_refunds.
+ *
+ * ## Why a separate API call?
+ * Violet webhooks are "thin notifications" — the BAG_REFUNDED payload contains
+ * only the bag status change (status, financial_status), NOT the refund amount
+ * or reason. These details must be fetched from the Violet Refund API:
+ *   `GET /v1/orders/{order_id}/bags/{bag_id}/refunds`
+ *
+ * @see https://docs.violet.io/api-reference/orders-and-checkout/order-refunds/refund-bag.md
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks.md
+ *
+ * ## Response format
+ * Violet returns paginated responses: `{ content: [...], number, size, total_elements }`.
+ * However, some endpoints may return a plain array. We handle both defensively.
+ *
+ * @see https://docs.violet.io/concepts/pagination.md
+ *
+ * ## Best-effort semantics
+ * The bag status is already committed before this runs. If the Violet API call
+ * fails, we log a warning and return without throwing, so the webhook event
+ * still resolves as "processed". The refund amount is a UX enhancement, not
+ * a correctness requirement — the bag status (REFUNDED) is the source of truth.
+ *
+ * ## Idempotency
+ * Upsert on `violet_refund_id` (UNIQUE constraint) means retries are safe.
+ * Repeated webhook deliveries won't create duplicate refund rows.
+ */
+async function fetchAndStoreRefundDetails(
+  supabase: SupabaseClient,
+  payload: VioletBagPayload,
+  orderBagId: string,
+): Promise<void> {
+  const violetHeadersResult = await getVioletHeaders();
+  if (violetHeadersResult.error) {
+    console.warn(
+      `[processBagRefunded] Cannot fetch refund details — Violet auth failed: ${violetHeadersResult.error.message}`,
+    );
+    return;
+  }
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const url = `${apiBase}/orders/${payload.order_id}/bags/${payload.id}/refunds`;
+  try {
+    const res = await fetch(url, {
+      headers: { ...violetHeadersResult.data, Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(
+        `[processBagRefunded] Violet refund API returned ${res.status} for bag ${payload.id}`,
+      );
+      return;
+    }
+    const raw = (await res.json()) as unknown;
+    // Violet paginates: { content: [...] } or plain array — handle both defensively
+    const refunds: unknown[] = Array.isArray(raw)
+      ? raw
+      : (((raw as Record<string, unknown>).content as unknown[]) ?? []);
+    for (const refund of refunds) {
+      const r = refund as Record<string, unknown>;
+      const amount = Number(r.amount);
+      if (!Number.isFinite(amount) || amount < 0) {
+        console.warn(`[processBagRefunded] Skipping refund ${r.id} — invalid amount: ${r.amount}`);
+        continue;
+      }
+      const { error } = await supabase.from("order_refunds").upsert(
+        {
+          order_bag_id: orderBagId,
+          violet_refund_id: String(r.id),
+          amount,
+          reason: (r.refund_reason as string | undefined) ?? null,
+          currency: (r.refund_currency as string | undefined) ?? "USD",
+          status: (r.status as string | undefined) ?? "PROCESSED",
+        },
+        { onConflict: "violet_refund_id" },
+      );
+      if (error) {
+        console.error(`[processBagRefunded] Failed to upsert refund ${r.id}: ${error.message}`);
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[processBagRefunded] Violet refund fetch error: ${err instanceof Error ? err.message : "Unknown"}`,
+    );
+  }
+}
+
+/**
+ * BAG_REFUNDED — updates bag status, derives order status, fetches refund details
+ * from the Violet API, and fires a send-notification invocation (fire-and-forget).
+ *
+ * Replaces the `processBagRefunded = processBagUpdated` stub from Story 5.4.
+ * Does NOT call `processBagUpdated` — logic is inlined to avoid a double DB round-trip.
+ *
+ * ## Violet REFUNDED vs CANCELED distinction
+ * Per Violet docs, CANCELED is merchant-initiated order rejection that does NOT
+ * trigger an automatic refund. REFUNDED/PARTIALLY_REFUNDED confirm actual monetary
+ * transactions occurred. This function only runs for BAG_REFUNDED events — CANCELED
+ * bags are handled by `processBagUpdated` and never fetch refund details.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md
+ *
+ * ## Processing order (resilience-first)
+ * 1. Update bag status (critical — always persisted first)
+ * 2. Derive order-level status from all bags
+ * 3. Fetch refund details from Violet API (best-effort, see {@link fetchAndStoreRefundDetails})
+ * 4. Fire send-notification (fire-and-forget — Story 5.6 implements the function)
+ *
+ * Steps 3-4 cannot fail the webhook event. The bag status is the source of truth.
+ */
+export async function processBagRefunded(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: VioletBagPayload,
+): Promise<void> {
+  try {
+    // Step 1: Update bag status (same as processBagUpdated)
+    const updateData: Record<string, unknown> = { status: payload.status };
+    if (payload.financial_status) updateData.financial_status = payload.financial_status;
+    const { error: bagError } = await supabase
+      .from("order_bags")
+      .update(updateData)
+      .eq("violet_bag_id", String(payload.id));
+    if (bagError) {
+      await updateEventStatus(
+        supabase,
+        eventId,
+        "failed",
+        `Bag refund update failed: ${bagError.message}`,
+      );
+      return;
+    }
+    // Step 2: Derive and update parent order status
+    await deriveAndUpdateOrderStatus(supabase, String(payload.order_id));
+    // Step 3: Get order_bags.id (UUID) for FK in order_refunds
+    const { data: bagRow } = await supabase
+      .from("order_bags")
+      .select("id")
+      .eq("violet_bag_id", String(payload.id))
+      .single();
+    // Step 4: Fetch refund details from Violet API (best-effort — bag status already saved)
+    if (bagRow) {
+      await fetchAndStoreRefundDetails(supabase, payload, bagRow.id);
+    }
+    // Step 5: Trigger refund email (fire-and-forget — Story 5.6 implements send-notification)
+    supabase.functions
+      .invoke("send-notification", {
+        body: {
+          type: "refund_processed",
+          bag_id: String(payload.id),
+          order_id: String(payload.order_id),
+        },
+      })
+      .catch((err: unknown) => {
+        console.warn(
+          `[processBagRefunded] send-notification invoke failed (non-critical, Story 5.6): ${err instanceof Error ? err.message : "Unknown"}`,
+        );
+      });
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error ? err.message : "Unknown error in processBagRefunded",
+    );
+  }
+}

@@ -206,6 +206,7 @@ describe("orderDetailHandler — authenticated user", () => {
           merchant_name: "Test Merchant",
           status: "SHIPPED",
           order_items: [{ id: "item-1", name: "Test Product", quantity: 1, price: 8500 }],
+          order_refunds: [],
         },
       ],
     };
@@ -221,6 +222,92 @@ describe("orderDetailHandler — authenticated user", () => {
     expect(result).toEqual(mockOrder);
     expect(result?.order_bags).toHaveLength(1);
     expect(result?.order_bags[0].order_items).toHaveLength(1);
+  });
+
+  it("returns refund data when a bag has been refunded", async () => {
+    mockAuthenticatedUser();
+    const mockOrder = {
+      id: "order-2",
+      status: "REFUNDED",
+      total: 4999,
+      currency: "USD",
+      order_bags: [
+        {
+          id: "bag-2",
+          merchant_name: "Test Merchant",
+          status: "REFUNDED",
+          order_items: [{ id: "item-2", name: "Refunded Product", quantity: 1, price: 4999 }],
+          order_refunds: [
+            {
+              id: "refund-1",
+              order_bag_id: "bag-2",
+              violet_refund_id: "violet-ref-123",
+              amount: 4999,
+              reason: "Item not as described",
+              currency: "USD",
+              status: "PROCESSED",
+              created_at: "2026-03-21T10:00:00Z",
+            },
+          ],
+        },
+      ],
+    };
+    const mockQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+    };
+    mockFrom.mockReturnValue(mockQuery);
+
+    const result = await orderDetailHandler("order-2");
+
+    expect(result?.order_bags[0].order_refunds).toHaveLength(1);
+    expect(result?.order_bags[0].order_refunds[0].amount).toBe(4999);
+    expect(result?.order_bags[0].order_refunds[0].reason).toBe("Item not as described");
+  });
+
+  it("returns empty order_refunds array for non-refunded bags", async () => {
+    mockAuthenticatedUser();
+    const mockOrder = {
+      id: "order-3",
+      status: "COMPLETED",
+      total: 6000,
+      currency: "USD",
+      order_bags: [
+        {
+          id: "bag-3",
+          merchant_name: "Test Merchant",
+          status: "COMPLETED",
+          order_items: [{ id: "item-3", name: "Delivered Product", quantity: 1, price: 6000 }],
+          order_refunds: [],
+        },
+      ],
+    };
+    const mockQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: mockOrder, error: null }),
+    };
+    mockFrom.mockReturnValue(mockQuery);
+
+    const result = await orderDetailHandler("order-3");
+
+    expect(result?.order_bags[0].order_refunds).toEqual([]);
+  });
+
+  it("includes order_refunds (*) in the Supabase select query", async () => {
+    mockAuthenticatedUser();
+    const mockQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: "order-abc" }, error: null }),
+    };
+    mockFrom.mockReturnValue(mockQuery);
+
+    await orderDetailHandler("order-abc");
+
+    const selectArg: string = mockQuery.select.mock.calls[0][0];
+    expect(selectArg).toContain("order_refunds");
   });
 
   it("queries by the provided orderId", async () => {

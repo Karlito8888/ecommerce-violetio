@@ -24,7 +24,16 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
-/** Compute SHA-256 hex digest of a string (Web Crypto API — available in Deno). */
+/**
+ * Compute SHA-256 hex digest of a string (Web Crypto API — available in Deno).
+ *
+ * ## Nested select: `order_refunds (*)`
+ * Both token-based and email-based lookups include `order_refunds(*)` in the
+ * Supabase select to return refund details alongside bag data. Refunds are
+ * populated by the BAG_REFUNDED webhook handler after fetching from Violet's
+ * Refund API (GET /v1/orders/{id}/bags/{id}/refunds). Service_role bypasses
+ * RLS, so the `service_role_all_order_refunds` policy covers all access here.
+ */
 async function sha256Hex(input: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
@@ -85,7 +94,7 @@ Deno.serve(async (req: Request) => {
     const tokenHash = await sha256Hex(token);
     const { data, error } = await supabase
       .from("orders")
-      .select("*, order_bags(*, order_items(*))")
+      .select("*, order_bags(*, order_items(*), order_refunds(*))")
       .eq("order_lookup_token_hash", tokenHash)
       .single();
 
@@ -136,7 +145,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
-    .select("*, order_bags(*, order_items(*))")
+    .select("*, order_bags(*, order_items(*), order_refunds(*))")
     .eq("email", user.email)
     .order("created_at", { ascending: false });
 

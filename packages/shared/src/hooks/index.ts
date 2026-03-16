@@ -28,3 +28,4 @@ export type {
   OrderBagWithItems,
   OrderWithBagsAndItems,
 } from "./useOrders.js";
+export type { OrderRefundRow } from "../types/orderPersistence.types.js";

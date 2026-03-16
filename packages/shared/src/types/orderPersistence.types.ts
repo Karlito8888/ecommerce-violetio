@@ -50,6 +50,35 @@ export interface OrderItemRow {
   created_at: string;
 }
 
+/**
+ * Supabase row type for order_refunds table.
+ *
+ * Populated by `processBagRefunded` after fetching from Violet's Refund API:
+ *   `GET /v1/orders/{order_id}/bags/{bag_id}/refunds`
+ *
+ * Violet webhooks (BAG_REFUNDED) are thin notifications — they do NOT include
+ * refund amount or reason. These must be fetched from the Refund API.
+ *
+ * Fields map to Violet's refund object:
+ * - `violet_refund_id` ← Violet `id` (numeric, stored as TEXT for consistency)
+ * - `amount` ← Violet `amount` (integer cents, e.g. 4999 = $49.99)
+ * - `reason` ← Violet `refund_reason` (nullable — merchants may omit)
+ * - `currency` ← Violet `refund_currency` (defaults to USD)
+ * - `status` ← Violet `status` (e.g. "PROCESSED")
+ *
+ * @see https://docs.violet.io/api-reference/orders-and-checkout/order-refunds/refund-bag.md
+ */
+export interface OrderRefundRow {
+  id: string;
+  order_bag_id: string;
+  violet_refund_id: string;
+  amount: number; // integer cents
+  reason: string | null;
+  currency: string;
+  status: string;
+  created_at: string;
+}
+
 /** Input for persisting an order (from OrderDetail) */
 export interface PersistOrderInput {
   violetOrderId: string;

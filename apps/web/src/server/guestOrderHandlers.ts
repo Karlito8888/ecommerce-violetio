@@ -27,6 +27,12 @@ import { getSupabaseServer, getSupabaseSessionClient } from "./supabaseServer";
  * Core logic for looking up a single guest order by its plaintext lookup token.
  * The token is hashed server-side before querying (SHA-256 hex digest).
  *
+ * ## Nested select: `order_refunds (*)`
+ * Includes refund data from the `order_refunds` table (populated by the
+ * BAG_REFUNDED webhook handler via Violet's Refund API). Guest lookups use
+ * service_role which bypasses RLS — the `service_role_all_order_refunds` policy
+ * grants full access.
+ *
  * @returns The matching order with bags and items, or null if not found/invalid.
  * @throws Error for unexpected Supabase errors (not PGRST116).
  */
@@ -38,7 +44,7 @@ export async function lookupOrderByTokenHandler(
 
   const { data, error } = await supabase
     .from("orders")
-    .select("*, order_bags(*, order_items(*))")
+    .select("*, order_bags(*, order_items(*), order_refunds(*))")
     .eq("order_lookup_token_hash", tokenHash)
     .single();
 
@@ -72,7 +78,7 @@ export async function lookupOrdersByEmailHandler(): Promise<OrderWithBagsAndItem
   const supabase = getSupabaseServer();
   const { data, error } = await supabase
     .from("orders")
-    .select("*, order_bags(*, order_items(*))")
+    .select("*, order_bags(*, order_items(*), order_refunds(*))")
     .eq("email", user.email)
     .order("created_at", { ascending: false });
 

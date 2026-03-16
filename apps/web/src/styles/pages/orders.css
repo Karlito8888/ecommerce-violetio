@@ -450,6 +450,36 @@
   font-family: monospace;
 }
 
+/* ── Refund notice (REFUNDED bags) ── */
+
+.order-detail__refund {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(39, 174, 96, 0.06);
+  border-left: 2px solid var(--color-success, #27ae60);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-top: var(--space-3);
+}
+
+.order-detail__refund-notice {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-success, #27ae60);
+  font-weight: 500;
+}
+
+.order-detail__refund-reason {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-muted, var(--color-steel));
+}
+
+.order-detail__bag-refund-annotation {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-success, #27ae60);
+  font-weight: normal;
+}
+
 /* ── Bag footer (shipping method + bag total) ── */
 
 .order-detail__bag-footer {
