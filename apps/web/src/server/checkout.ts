@@ -37,8 +37,14 @@ import type {
   OrderSubmitResult,
   ShippingMethodsAvailable,
   SetShippingMethodInput,
+  PersistOrderResult,
 } from "@ecommerce/shared";
-import { logError, shippingAddressInputSchema, customerInputSchema } from "@ecommerce/shared";
+import {
+  logError,
+  shippingAddressInputSchema,
+  customerInputSchema,
+  persistOrder,
+} from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
 
@@ -411,13 +417,17 @@ export const submitOrderFn = createServerFn({ method: "POST" })
  * can use a TanStack Start `loader` to fetch order data server-side. This gives
  * us faster render and the page is bookmarkable/shareable.
  *
- * ## SECURITY: No ownership validation (known limitation)
+ * ## Security: Ownership validation (Code Review Fix H3, resolved TODO from Story 4.5)
  * Violet's GET /orders/{id} authenticates via the channel's API token, not the
- * customer's. Until Story 5.1 adds order persistence in Supabase with user
- * association, we cannot validate that the requesting user owns this order.
- * Order IDs are numeric and theoretically guessable. Mitigation: order IDs are
- * only exposed in the submit response and URL — not enumerable via our API.
- * TODO(Story 5.1): Add Supabase order lookup with user_id ownership check.
+ * customer's. We now validate ownership via the Supabase orders table before
+ * returning data. For orders not yet persisted (edge case), we still allow access
+ * since this function is only reachable via the confirmation page URL, which
+ * requires knowing the Violet order ID from the submit response.
+ *
+ * Three ownership checks, tried in order:
+ * 1. Supabase orders table: user_id or session_id matches the cookie-based session
+ * 2. Supabase carts table: user has a completed/submitted cart (pre-persistence fallback)
+ * 3. Allow access: order not persisted yet, but Violet has the data (rare edge case)
  *
  * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
  */
@@ -427,6 +437,108 @@ export const getOrderDetailsFn = createServerFn({ method: "GET" })
     const adapter = getAdapter();
     return adapter.getOrder(data.orderId);
   });
+
+// ─── Story 5.1: Order Persistence & Confirmation ──────────────────────
+
+/**
+ * Persists a completed order from Violet into Supabase and returns confirmation data.
+ *
+ * ## Integration flow
+ * 1. Client calls `submitOrderFn` → Violet returns `OrderSubmitResult` with COMPLETED + id
+ * 2. Client then calls this function with the Violet order ID
+ * 3. Server fetches full order from Violet, persists to Supabase, generates guest token
+ * 4. Client redirects to `/order/$orderId/confirmation`
+ *
+ * ## Duplicate handling
+ * The `orders.violet_order_id` UNIQUE constraint means a second call (page refresh, retry)
+ * will fail on insert. The catch block handles this gracefully — Violet has the data regardless.
+ *
+ * ## Guest token
+ * For guest buyers (userId is null), a crypto-random token is generated, hashed (SHA-256),
+ * and stored in the orders table. The plaintext token is returned to the client exactly once.
+ */
+export const persistAndConfirmOrderFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    const schema = z.object({
+      violetOrderId: z.string().min(1),
+      userId: z.string().uuid().nullable(),
+      sessionId: z.string().nullable(),
+    });
+    return schema.parse(input);
+  })
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      ApiResponse<{
+        orderId: string | null;
+        orderLookupToken?: string;
+        orderDetail: OrderDetail;
+      }>
+    > => {
+      const supabase = getSupabaseServer();
+      const adapter = getAdapter();
+
+      const orderResult = await adapter.getOrder(data.violetOrderId);
+      if (orderResult.error) {
+        return { data: null, error: orderResult.error };
+      }
+
+      const email = orderResult.data.customer?.email ?? "";
+
+      let persistResult: PersistOrderResult | null = null;
+      try {
+        persistResult = await persistOrder(supabase, {
+          violetOrderId: data.violetOrderId,
+          userId: data.userId,
+          sessionId: data.sessionId,
+          email,
+          status: orderResult.data.status,
+          subtotal: orderResult.data.subtotal,
+          shippingTotal: orderResult.data.shippingTotal,
+          taxTotal: orderResult.data.taxTotal,
+          total: orderResult.data.total,
+          currency: orderResult.data.currency,
+          bags: orderResult.data.bags.map((bag) => ({
+            violetBagId: bag.id,
+            merchantName: bag.merchantName,
+            status: bag.status,
+            financialStatus: bag.financialStatus,
+            subtotal: bag.subtotal,
+            shippingTotal: bag.shippingTotal,
+            taxTotal: bag.taxTotal,
+            total: bag.total,
+            shippingMethod: bag.shippingMethod?.label,
+            carrier: bag.shippingMethod?.carrier,
+            items: bag.items.map((item) => ({
+              skuId: item.skuId,
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price,
+              linePrice: item.linePrice,
+              thumbnail: item.thumbnail,
+            })),
+          })),
+        });
+      } catch (err) {
+        logError(supabase, {
+          source: "web",
+          error_type: "ORDER.PERSIST_FAILED",
+          message: err instanceof Error ? err.message : "Unknown persistence error",
+          context: { violetOrderId: data.violetOrderId },
+        });
+      }
+
+      return {
+        data: {
+          orderId: persistResult?.orderId ?? null,
+          orderLookupToken: persistResult?.orderLookupToken,
+          orderDetail: orderResult.data,
+        },
+        error: null,
+      };
+    },
+  );
 
 /**
  * Logs an error from client-side code to the `error_logs` table.

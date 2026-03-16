@@ -17,16 +17,27 @@
  * in Violet's system after POST /checkout/cart/{id}/submit. The `orderId` comes
  * from the submit response and is passed via the URL parameter.
  *
+ * ## Story 5.1 additions
+ * - Guest lookup token display (from `token` search param)
+ * - GDPR session cleanup (cart cache cleared on mount)
+ * - Email confirmation notice
+ *
  * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
  * @see Story 4.5 — Payment Confirmation & 3D Secure Handling
+ * @see Story 5.1 — Order Confirmation & Data Persistence
  */
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatPrice } from "@ecommerce/shared";
 import { getOrderDetailsFn } from "#/server/checkout";
 import type { OrderDetail, OrderBag } from "@ecommerce/shared";
 
 export const Route = createFileRoute("/order/$orderId/confirmation")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    token: typeof search.token === "string" ? search.token : undefined,
+  }),
   /**
    * SSR loader — fetches order details server-side for fast first paint.
    * The orderId is the Violet order ID returned by POST /submit (Story 4.4).
@@ -58,6 +69,32 @@ function formatDate(isoDate?: string): string {
 
 function OrderConfirmation() {
   const result = Route.useLoaderData();
+  const { token } = useSearch({ from: "/order/$orderId/confirmation" });
+  const queryClient = useQueryClient();
+  const [copied, setCopied] = useState(false);
+
+  /**
+   * GDPR data minimization (FR54): Clear cart cache on confirmation page mount.
+   *
+   * ## What this cleans up
+   * - TanStack Query cart cache (`["cart"]` query key) — prevents stale cart data
+   *   from showing in CartDrawer after order completion.
+   *
+   * ## What this does NOT clean up (and why)
+   * - No sessionStorage: the checkout flow stores NO data in sessionStorage.
+   *   Shipping address, email, and payment data are managed entirely via Server
+   *   Functions + Violet API and never touch client storage.
+   * - Cart context: already cleared via `resetCart()` in the checkout submit handler
+   *   (handleOrderSuccess in checkout/index.tsx).
+   * - Cart cookie: already cleared via `clearCartCookieFn()` in handleOrderSuccess.
+   *
+   * ## Why unconditional (not just for guests)
+   * Even authenticated users benefit from clearing stale cart cache — it prevents
+   * the CartDrawer from showing items that are now part of a completed order.
+   */
+  useEffect(() => {
+    queryClient.removeQueries({ queryKey: ["cart"] });
+  }, [queryClient]);
 
   // Error state — order not found or Violet API error
   if (result.error || !result.data) {
@@ -78,6 +115,28 @@ function OrderConfirmation() {
 
   const order: OrderDetail = result.data;
 
+  /**
+   * Copies the guest order tracking URL to clipboard.
+   *
+   * Constructs a full URL from the token search param so the guest can
+   * bookmark or share it. The token is a 32-byte crypto-random value
+   * (base64url-encoded) generated server-side by persistAndConfirmOrderFn.
+   *
+   * Uses the Clipboard API (navigator.clipboard.writeText) which is available
+   * in all modern browsers. Falls back gracefully if clipboard access is denied
+   * (the user can still manually copy from the displayed URL fragment).
+   *
+   * @see packages/shared/src/utils/guestToken.ts — generateOrderLookupToken()
+   * @see Story 5.4 — will implement the /order/lookup route that validates this token
+   */
+  const handleCopyToken = async () => {
+    if (!token) return;
+    const url = `${window.location.origin}/order/lookup?token=${token}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="page-wrap">
       <div className="confirmation" role="main" aria-label="Order confirmation">
@@ -90,7 +149,33 @@ function OrderConfirmation() {
           <p className="confirmation__subheading">
             Thank you for your purchase. Your order has been placed successfully.
           </p>
+          <p className="confirmation__email-notice">
+            A confirmation email will be sent to your email address shortly.
+          </p>
         </header>
+
+        {/* ── Guest order tracking token (Story 5.1) ── */}
+        {token && (
+          <div className="confirmation__guest-token" role="region" aria-label="Order tracking link">
+            <div className="confirmation__section-title">Save Your Tracking Link</div>
+            <p className="confirmation__guest-token-hint">
+              Since you checked out as a guest, save this link to track your order later. This is
+              the only time it will be shown.
+            </p>
+            <div className="confirmation__guest-token-row">
+              <code className="confirmation__guest-token-value">
+                /order/lookup?token={token.slice(0, 12)}...
+              </code>
+              <button
+                type="button"
+                className="confirmation__guest-token-copy"
+                onClick={handleCopyToken}
+              >
+                {copied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Order metadata ── */}
         <div className="confirmation__meta">

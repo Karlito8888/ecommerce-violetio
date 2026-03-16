@@ -17,13 +17,20 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-// Using shared OrderDetail type to avoid drift with web implementation
 import { createSupabaseClient, formatPrice } from "@ecommerce/shared";
 import type { OrderDetail } from "@ecommerce/shared";
 
@@ -36,20 +43,46 @@ const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
  * Retrieves the Supabase session access token for Edge Function authorization.
  * The Edge Function requires a valid JWT for ALL routes, including GET /orders.
  *
+ * ## Naming: `getSessionAccessToken` (not `getSessionToken`)
+ * Code Review Fix H1: Renamed from `getSessionToken` to avoid shadowing the
+ * `token` search param from `useLocalSearchParams` (guest lookup token) inside
+ * the `fetchOrder` callback. The two tokens serve completely different purposes:
+ * - **accessToken**: Supabase JWT for Edge Function auth headers
+ * - **token** (search param): Guest order lookup token for tracking
+ *
  * @see supabase/functions/cart/index.ts — validateUser() gate
  */
-async function getSessionToken(): Promise<string | null> {
+async function getSessionAccessToken(): Promise<string | null> {
   const supabase = createSupabaseClient();
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }
 
 export default function OrderConfirmationScreen() {
-  const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { orderId, token } = useLocalSearchParams<{ orderId: string; token?: string }>();
   const router = useRouter();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  /**
+   * Guest token "copy" handler (Code Review Note L1).
+   *
+   * Uses Alert.alert() as a workaround because `expo-clipboard` is not installed.
+   * This shows the full token in a native dialog so the user can manually copy it.
+   * Not ideal UX — a true clipboard copy would be better.
+   *
+   * TODO(Story 5.4): Install expo-clipboard and use `Clipboard.setStringAsync(url)`
+   * when implementing the full guest order lookup flow.
+   */
+  const handleCopyToken = () => {
+    if (!token) return;
+    const url = `${process.env.EXPO_PUBLIC_WEB_URL ?? ""}/order/lookup?token=${token}`;
+    Alert.alert("Save Your Tracking Link", url, [{ text: "OK" }]);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const fetchOrder = useCallback(async () => {
     if (!orderId || !EDGE_FN_BASE) {
@@ -59,8 +92,8 @@ export default function OrderConfirmationScreen() {
     }
 
     try {
-      const token = await getSessionToken();
-      if (!token) {
+      const accessToken = await getSessionAccessToken();
+      if (!accessToken) {
         setError("Not authenticated. Please restart the app.");
         setIsLoading(false);
         return;
@@ -68,7 +101,7 @@ export default function OrderConfirmationScreen() {
 
       const res = await fetch(`${EDGE_FN_BASE}/orders/${orderId}`, {
         method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) {
         setError(`Failed to load order (${res.status}).`);
@@ -121,7 +154,31 @@ export default function OrderConfirmationScreen() {
               <ThemedText style={styles.heading}>Order Confirmed</ThemedText>
               <ThemedText style={styles.subheading}>Thank you for your purchase!</ThemedText>
               <ThemedText style={styles.orderId}>Order #{order.id}</ThemedText>
+              <ThemedText style={styles.emailNotice}>
+                A confirmation email will be sent to your email address shortly.
+              </ThemedText>
             </ThemedView>
+
+            {/* ── Guest order tracking token (Story 5.1) ── */}
+            {token && (
+              <ThemedView style={styles.guestTokenCard}>
+                <ThemedText style={styles.sectionTitle}>SAVE YOUR TRACKING LINK</ThemedText>
+                <ThemedText style={styles.guestTokenHint}>
+                  Since you checked out as a guest, save this token to track your order later. This
+                  is the only time it will be shown.
+                </ThemedText>
+                <View style={styles.guestTokenRow}>
+                  <ThemedText style={styles.guestTokenValue} numberOfLines={1}>
+                    {token.slice(0, 20)}...
+                  </ThemedText>
+                  <Pressable style={styles.guestTokenCopy} onPress={handleCopyToken}>
+                    <ThemedText style={styles.guestTokenCopyText}>
+                      {copied ? "Copied!" : "Copy"}
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </ThemedView>
+            )}
 
             {/* ── Per-merchant bags ── */}
             {order.bags.map((bag) => (
@@ -204,9 +261,9 @@ export default function OrderConfirmationScreen() {
 
             {/* ── Continue shopping button ── */}
             <View style={styles.ctaContainer}>
-              <ThemedText style={styles.ctaButton} onPress={() => router.push("/")}>
-                Continue Shopping
-              </ThemedText>
+              <Pressable style={styles.ctaButtonContainer} onPress={() => router.replace("/")}>
+                <ThemedText style={styles.ctaButton}>Continue Shopping</ThemedText>
+              </Pressable>
               <ThemedText style={styles.trackingHint}>
                 Order tracking will be available once your items ship.
               </ThemedText>
@@ -240,6 +297,35 @@ const styles = StyleSheet.create({
   heading: { fontSize: 24, fontWeight: "700", marginBottom: Spacing.one },
   subheading: { fontSize: 15, opacity: 0.6 },
   orderId: { fontSize: 13, opacity: 0.5, marginTop: Spacing.one },
+  emailNotice: { fontSize: 13, opacity: 0.5, marginTop: Spacing.two, textAlign: "center" },
+  guestTokenCard: {
+    borderWidth: 1,
+    borderColor: "#e8e4df",
+    borderRadius: 12,
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
+    backgroundColor: "#FAF8F5",
+  },
+  guestTokenHint: { fontSize: 13, opacity: 0.6, lineHeight: 20, marginBottom: Spacing.two },
+  guestTokenRow: { flexDirection: "row", alignItems: "center", gap: Spacing.two },
+  guestTokenValue: {
+    flex: 1,
+    fontFamily: "monospace" as const,
+    fontSize: 13,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e8e4df",
+    borderRadius: 8,
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
+  },
+  guestTokenCopy: {
+    backgroundColor: "#2c2c2c",
+    paddingVertical: Spacing.one + 2,
+    paddingHorizontal: Spacing.three,
+    borderRadius: 8,
+  },
+  guestTokenCopyText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   bagCard: {
     borderWidth: 1,
     borderColor: "#e8e4df",
@@ -319,15 +405,17 @@ const styles = StyleSheet.create({
   },
   addressText: { fontSize: 14, lineHeight: 22, opacity: 0.8 },
   ctaContainer: { alignItems: "center", paddingTop: Spacing.three },
-  ctaButton: {
+  ctaButtonContainer: {
     backgroundColor: "#2c2c2c",
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
     paddingVertical: 14,
     paddingHorizontal: 40,
     borderRadius: 10,
-    overflow: "hidden",
+    alignItems: "center",
+  },
+  ctaButton: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
     textAlign: "center",
   },
   trackingHint: {

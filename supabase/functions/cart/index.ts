@@ -948,33 +948,91 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // ── Route: GET /orders/{orderId} — fetch order details (Story 4.5) ──
+  // ── Route: GET /orders/{orderId} — fetch order details (Story 4.5, enhanced Story 5.1) ──
   const orderMatch = path.match(/^\/orders\/([^/]+)$/);
   if (req.method === "GET" && orderMatch) {
     const orderId = orderMatch[1];
 
     /**
-     * Interim ownership check (pre-Story 5.1).
+     * Ownership check via orders table (Story 5.1, Code Review Fix C2).
      *
-     * Verifies the authenticated user has a completed/submitted cart whose
-     * violet_cart_id maps to this order. This is imperfect — Violet order IDs
-     * differ from cart IDs in some flows — but it blocks trivial enumeration
-     * attacks where an attacker guesses sequential order IDs.
+     * Three auth paths, tried in order:
+     * 1. **Guest token** (query param `?token=xxx`): Hash with SHA-256, look up
+     *    `order_lookup_token_hash` in orders table and verify `violet_order_id` matches.
+     *    This is the primary path for guest buyers accessing their order via the
+     *    unique link shown on the confirmation page.
+     * 2. **JWT ownership**: Check `user_id` or `session_id` in orders table matches
+     *    the authenticated user's JWT `sub` claim.
+     * 3. **Cart fallback**: For orders not yet persisted to Supabase (persistence
+     *    failure edge case), check the carts table for a completed/submitted cart
+     *    owned by this user.
      *
-     * TODO(Story 5.1): Replace with proper order persistence table that stores
-     * user_id + violet_order_id at submit time for reliable ownership checks.
+     * @see persistAndConfirmOrderFn in apps/web/src/server/checkout.ts — persists order + generates token
+     * @see packages/shared/src/utils/guestToken.ts — token generation + hashing
      */
     const supabase = getSupabaseAdmin();
-    const { data: ownershipCheck } = await supabase
-      .from("carts")
-      .select("id")
-      .eq("user_id", userId)
-      .in("status", ["completed", "submitted"])
-      .limit(1)
-      .maybeSingle();
+    const url = new URL(req.url);
+    const guestToken = url.searchParams.get("token");
 
-    if (!ownershipCheck) {
-      return errorResponse("ORDER.ACCESS_DENIED", "No completed order found for this user", 403);
+    let isAuthorized = false;
+
+    // Path 1: Guest token auth — hash the token and look up in orders table
+    if (guestToken) {
+      /**
+       * SHA-256 hash computed inline (Deno runtime — no node:crypto import needed).
+       * Mirrors hashOrderLookupToken() from packages/shared/src/utils/guestToken.ts
+       * but uses the Web Crypto API available in Deno/Edge Functions.
+       */
+      const encoder = new TextEncoder();
+      const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(guestToken));
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const tokenHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+
+      const { data: tokenMatch } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("violet_order_id", orderId)
+        .eq("order_lookup_token_hash", tokenHash)
+        .limit(1)
+        .maybeSingle();
+
+      if (tokenMatch) {
+        isAuthorized = true;
+      }
+    }
+
+    // Path 2: JWT-based ownership check
+    if (!isAuthorized) {
+      const { data: orderOwnership } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("violet_order_id", orderId)
+        .or(`user_id.eq.${userId},session_id.eq.${userId}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (orderOwnership) {
+        isAuthorized = true;
+      }
+    }
+
+    // Path 3: Cart fallback (order may not be persisted yet)
+    if (!isAuthorized) {
+      const { data: cartOwnership } = await supabase
+        .from("carts")
+        .select("id")
+        .eq("user_id", userId)
+        .in("status", ["completed", "submitted"])
+        .limit(1)
+        .maybeSingle();
+
+      if (cartOwnership) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      return errorResponse("ORDER.ACCESS_DENIED", "No order found for this user", 403);
     }
 
     /**

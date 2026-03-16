@@ -77,3 +77,12 @@ export type {
 } from "./biometric.types.js";
 export { BiometricType } from "./biometric.types.js";
 export type { CheckoutError, CartHealthStatus, ErrorLogEntry } from "./error.types.js";
+export type {
+  OrderRow,
+  OrderBagRow,
+  OrderItemRow,
+  PersistOrderInput,
+  PersistOrderBagInput,
+  PersistOrderItemInput,
+  PersistOrderResult,
+} from "./orderPersistence.types.js";

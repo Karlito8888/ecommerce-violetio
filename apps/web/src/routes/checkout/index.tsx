@@ -22,7 +22,9 @@ import {
   getPaymentIntentFn,
   submitOrderFn,
   clearCartCookieFn,
+  persistAndConfirmOrderFn,
 } from "../../server/checkout";
+import { useAuthSession } from "../../hooks/useAuthSession";
 import { CheckoutErrorBoundary } from "../../components/checkout/CheckoutErrorBoundary";
 import { BagErrors } from "../../components/checkout/BagErrors";
 import { InventoryAlert } from "../../components/checkout/InventoryAlert";
@@ -438,6 +440,7 @@ function CheckoutPage() {
   const { violetCartId, cartHealth, setCartHealth, resetCart } = useCartContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { user, isAnonymous } = useAuthSession();
   const { data: cartResponse, isLoading: isCartLoading } = useCartQuery(violetCartId, fetchCart);
   const cart = cartResponse?.data ?? null;
 
@@ -991,6 +994,27 @@ function CheckoutPage() {
   }
 
   // ── Order success handler ───────────────────────────────────────────
+
+  /**
+   * Story 5.1 (Code Review Fix C1): Wire up order persistence.
+   *
+   * After Violet submit succeeds, we persist the order to Supabase for:
+   * - Local queries and order history (Supabase mirrors Violet data)
+   * - Guest lookup tokens (SHA-256 hashed, stored server-side)
+   * - Email queue tracking (email_sent flag)
+   *
+   * ## Why fire-and-forget on failure
+   * Violet is the source of truth. If Supabase persistence fails, the order
+   * still exists in Violet — we log the error but never block the user from
+   * seeing their confirmation. The confirmation page fetches from Violet as
+   * its primary source regardless.
+   *
+   * ## Guest token flow
+   * For anonymous/guest users (isAnonymous=true), the server generates a
+   * crypto-random token, hashes it, stores the hash in Supabase, and returns
+   * the plaintext token exactly once. We pass it as a URL search param so the
+   * confirmation page can display it with copy-to-clipboard.
+   */
   async function handleOrderSuccess(orderId: string) {
     // Clear cart cookie so next addToCart creates a fresh cart
     await clearCartCookieFn();
@@ -1000,8 +1024,32 @@ function CheckoutPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.cart.detail(violetCartId) });
     }
 
-    // Navigate to order confirmation page (Story 4.5 — full UI with order details)
-    navigate({ to: `/order/${orderId}/confirmation` as string });
+    /**
+     * Persist order to Supabase (Story 5.1).
+     * Pass userId=null for anonymous users so the server generates a guest lookup token.
+     * Session ID is the Supabase auth user UUID even for anonymous users — it's used
+     * as a fallback identifier in the orders table for anonymous-to-authenticated upgrades.
+     */
+    let guestToken: string | undefined;
+    try {
+      const persistResult = await persistAndConfirmOrderFn({
+        data: {
+          violetOrderId: orderId,
+          userId: isAnonymous ? null : (user?.id ?? null),
+          sessionId: user?.id ?? null,
+        },
+      });
+      guestToken = persistResult.data?.orderLookupToken;
+    } catch {
+      // Persistence failure is non-blocking — Violet has the order data.
+      // Error is already logged server-side by persistAndConfirmOrderFn.
+    }
+
+    // Navigate to confirmation — include guest token as search param if present
+    navigate({
+      to: `/order/${orderId}/confirmation` as string,
+      search: guestToken ? { token: guestToken } : undefined,
+    });
   }
 
   // ── Aggregate totals ───────────────────────────────────────────────

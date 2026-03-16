@@ -334,3 +334,68 @@
     height: 40px;
   }
 }
+
+/* ── Story 5.1: Guest token + email notice ──
+ * Code Review Fix H2: Replaced `--color-stone-500` and `--text-sm` with tokens
+ * that actually exist in tokens.css. The project defines `--color-steel` (#5a5a5a)
+ * for secondary text and uses explicit rem values (0.8125rem = 13px) for small text.
+ * There are NO --text-* or --color-stone-* tokens — those are Tailwind conventions
+ * that don't apply here.
+ * @see apps/web/src/styles/tokens.css — canonical token definitions
+ */
+
+.confirmation__email-notice {
+  color: var(--color-steel);
+  font-size: 0.8125rem;
+  margin-top: var(--space-2);
+}
+
+.confirmation__guest-token {
+  background: var(--color-ivory);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.confirmation__guest-token-hint {
+  color: var(--color-steel);
+  font-size: 0.8125rem;
+  margin-bottom: var(--space-4);
+  line-height: 1.5;
+}
+
+.confirmation__guest-token-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.confirmation__guest-token-value {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  background: #fff;
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirmation__guest-token-copy {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-midnight);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.confirmation__guest-token-copy:hover {
+  opacity: 0.9;
+}

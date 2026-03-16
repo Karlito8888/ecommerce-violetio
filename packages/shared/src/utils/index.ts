@@ -10,3 +10,5 @@ export {
 } from "./seo.js";
 export type { MetaTag, PageMetaOptions } from "./seo.js";
 export { logError } from "./errorLogger.js";
+export { generateOrderLookupToken, hashOrderLookupToken } from "./guestToken.js";
+export { persistOrder } from "./orderPersistence.js";
