@@ -14,18 +14,23 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { setCookie } from "@tanstack/react-start/server";
+import { logError } from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
 
 /**
  * Finds the active cart for an authenticated user.
  * Returns the most recently updated active cart's violet_cart_id, or null.
+ *
+ * Supabase client returns errors in `{ error }` without throwing.
+ * Ignoring this property causes database failures to masquerade as
+ * "not found" results. We explicitly check and log it.
  */
 export const getUserCartFn = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: string }) => data)
   .handler(async ({ data }) => {
     const supabase = getSupabaseServer();
-    const { data: cart } = await supabase
+    const { data: cart, error } = await supabase
       .from("carts")
       .select("violet_cart_id")
       .eq("user_id", data.userId)
@@ -33,25 +38,43 @@ export const getUserCartFn = createServerFn({ method: "GET" })
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (error) {
+      logError(supabase, {
+        source: "web",
+        error_type: "DB.QUERY_FAILED",
+        message: `Failed to look up user cart: ${error.message}`,
+        context: { userId: data.userId, operation: "getUserCart", code: error.code },
+      });
+    }
+
     return { violetCartId: cart?.violet_cart_id ?? null };
   });
 
 /**
  * Merges items from an anonymous cart into an authenticated cart via Violet API.
  *
- * Strategy:
- * - For each item in the anonymous cart:
- *   - If the SKU already exists in the target → increase quantity
- *   - If the SKU is new → add to target cart
- * - After merge, mark the anonymous cart as "merged" in Supabase
+ * ## Merge strategy
+ * Items are transferred one-by-one from the anonymous cart to the target cart
+ * via Violet API calls. This is NOT atomic — each item is an independent API call.
  *
- * Merge is NOT atomic — each item is added individually via Violet API.
- * Partial failures are collected and returned (non-blocking).
+ * ## Partial failure handling
+ * - If an item fails to merge (e.g., SKU no longer available, API timeout),
+ *   the error is recorded and logged but remaining items continue processing.
+ * - The anonymous cart is only marked as "merged" if at least one item transferred.
+ *   If ALL items fail, the anonymous cart stays active so the user can retry.
+ * - Partial failures are logged to error_logs with details about which items
+ *   failed, enabling operational debugging without blocking the merge flow.
+ *
+ * ## Duplicate handling
+ * If a SKU already exists in the target cart, quantities are summed rather
+ * than creating duplicate line items.
  */
 export const mergeAnonymousCartFn = createServerFn({ method: "POST" })
   .inputValidator((data: { anonymousVioletCartId: string; targetVioletCartId: string }) => data)
   .handler(async ({ data }) => {
     const adapter = getAdapter();
+    const supabase = getSupabaseServer();
 
     // 1. Fetch both carts from Violet
     const [anonResult, targetResult] = await Promise.all([
@@ -80,6 +103,8 @@ export const mergeAnonymousCartFn = createServerFn({ method: "POST" })
     // 3. For each anonymous item, add to target or update qty
     const errors: string[] = [];
     let mergedCount = 0;
+    const totalItems = anonCart.bags.reduce((sum, bag) => sum + bag.items.length, 0);
+
     for (const bag of anonCart.bags) {
       for (const item of bag.items) {
         const existingQty = existingSkus.get(item.skuId);
@@ -112,19 +137,56 @@ export const mergeAnonymousCartFn = createServerFn({ method: "POST" })
       }
     }
 
+    /**
+     * Log partial merge failures for operational visibility.
+     * Individual item errors are collected above and logged here as a batch,
+     * with details about which items failed and how many succeeded.
+     */
+    if (errors.length > 0) {
+      logError(supabase, {
+        source: "web",
+        error_type: "CART.MERGE_PARTIAL_FAILURE",
+        message: `Cart merge partially failed: ${errors.length}/${totalItems} items failed`,
+        context: {
+          anonymousVioletCartId: data.anonymousVioletCartId,
+          targetVioletCartId: data.targetVioletCartId,
+          mergedCount,
+          failedCount: errors.length,
+          totalItems,
+          failureDetails: errors,
+        },
+      });
+    }
+
     // 4. Only mark anonymous cart as merged if at least one item transferred.
     // If all items failed, keep the cart active so the user can retry.
-    const supabase = getSupabaseServer();
     if (mergedCount > 0) {
-      await supabase
+      const { error: statusError } = await supabase
         .from("carts")
         .update({ status: "merged" })
         .eq("violet_cart_id", data.anonymousVioletCartId);
+
+      if (statusError) {
+        logError(supabase, {
+          source: "web",
+          error_type: "DB.CART_STATUS_UPDATE_FAILED",
+          message: `Failed to mark anonymous cart as merged: ${statusError.message}`,
+          context: {
+            anonymousVioletCartId: data.anonymousVioletCartId,
+            operation: "mergeAnonymousCart",
+          },
+        });
+      }
     }
 
+    /**
+     * HttpOnly cookie with Secure flag in production prevents transmission over
+     * plain HTTP. SameSite=lax prevents CSRF while allowing top-level navigations.
+     */
     // 5. Update the cookie to point to the target cart
     setCookie("violet_cart_id", data.targetVioletCartId, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 30,

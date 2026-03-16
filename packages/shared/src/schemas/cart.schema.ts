@@ -1,5 +1,15 @@
 /**
- * Zod validation schemas for Violet cart API responses.
+ * Zod validation schemas for Violet cart API responses and client input validation.
+ *
+ * ## Monetary field validation strategy
+ * All monetary fields are validated as non-negative integers representing cents.
+ * Violet API returns prices in cents to avoid floating-point precision issues
+ * (e.g., 4999 = $49.99). The `.nonnegative()` constraint ensures no negative
+ * values slip through from malformed API responses or client submissions.
+ *
+ * ## Response vs Input schemas
+ * - `violet*Schema` — validate/transform Violet API responses (snake_case, lenient defaults)
+ * - `*InputSchema` — validate client-submitted data (camelCase, strict constraints)
  *
  * Violet returns HTTP 200 even when items have errors — ALWAYS check
  * the `errors` array even on successful responses.
@@ -21,7 +31,7 @@ export const violetCartSkuSchema = z.object({
   id: z.number(),
   sku_id: z.number(),
   quantity: z.number().int().min(1),
-  price: z.number().default(0),
+  price: z.number().nonnegative().default(0),
 });
 
 /** Validates a Violet bag (merchant group). */
@@ -30,9 +40,9 @@ export const violetBagSchema = z.object({
   merchant_id: z.number(),
   merchant_name: z.string().optional().default(""),
   skus: z.array(violetCartSkuSchema).optional().default([]),
-  subtotal: z.number().default(0),
-  tax: z.number().default(0),
-  shipping_total: z.number().default(0),
+  subtotal: z.number().nonnegative().default(0),
+  tax: z.number().nonnegative().default(0),
+  shipping_total: z.number().nonnegative().default(0),
   errors: z.array(violetBagErrorSchema).optional().default([]),
 });
 
@@ -53,7 +63,7 @@ export const violetCartResponseSchema = z.object({
   channel_id: z.number().optional(),
   currency: z.string().optional().default("USD"),
   /** Cart grand total in integer cents (sum of all bags: subtotal + tax + shipping). */
-  total: z.number().optional(),
+  total: z.number().nonnegative().optional(),
   /**
    * Stripe PaymentIntent client secret — only present when cart was created
    * with `wallet_based_checkout: true`. Pass to `<Elements options={{ clientSecret }}>`.
@@ -119,7 +129,7 @@ export const violetShippingMethodSchema = z.object({
    * Shipping cost in integer cents. 0 means free shipping.
    * Confirmed field name: `price`.
    */
-  price: z.number().default(0),
+  price: z.number().nonnegative().default(0),
   /**
    * Bag ID repeated at method level (Violet convenience field).
    * Not needed for selection but present in the response.
@@ -189,3 +199,68 @@ export const violetShippingAddressSchema = z.object({
 
 export type VioletShippingMethod = z.infer<typeof violetShippingMethodSchema>;
 export type VioletShippingAvailableResponse = z.infer<typeof violetShippingAvailableResponseSchema>;
+
+// ─── Client Input Validation Schemas ──────────────────────────────────────
+
+/**
+ * Validates client-submitted cart item data (add-to-cart action).
+ *
+ * Unlike Violet response schemas which are lenient with defaults,
+ * input schemas enforce strict constraints to catch bad data before
+ * it reaches the API.
+ */
+export const cartItemInputSchema = z.object({
+  /** Violet SKU ID — must be a non-empty string */
+  skuId: z.string().min(1, "SKU ID is required"),
+  /** Item quantity — integer between 1 and 99 */
+  quantity: z
+    .number()
+    .int()
+    .min(1, "Quantity must be at least 1")
+    .max(99, "Quantity cannot exceed 99"),
+});
+
+/** Inferred type for validated cart item input (Zod-inferred). */
+export type CartItemInputValidated = z.infer<typeof cartItemInputSchema>;
+
+/**
+ * Validates client-submitted guest customer data (checkout step).
+ *
+ * Applied before sending to Violet's POST /checkout/cart/{id}/customer endpoint.
+ * Field length limits prevent abuse and match reasonable real-world constraints.
+ */
+export const customerInputSchema = z.object({
+  /** Valid email address */
+  email: z.string().email("Valid email is required"),
+  /** Customer first name — 1 to 100 characters */
+  firstName: z.string().min(1, "First name is required").max(100, "First name is too long"),
+  /** Customer last name — 1 to 100 characters */
+  lastName: z.string().min(1, "Last name is required").max(100, "Last name is too long"),
+});
+
+/** Inferred type for validated customer input. */
+export type CustomerInputValidated = z.infer<typeof customerInputSchema>;
+
+/**
+ * Validates client-submitted shipping address (checkout step).
+ *
+ * All fields are required for input validation — unlike the Violet response schema
+ * (`violetShippingAddressSchema`) which makes them optional because Violet validates
+ * server-side. This schema catches missing fields before the API call, providing
+ * faster feedback to the user.
+ */
+export const shippingAddressInputSchema = z.object({
+  /** Street address line 1 — 1 to 200 characters */
+  address1: z.string().min(1, "Address is required").max(200, "Address is too long"),
+  /** City — 1 to 100 characters */
+  city: z.string().min(1, "City is required").max(100, "City is too long"),
+  /** State/province — 1 to 50 characters */
+  state: z.string().min(1, "State is required").max(50, "State is too long"),
+  /** Postal/ZIP code — 1 to 20 characters */
+  postalCode: z.string().min(1, "Postal code is required").max(20, "Postal code is too long"),
+  /** ISO 3166-1 alpha-2 country code (exactly 2 characters, e.g., "US", "GB") */
+  country: z.string().length(2, "Country must be a 2-letter ISO code"),
+});
+
+/** Inferred type for validated shipping address input. */
+export type ShippingAddressInputValidated = z.infer<typeof shippingAddressInputSchema>;

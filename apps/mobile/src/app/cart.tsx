@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -9,6 +9,12 @@ import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import type { Cart, Bag, CartItem } from "@ecommerce/shared";
 import { createSupabaseClient } from "@ecommerce/shared";
+
+/** Structured result type for Edge Function calls. */
+interface EdgeResult<T> {
+  data: T | null;
+  error: string | null;
+}
 
 /** Key for persisting the Violet cart ID in SecureStore. */
 const CART_KEY = "violet_cart_id";
@@ -26,6 +32,9 @@ function formatCents(cents: number): string {
 /**
  * Gets the current Supabase session access token.
  *
+ * Uses `createSupabaseClient()` which returns a singleton instance — the shared
+ * package memoizes the client so we don't create a new connection per call.
+ *
  * The Edge Function validates a Supabase user JWT (not the project anon key).
  * Anonymous users are authenticated via Supabase anonymous auth (`initAnonymousSession`
  * in the app's _layout.tsx), so they have a real user ID and access token.
@@ -38,38 +47,48 @@ async function getSessionToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-/** Fetches the current cart from the Edge Function. */
-async function fetchCartFromEdge(violetCartId: string): Promise<Cart | null> {
-  if (!EDGE_FN_BASE) return null;
+/**
+ * Fetches the current cart from the Edge Function.
+ *
+ * Returns structured { data, error } to ensure every failure path provides
+ * user-visible feedback. Silent null returns are a critical UX bug — users
+ * must always know why an action failed.
+ */
+async function fetchCartFromEdge(violetCartId: string): Promise<EdgeResult<Cart>> {
+  if (!EDGE_FN_BASE) return { data: null, error: "Configuration error: Edge Function URL not set" };
   const token = await getSessionToken();
-  if (!token) return null;
+  if (!token) return { data: null, error: "Authentication required" };
 
   try {
-    // No Content-Type on GET — GET requests have no body. Sending it is unnecessary
-    // and inconsistent with the pattern established in VioletAdapter (see M2 fix comment).
     const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { data: null, error: `Server error (${res.status})` };
     const json = await res.json();
-    return json.data ?? null;
+    return { data: json.data ?? null, error: null };
   } catch {
-    return null;
+    return { data: null, error: "Network error. Check your connection." };
   }
 }
 
-/** Updates a cart item quantity via the Edge Function. */
+/**
+ * Updates a cart item quantity via the Edge Function.
+ *
+ * Returns structured { data, error } to ensure every failure path provides
+ * user-visible feedback. Silent null returns are a critical UX bug — users
+ * must always know why an action failed.
+ */
 async function updateItemEdge(
   violetCartId: string,
   skuId: string,
   quantity: number,
-): Promise<Cart | null> {
-  if (!EDGE_FN_BASE) return null;
+): Promise<EdgeResult<Cart>> {
+  if (!EDGE_FN_BASE) return { data: null, error: "Configuration error: Edge Function URL not set" };
   const token = await getSessionToken();
-  if (!token) return null;
+  if (!token) return { data: null, error: "Authentication required" };
 
   try {
     const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/skus/${skuId}`, {
@@ -80,30 +99,36 @@ async function updateItemEdge(
       },
       body: JSON.stringify({ quantity }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { data: null, error: `Server error (${res.status})` };
     const json = await res.json();
-    return json.data ?? null;
+    return { data: json.data ?? null, error: null };
   } catch {
-    return null;
+    return { data: null, error: "Network error. Check your connection." };
   }
 }
 
-/** Removes a cart item via the Edge Function. */
-async function removeItemEdge(violetCartId: string, skuId: string): Promise<Cart | null> {
-  if (!EDGE_FN_BASE) return null;
+/**
+ * Removes a cart item via the Edge Function.
+ *
+ * Returns structured { data, error } to ensure every failure path provides
+ * user-visible feedback. Silent null returns are a critical UX bug — users
+ * must always know why an action failed.
+ */
+async function removeItemEdge(violetCartId: string, skuId: string): Promise<EdgeResult<Cart>> {
+  if (!EDGE_FN_BASE) return { data: null, error: "Configuration error: Edge Function URL not set" };
   const token = await getSessionToken();
-  if (!token) return null;
+  if (!token) return { data: null, error: "Authentication required" };
 
   try {
     const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/skus/${skuId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { data: null, error: `Server error (${res.status})` };
     const json = await res.json();
-    return json.data ?? null;
+    return { data: json.data ?? null, error: null };
   } catch {
-    return null;
+    return { data: null, error: "Network error. Check your connection." };
   }
 }
 
@@ -225,6 +250,14 @@ export default function CartScreen() {
   const [violetCartId, setVioletCartId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Ref to track in-flight mutations without causing re-renders.
+   * Using a ref instead of `isUpdating` state in dependency arrays prevents
+   * unnecessary recreation of callbacks on every update cycle.
+   */
+  const isUpdatingRef = useRef(false);
 
   const totalItems =
     cart?.bags.reduce((sum, bag) => sum + bag.items.reduce((s, i) => s + i.quantity, 0), 0) ?? 0;
@@ -236,8 +269,12 @@ export default function CartScreen() {
         const savedId = await SecureStore.getItemAsync(CART_KEY);
         if (savedId) {
           setVioletCartId(savedId);
-          const cartData = await fetchCartFromEdge(savedId);
-          setCart(cartData);
+          const result = await fetchCartFromEdge(savedId);
+          if (result.error) {
+            setError(result.error);
+          } else {
+            setCart(result.data);
+          }
         }
       } finally {
         setIsLoading(false);
@@ -246,32 +283,56 @@ export default function CartScreen() {
     init();
   }, []);
 
+  /**
+   * Updates item quantity in the cart via Edge Function.
+   * Uses isUpdatingRef to guard against concurrent mutations without
+   * adding isUpdating to the dependency array (which would cause re-renders).
+   */
   const handleUpdateQty = useCallback(
     async (skuId: string, quantity: number) => {
-      if (!violetCartId || isUpdating) return;
+      if (!violetCartId || isUpdatingRef.current) return;
+      isUpdatingRef.current = true;
       setIsUpdating(true);
+      setError(null);
       try {
-        const updated = await updateItemEdge(violetCartId, skuId, quantity);
-        if (updated) setCart(updated);
+        const result = await updateItemEdge(violetCartId, skuId, quantity);
+        if (result.error) {
+          Alert.alert("Error", result.error);
+        } else if (result.data) {
+          setCart(result.data);
+        }
       } finally {
+        isUpdatingRef.current = false;
         setIsUpdating(false);
       }
     },
-    [violetCartId, isUpdating],
+    [violetCartId],
   );
 
+  /**
+   * Removes an item from the cart via Edge Function.
+   * Uses isUpdatingRef to guard against concurrent mutations without
+   * adding isUpdating to the dependency array (which would cause re-renders).
+   */
   const handleRemove = useCallback(
     async (skuId: string) => {
-      if (!violetCartId || isUpdating) return;
+      if (!violetCartId || isUpdatingRef.current) return;
+      isUpdatingRef.current = true;
       setIsUpdating(true);
+      setError(null);
       try {
-        const updated = await removeItemEdge(violetCartId, skuId);
-        if (updated) setCart(updated);
+        const result = await removeItemEdge(violetCartId, skuId);
+        if (result.error) {
+          Alert.alert("Error", result.error);
+        } else if (result.data) {
+          setCart(result.data);
+        }
       } finally {
+        isUpdatingRef.current = false;
         setIsUpdating(false);
       }
     },
-    [violetCartId, isUpdating],
+    [violetCartId],
   );
 
   return (
@@ -280,6 +341,8 @@ export default function CartScreen() {
         <ThemedText type="subtitle" style={styles.title}>
           Your Bag{totalItems > 0 ? ` (${totalItems})` : ""}
         </ThemedText>
+
+        {error && <ThemedText style={styles.errorText}>{error}</ThemedText>}
 
         {isLoading ? (
           <ThemedText themeColor="textSecondary">Loading your bag…</ThemedText>
@@ -312,9 +375,14 @@ export default function CartScreen() {
               <ThemedText style={styles.totalValue}>{formatCents(cart.total)}</ThemedText>
             </View>
 
+            {/**
+             * Navigates to the checkout screen. Button is disabled during cart
+             * update operations to prevent navigation with stale state.
+             */}
             <TouchableOpacity
               style={[styles.checkoutBtn, isUpdating && styles.checkoutBtnDisabled]}
               disabled={isUpdating}
+              onPress={() => router.push("/checkout" as never)}
               accessibilityLabel="Proceed to checkout"
             >
               <ThemedText style={styles.checkoutBtnText}>Proceed to Checkout</ThemedText>
@@ -337,6 +405,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   empty: { alignItems: "center", marginTop: Spacing.six, gap: Spacing.two },
   emptyIcon: { fontSize: 48, opacity: 0.3 },
+  errorText: { color: "#b54a4a", fontSize: 13, marginBottom: Spacing.two },
   startShoppingBtn: {
     backgroundColor: "#2c2c2c",
     paddingVertical: Spacing.three,

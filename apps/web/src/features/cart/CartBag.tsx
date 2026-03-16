@@ -1,10 +1,7 @@
+// Using shared formatPrice to avoid duplication — see packages/shared/src/utils/formatPrice.ts
+import { formatPrice } from "@ecommerce/shared";
 import type { Bag } from "@ecommerce/shared";
 import CartItem from "./CartItem";
-
-/** Formats an integer cent value to a dollar string. */
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
 
 interface CartBagProps {
   bag: Bag;
@@ -48,16 +45,16 @@ export default function CartBag({ bag, onUpdateQty, onRemove, isUpdating }: Cart
 
       <div className="cart-drawer__bag-subtotal">
         <span>Subtotal</span>
-        <span>{formatCents(bag.subtotal)}</span>
+        <span>{formatPrice(bag.subtotal)}</span>
       </div>
       <div className="cart-drawer__bag-tax">
         <span>Est. Tax</span>
-        <span>{formatCents(bag.tax)}</span>
+        <span>{formatPrice(bag.tax)}</span>
       </div>
       <div className="cart-drawer__bag-shipping">
         <span>Est. Shipping</span>
         <span>
-          {bag.shippingTotal > 0 ? formatCents(bag.shippingTotal) : "Calculated at checkout"}
+          {bag.shippingTotal > 0 ? formatPrice(bag.shippingTotal) : "Calculated at checkout"}
         </span>
       </div>
     </div>

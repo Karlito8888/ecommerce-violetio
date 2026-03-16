@@ -20,6 +20,9 @@ export {
   violetShippingAvailableItemSchema,
   violetShippingAvailableResponseSchema,
   violetShippingAddressSchema,
+  cartItemInputSchema,
+  customerInputSchema,
+  shippingAddressInputSchema,
 } from "./cart.schema.js";
 export type {
   VioletCartResponse,
@@ -27,6 +30,9 @@ export type {
   VioletCartSkuResponse,
   VioletShippingMethod,
   VioletShippingAvailableResponse,
+  CartItemInputValidated,
+  CustomerInputValidated,
+  ShippingAddressInputValidated,
 } from "./cart.schema.js";
 export {
   webhookEventTypeSchema,

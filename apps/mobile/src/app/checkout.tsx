@@ -49,6 +49,9 @@ const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
 /**
  * Retrieves the Supabase session access token for Edge Function authorization.
  * Anonymous users have a real token via Supabase anonymous auth.
+ *
+ * Uses `createSupabaseClient()` which returns a singleton instance — the shared
+ * package memoizes the client so we don't create a new connection per call.
  */
 async function getSessionToken(): Promise<string | null> {
   const supabase = createSupabaseClient();
@@ -247,15 +250,29 @@ export default function CheckoutScreen() {
     if (violetCartId) await fetchAvailableShippingMethods(violetCartId);
   }, [fetchAvailableShippingMethods]);
 
-  // ── Continue to guest info (shipping confirm) ───────────────────────
+  /**
+   * Confirms shipping method selections and advances to guest info step.
+   * All early-return paths set an error state so the user always knows why
+   * the action failed — silent returns are a critical UX bug.
+   */
   const handleContinueToGuestInfo = useCallback(async () => {
-    if (!allBagsSelected || !EDGE_FN_BASE) return;
+    if (!allBagsSelected) return;
+    if (!EDGE_FN_BASE) {
+      setShippingError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
+      return;
+    }
 
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
-    if (!violetCartId) return;
+    if (!violetCartId) {
+      setShippingError("Cart session expired. Please return to your cart.");
+      return;
+    }
 
     const token = await getSessionToken();
-    if (!token) return;
+    if (!token) {
+      setShippingError("Not authenticated. Please restart the app.");
+      return;
+    }
 
     setIsSubmittingShipping(true);
     setShippingError(null);
@@ -286,17 +303,27 @@ export default function CheckoutScreen() {
     }
   }, [allBagsSelected, selectedMethods]);
 
-  // ── Guest info submit → billing step ─────────────────────────────────
+  /**
+   * Submits guest customer info and advances to billing step.
+   * All early-return paths set an error state so the user always knows why
+   * the action failed — silent returns are a critical UX bug.
+   */
   const handleGuestInfoSubmit = useCallback(async () => {
     if (!guestEmail.trim() || !guestFirstName.trim() || !guestLastName.trim()) {
       setGuestError("Email, first name, and last name are required.");
       return;
     }
 
-    if (!EDGE_FN_BASE) return;
+    if (!EDGE_FN_BASE) {
+      setGuestError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
+      return;
+    }
 
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
-    if (!violetCartId) return;
+    if (!violetCartId) {
+      setGuestError("Cart session expired. Please return to your cart.");
+      return;
+    }
 
     const token = await getSessionToken();
     if (!token) {
@@ -337,12 +364,22 @@ export default function CheckoutScreen() {
     }
   }, [guestEmail, guestFirstName, guestLastName, marketingConsent]);
 
-  // ── Billing confirm → initiate payment ──────────────────────────────
+  /**
+   * Confirms billing address, fetches the Stripe payment intent, and
+   * initializes the PaymentSheet. All early-return paths set an error
+   * state so the user always knows why the action failed.
+   */
   const handleBillingConfirm = useCallback(async () => {
-    if (!EDGE_FN_BASE) return;
+    if (!EDGE_FN_BASE) {
+      setBillingError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
+      return;
+    }
 
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
-    if (!violetCartId) return;
+    if (!violetCartId) {
+      setBillingError("Cart session expired. Please return to your cart.");
+      return;
+    }
 
     const token = await getSessionToken();
     if (!token) {
@@ -429,9 +466,31 @@ export default function CheckoutScreen() {
     }
   }, [billingSameAsShipping, billingAddress, initPaymentSheet]);
 
-  // ── Present PaymentSheet and submit order ───────────────────────────
+  /**
+   * Presents the Stripe PaymentSheet and submits the order to Violet on success.
+   *
+   * Cart ID and auth token must be validated BEFORE presenting the PaymentSheet.
+   * If checked after, the user's card could be authorized but the order never
+   * submitted — the worst possible UX outcome.
+   */
   const handlePayment = useCallback(async () => {
-    if (!EDGE_FN_BASE) return;
+    if (!EDGE_FN_BASE) {
+      setPaymentError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
+      return;
+    }
+
+    // Validate cart ID and auth token BEFORE presenting PaymentSheet
+    const violetCartId = await SecureStore.getItemAsync(CART_KEY);
+    if (!violetCartId) {
+      setPaymentError("Cart session expired. Please return to your cart.");
+      return;
+    }
+
+    const token = await getSessionToken();
+    if (!token) {
+      setPaymentError("Authentication expired. Please restart the app.");
+      return;
+    }
 
     setIsPaymentProcessing(true);
     setPaymentError(null);
@@ -455,13 +514,6 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // PaymentSheet success — submit to Violet
-      const violetCartId = await SecureStore.getItemAsync(CART_KEY);
-      if (!violetCartId) return;
-
-      const token = await getSessionToken();
-      if (!token) return;
-
       const submitRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/submit`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -469,8 +521,9 @@ export default function CheckoutScreen() {
       });
 
       if (!submitRes.ok) {
-        const text = await submitRes.text().catch(() => "");
-        setPaymentError(`Order submission failed (${submitRes.status}): ${text}`);
+        setPaymentError(
+          "Payment was authorized but order submission failed. Your card was not charged. Please try again or contact support.",
+        );
         setIsPaymentProcessing(false);
         return;
       }

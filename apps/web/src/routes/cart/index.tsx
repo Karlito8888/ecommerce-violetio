@@ -1,19 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCartContext } from "../../contexts/CartContext";
-import { useCartQuery, getCartItemCount } from "@ecommerce/shared";
+// Using shared formatPrice to avoid duplication — see packages/shared/src/utils/formatPrice.ts
+import {
+  useCartQuery,
+  getCartItemCount,
+  useUpdateCartItem,
+  useRemoveFromCart,
+  formatPrice,
+} from "@ecommerce/shared";
 import { getCartFn, updateCartItemFn, removeFromCartFn } from "../../server/cartActions";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
 import CartEmpty from "../../features/cart/CartEmpty";
-import { useUpdateCartItem, useRemoveFromCart } from "@ecommerce/shared";
 
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
 const updateCartItem: UpdateCartItemFn = (input) => updateCartItemFn({ data: input });
 const removeFromCart: RemoveFromCartFn = (input) => removeFromCartFn({ data: input });
-
-/** Formats an integer cent value to a dollar string. */
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
 
 /**
  * /cart — Full cart page (CSR only — no loader, per architecture.md#SSR strategy).
@@ -86,8 +87,8 @@ function CartPage() {
                       <div className="cart__item-info">
                         <p className="cart__item-name">{item.name ?? `SKU ${item.skuId}`}</p>
                         <p className="cart__item-price">
-                          {formatCents(item.unitPrice)} × {item.quantity} ={" "}
-                          <strong>{formatCents(item.unitPrice * item.quantity)}</strong>
+                          {formatPrice(item.unitPrice)} × {item.quantity} ={" "}
+                          <strong>{formatPrice(item.unitPrice * item.quantity)}</strong>
                         </p>
                       </div>
                       <div className="cart__item-controls">
@@ -123,17 +124,17 @@ function CartPage() {
                   <div className="cart__bag-pricing">
                     <div className="cart__bag-row cart__bag-row--subtotal">
                       <span>Subtotal</span>
-                      <span>{formatCents(bag.subtotal)}</span>
+                      <span>{formatPrice(bag.subtotal)}</span>
                     </div>
                     <div className="cart__bag-row">
                       <span>Est. Tax</span>
-                      <span>{formatCents(bag.tax)}</span>
+                      <span>{formatPrice(bag.tax)}</span>
                     </div>
                     <div className="cart__bag-row">
                       <span>Est. Shipping</span>
                       <span>
                         {bag.shippingTotal > 0
-                          ? formatCents(bag.shippingTotal)
+                          ? formatPrice(bag.shippingTotal)
                           : "Calculated at checkout"}
                       </span>
                     </div>
@@ -146,19 +147,19 @@ function CartPage() {
             <div className="cart__summary">
               <div className="cart__summary-row">
                 <span>Subtotal</span>
-                <span>{formatCents(subtotalAll)}</span>
+                <span>{formatPrice(subtotalAll)}</span>
               </div>
               <div className="cart__summary-row">
                 <span>Est. Tax</span>
-                <span>{formatCents(taxAll)}</span>
+                <span>{formatPrice(taxAll)}</span>
               </div>
               <div className="cart__summary-row">
                 <span>Est. Shipping</span>
-                <span>{shippingAll > 0 ? formatCents(shippingAll) : "Calculated at checkout"}</span>
+                <span>{shippingAll > 0 ? formatPrice(shippingAll) : "Calculated at checkout"}</span>
               </div>
               <div className="cart__summary-total">
                 <span>Total</span>
-                <span>{formatCents(cart.total)}</span>
+                <span>{formatPrice(cart.total)}</span>
               </div>
               <Link to="/checkout" className="cart__checkout-btn">
                 Proceed to Checkout

@@ -76,7 +76,11 @@ export interface Cart {
 export interface CartItem {
   id: string;
   skuId: string;
-  productId: string;
+  /**
+   * Optional because Violet doesn't return product_id in cart SKU responses.
+   * Only populated when stored from product detail page context.
+   */
+  productId?: string;
   quantity: number;
   /** Unit price in integer cents */
   unitPrice: number;

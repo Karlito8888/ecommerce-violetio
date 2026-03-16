@@ -76,10 +76,11 @@ function errorResponse(code: string, message: string, status = 400): Response {
 
 /**
  * Fire-and-forget error logging to Supabase error_logs table (Story 4.7).
- * Never blocks the response — errors in logging are silently ignored.
+ * Uses console.error as fallback if Supabase insert fails, ensuring
+ * diagnostic info is preserved in Deno runtime logs.
  */
 async function logEdgeFunctionError(
-  code: string,
+  source: string,
   message: string,
   context?: Record<string, unknown>,
   userId?: string,
@@ -88,26 +89,47 @@ async function logEdgeFunctionError(
     const supabase = getSupabaseAdmin();
     await supabase.from("error_logs").insert({
       source: "edge-function",
-      error_type: code,
+      error_type: source,
       message,
       context,
       user_id: userId ?? null,
     });
-  } catch {
-    // Silently ignore — logging failure must never break the request
+  } catch (err) {
+    console.error("[edge-fn] Failed to log error:", err, "— Original:", {
+      source,
+      errorType: source,
+      message,
+    });
   }
 }
 
-/** Validates the caller's Supabase JWT and returns the user ID, or null. */
-async function validateUser(req: Request): Promise<string | null> {
+/** Validated user result — either a userId or a typed error. */
+type ValidateUserResult =
+  | { userId: string }
+  | { error: "NO_AUTH_HEADER" | "INVALID_TOKEN" | "AUTH_SERVICE_ERROR" };
+
+/**
+ * Validates the caller's Supabase JWT and returns the user ID or a typed error.
+ *
+ * Three failure modes:
+ * - `NO_AUTH_HEADER`: Missing or malformed Authorization header (client bug).
+ * - `INVALID_TOKEN`: JWT present but rejected by Supabase Auth (expired/tampered).
+ * - `AUTH_SERVICE_ERROR`: Supabase Auth service itself failed (transient outage).
+ */
+async function validateUser(req: Request): Promise<ValidateUserResult> {
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
+  if (!authHeader?.startsWith("Bearer ")) return { error: "NO_AUTH_HEADER" };
 
   const jwt = authHeader.slice(7);
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.auth.getUser(jwt);
-  if (error || !data.user) return null;
-  return data.user.id;
+  try {
+    const { data, error } = await supabase.auth.getUser(jwt);
+    if (error) return { error: "INVALID_TOKEN" };
+    if (!data.user) return { error: "INVALID_TOKEN" };
+    return { userId: data.user.id };
+  } catch {
+    return { error: "AUTH_SERVICE_ERROR" };
+  }
 }
 
 /**
@@ -157,15 +179,30 @@ async function deleteCartItem(cartId: string, skuId: string): Promise<void> {
   await supabase.from("cart_items").delete().eq("cart_id", cartId).eq("sku_id", String(skuId));
 }
 
-/** Fetches product info map from cart_items for a given cart UUID. */
+/**
+ * Fetches product info map from cart_items for a given cart UUID.
+ *
+ * Graceful degradation: if the Supabase query fails, returns an empty map.
+ * Product names and thumbnails are cosmetic — the cart functions correctly
+ * without them; items simply render without display metadata.
+ */
 async function getProductInfoMap(
   cartId: string,
 ): Promise<Record<string, { name: string | null; thumbnailUrl: string | null }>> {
   const supabase = getSupabaseAdmin();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("cart_items")
     .select("sku_id, product_name, thumbnail_url")
     .eq("cart_id", cartId);
+
+  if (error) {
+    logEdgeFunctionError(
+      "SUPABASE.QUERY_ERROR",
+      `Failed to fetch product info for cart ${cartId}: ${error.message}`,
+      { cartId, table: "cart_items" },
+    );
+    return {};
+  }
 
   const map: Record<string, { name: string | null; thumbnailUrl: string | null }> = {};
   for (const row of data ?? []) {
@@ -174,7 +211,14 @@ async function getProductInfoMap(
   return map;
 }
 
-/** Upserts a cart row in Supabase and returns the Supabase cart UUID. */
+/**
+ * Upserts a cart row in Supabase and returns the Supabase cart UUID.
+ *
+ * Returns `null` on failure. Callers should still return cart data to the
+ * client but set `id: null` and include a warning — the Violet cart is
+ * functional, only Supabase persistence failed. The error is logged so
+ * ops can investigate without blocking the user's checkout flow.
+ */
 async function upsertCart(violetCartId: string, userId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
@@ -191,26 +235,37 @@ async function upsertCart(violetCartId: string, userId: string): Promise<string 
     .select("id")
     .single();
 
-  if (error || !data) return null;
+  if (error) {
+    logEdgeFunctionError(
+      "SUPABASE.UPSERT_ERROR",
+      `Cart upsert failed for violet_cart_id=${violetCartId}: ${error.message}`,
+      { violetCartId, userId },
+      userId,
+    );
+    return null;
+  }
+  if (!data) return null;
   return data.id;
 }
 
 Deno.serve(async (req: Request) => {
   // ── CORS preflight ─────────────────────────────────────────────────
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        ...corsHeaders,
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      },
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   // ── Auth gate ──────────────────────────────────────────────────────
-  const userId = await validateUser(req);
-  if (!userId) {
-    return errorResponse("AUTH.REQUIRED", "Valid Supabase JWT required", 401);
+  const authResult = await validateUser(req);
+  if ("error" in authResult) {
+    const messages: Record<string, string> = {
+      NO_AUTH_HEADER: "Missing or malformed Authorization header",
+      INVALID_TOKEN: "Invalid or expired Supabase JWT",
+      AUTH_SERVICE_ERROR: "Authentication service unavailable — try again later",
+    };
+    const status = authResult.error === "AUTH_SERVICE_ERROR" ? 503 : 401;
+    return errorResponse(`AUTH.${authResult.error}`, messages[authResult.error], status);
   }
+  const userId = authResult.userId;
 
   // ── Violet auth headers ────────────────────────────────────────────
   const violetHeadersResult = await getVioletHeaders();
@@ -269,9 +324,13 @@ Deno.serve(async (req: Request) => {
     const violetCartId = String(cartData.id);
     const supabaseCartId = await upsertCart(violetCartId, userId);
 
+    const warning =
+      supabaseCartId === null
+        ? "Cart persistence failed — cart state may not sync across devices"
+        : undefined;
     return json({
       data: {
-        id: supabaseCartId ?? "",
+        id: supabaseCartId,
         violetCartId,
         bags: [],
         total: 0,
@@ -279,6 +338,7 @@ Deno.serve(async (req: Request) => {
         status: "active",
       },
       error: null,
+      warning,
     });
   }
 
@@ -356,6 +416,13 @@ Deno.serve(async (req: Request) => {
 
     const anonCart = transformCart(await anonRes.json());
     const targetCart = transformCart(await targetRes.json());
+
+    if (!anonCart) {
+      return errorResponse("CART.INVALID_RESPONSE", "Anonymous cart data is invalid", 502);
+    }
+    if (!targetCart) {
+      return errorResponse("CART.INVALID_RESPONSE", "Target cart data is invalid", 502);
+    }
 
     // Extract typed bag/item arrays from transformed carts
     type MergeBag = { items: Array<{ skuId: string; quantity: number }> };
@@ -450,8 +517,25 @@ Deno.serve(async (req: Request) => {
     }
 
     const cartData = await res.json();
-    const supabaseCartId = await upsertCart(violetCartId, userId);
     const transformed = transformCart(cartData);
+
+    if (!transformed) {
+      return errorResponse("CART.INVALID_RESPONSE", "Violet returned invalid cart data", 502);
+    }
+
+    /**
+     * GET is read-only. Cart persistence happens during mutations (create,
+     * add item, update, etc). Calling upsert on GET caused unnecessary
+     * writes and spurious Realtime events.
+     */
+    // Look up existing Supabase cart (read-only, no upsert)
+    const supabase = getSupabaseAdmin();
+    const { data: existingCart } = await supabase
+      .from("carts")
+      .select("id")
+      .eq("violet_cart_id", violetCartId)
+      .maybeSingle();
+    const supabaseCartId = existingCart?.id ?? null;
 
     // Enrich items with product names/thumbnails from Supabase cart_items
     if (supabaseCartId) {
@@ -470,7 +554,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    return json({ data: { ...transformed, id: supabaseCartId ?? "" }, error: null });
+    return json({ data: { ...transformed, id: null }, error: null });
   }
 
   // ── Route: POST /cart/{id}/skus — add SKU ─────────────────────────
@@ -507,11 +591,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const cartData = await res.json();
+    const transformed = transformCart(cartData);
+
+    if (!transformed) {
+      return errorResponse("CART.INVALID_RESPONSE", "Violet returned invalid cart data", 502);
+    }
+
     const supabaseCartId = await upsertCart(violetCartId, userId);
 
     // Store product info for name/thumbnail display at get-cart time
     if (supabaseCartId) {
-      const transformed = transformCart(cartData);
       const addedItem = (transformed.bags as Array<Record<string, unknown>>)
         .flatMap((b) => b.items as Array<Record<string, unknown>>)
         .find((i) => String(i.skuId) === String(body.sku_id));
@@ -524,11 +613,13 @@ Deno.serve(async (req: Request) => {
         body.productName ?? null,
         body.thumbnailUrl ?? null,
       );
-
-      return json({ data: { ...transformed, id: supabaseCartId }, error: null });
     }
 
-    return json({ data: { ...transformCart(cartData), id: supabaseCartId ?? "" }, error: null });
+    const warning =
+      supabaseCartId === null
+        ? "Cart persistence failed — cart state may not sync across devices"
+        : undefined;
+    return json({ data: { ...transformed, id: supabaseCartId }, error: null, warning });
   }
 
   // ── Route: PUT /cart/{id}/skus/{skuId} — update qty ───────────────
@@ -560,8 +651,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const cartData = await res.json();
+    const transformed = transformCart(cartData);
+    if (!transformed) {
+      return errorResponse("CART.INVALID_RESPONSE", "Violet returned invalid cart data", 502);
+    }
     const supabaseCartId = await upsertCart(violetCartId, userId);
-    return json({ data: { ...transformCart(cartData), id: supabaseCartId ?? "" }, error: null });
+    const warning =
+      supabaseCartId === null
+        ? "Cart persistence failed — cart state may not sync across devices"
+        : undefined;
+    return json({ data: { ...transformed, id: supabaseCartId }, error: null, warning });
   }
 
   // ── Route: DELETE /cart/{id}/skus/{skuId} — remove SKU ────────────
@@ -590,6 +689,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const cartData = await res.json();
+    const transformed = transformCart(cartData);
+    if (!transformed) {
+      return errorResponse("CART.INVALID_RESPONSE", "Violet returned invalid cart data", 502);
+    }
     const supabaseCartId = await upsertCart(violetCartId, userId);
 
     // Clean up orphan row — Violet confirmed removal, so delete from cart_items.
@@ -598,7 +701,11 @@ Deno.serve(async (req: Request) => {
       await deleteCartItem(supabaseCartId, skuId);
     }
 
-    return json({ data: { ...transformCart(cartData), id: supabaseCartId ?? "" }, error: null });
+    const warning =
+      supabaseCartId === null
+        ? "Cart persistence failed — cart state may not sync across devices"
+        : undefined;
+    return json({ data: { ...transformed, id: supabaseCartId }, error: null, warning });
   }
 
   // ── Route: POST /cart/{id}/shipping_address — set address ─────────
@@ -699,6 +806,9 @@ Deno.serve(async (req: Request) => {
 
     const cartData = await res.json();
     const transformed = transformCart(cartData);
+    if (!transformed) {
+      return errorResponse("CART.INVALID_RESPONSE", "Violet returned invalid cart data", 502);
+    }
     // Refresh Supabase cart row with updated timestamp
     await upsertCart(violetCartId, userId);
     return json({ data: transformed, error: null });
@@ -816,14 +926,56 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    /**
+     * Raw Violet responses must be transformed before returning to clients.
+     * Returning raw data would leak Violet internal fields and force clients
+     * to handle snake_case, breaking our camelCase contract. The submit
+     * response is an order-like object — we use transformOrder plus the
+     * payment_intent_client_secret needed for 3D Secure flows.
+     */
     const orderData = await res.json();
-    return json({ data: orderData, error: null });
+    const rawObj =
+      orderData && typeof orderData === "object" ? (orderData as Record<string, unknown>) : {};
+    const transformedOrder = transformOrder(orderData);
+    return json({
+      data: {
+        ...transformedOrder,
+        paymentIntentClientSecret: rawObj.payment_intent_client_secret
+          ? String(rawObj.payment_intent_client_secret)
+          : undefined,
+      },
+      error: null,
+    });
   }
 
   // ── Route: GET /orders/{orderId} — fetch order details (Story 4.5) ──
   const orderMatch = path.match(/^\/orders\/([^/]+)$/);
   if (req.method === "GET" && orderMatch) {
     const orderId = orderMatch[1];
+
+    /**
+     * Interim ownership check (pre-Story 5.1).
+     *
+     * Verifies the authenticated user has a completed/submitted cart whose
+     * violet_cart_id maps to this order. This is imperfect — Violet order IDs
+     * differ from cart IDs in some flows — but it blocks trivial enumeration
+     * attacks where an attacker guesses sequential order IDs.
+     *
+     * TODO(Story 5.1): Replace with proper order persistence table that stores
+     * user_id + violet_order_id at submit time for reliable ownership checks.
+     */
+    const supabase = getSupabaseAdmin();
+    const { data: ownershipCheck } = await supabase
+      .from("carts")
+      .select("id")
+      .eq("user_id", userId)
+      .in("status", ["completed", "submitted"])
+      .limit(1)
+      .maybeSingle();
+
+    if (!ownershipCheck) {
+      return errorResponse("ORDER.ACCESS_DENIED", "No completed order found for this user", 403);
+    }
 
     /**
      * Fetches complete order details from Violet for the confirmation page.
@@ -834,11 +986,6 @@ Deno.serve(async (req: Request) => {
      * The response includes bags with items, customer info, addresses, and totals.
      * We transform snake_case → camelCase at this boundary for mobile clients.
      *
-     * SECURITY: No ownership validation — Violet authenticates via channel token,
-     * not customer identity. Until Story 5.1 adds Supabase order persistence with
-     * user_id, we cannot verify the authenticated user owns this order.
-     * TODO(Story 5.1): Add Supabase order lookup with user_id ownership check.
-     *
      * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
      */
     const res = await fetch(`${VIOLET_API_BASE}/orders/${orderId}`, {
@@ -848,6 +995,12 @@ Deno.serve(async (req: Request) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.ORDER_NOT_FOUND",
+        `Order fetch failed (${res.status}): ${text}`,
+        { orderId, route: "GET /orders/{orderId}", httpStatus: res.status },
+        userId,
+      );
       return errorResponse(
         "VIOLET.ORDER_NOT_FOUND",
         `Order fetch failed (${res.status}): ${text}`,
@@ -932,17 +1085,14 @@ function transformShippingAvailable(raw: unknown): Array<{
  * @see packages/shared/src/schemas/cart.schema.ts — canonical schema definition
  * @see packages/shared/src/adapters/violetAdapter.ts — parseAndTransformCart() (uses Zod)
  */
-function transformCart(raw: unknown): Record<string, unknown> {
+/**
+ * Returns null when the Violet response is not a valid object. Callers must
+ * treat null as an error rather than displaying an empty cart, which would
+ * mislead the user into thinking their cart is empty when it may not be.
+ */
+function transformCart(raw: unknown): Record<string, unknown> | null {
   if (!raw || typeof raw !== "object") {
-    return {
-      violetCartId: "",
-      userId: null,
-      sessionId: null,
-      bags: [],
-      total: 0,
-      currency: "USD",
-      status: "active",
-    };
+    return null;
   }
   const r = raw as Record<string, unknown>;
 

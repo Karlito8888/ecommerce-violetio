@@ -82,8 +82,10 @@ export interface OrderSubmitResult {
   /** Per-merchant bag statuses after submission */
   bags: Array<{
     id: string;
-    status: string;
-    financialStatus: string;
+    /** Bag fulfillment status — uses BagStatus state machine, not OrderStatus */
+    status: BagStatus;
+    /** Bag financial/payment status — tracks payment capture and refund state */
+    financialStatus: BagFinancialStatus;
     /** Bag total in integer cents */
     total: number;
   }>;
@@ -113,12 +115,33 @@ export type BagStatus =
   | "CANCELED"
   | "REJECTED";
 
-/** A completed or in-progress order. */
+/**
+ * Financial status of a merchant bag — tracks payment state independently from fulfillment.
+ *
+ * - `UNPAID`: payment not yet captured (pre-submission or pending)
+ * - `PAID`: payment successfully captured by merchant
+ * - `PARTIALLY_REFUNDED`: some items returned and partially refunded
+ * - `REFUNDED`: all items returned and fully refunded (terminal)
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag
+ */
+export type BagFinancialStatus = "UNPAID" | "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED";
+
+/**
+ * A completed or in-progress order.
+ *
+ * Orders and bags have different state machines:
+ * - `OrderStatus` tracks the overall order lifecycle (IN_PROGRESS → COMPLETED / REJECTED)
+ * - `BagStatus` tracks per-merchant bag fulfillment (SUBMITTED → ACCEPTED → COMPLETED / REFUNDED)
+ *
+ * An order can be COMPLETED while individual bags are still in ACCEPTED state
+ * (awaiting shipment), so these must remain separate union types.
+ */
 export interface Order {
   id: string;
   cartId: string;
   userId: string;
-  status: BagStatus;
+  status: OrderStatus;
   /** Total in integer cents */
   total: number;
   currency: string;
@@ -169,10 +192,10 @@ export interface OrderBagItem {
 export interface OrderBag {
   id: string;
   merchantName: string;
-  /** Bag-level status: ACCEPTED, COMPLETED, REJECTED, CANCELED, etc. */
-  status: string;
-  /** Financial status: PAID, REFUNDED, PARTIALLY_REFUNDED, etc. */
-  financialStatus: string;
+  /** Bag-level fulfillment status — uses the BagStatus state machine */
+  status: BagStatus;
+  /** Financial/payment status — tracks payment capture and refund state */
+  financialStatus: BagFinancialStatus;
   items: OrderBagItem[];
   /** Subtotal in integer cents (sum of all item line prices) */
   subtotal: number;

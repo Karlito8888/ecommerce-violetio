@@ -6,15 +6,12 @@ import {
   useUpdateCartItem,
   useRemoveFromCart,
   getCartItemCount,
+  // Using shared formatPrice to avoid duplication — see packages/shared/src/utils/formatPrice.ts
+  formatPrice,
 } from "@ecommerce/shared";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
 import CartBag from "./CartBag";
 import CartEmpty from "./CartEmpty";
-
-/** Formats an integer cent value to a dollar string. */
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
 
 interface CartDrawerProps {
   fetchCartFn: CartFetchFn;
@@ -162,7 +159,7 @@ export default function CartDrawer({
         <div className="cart-drawer__body">
           {/* aria-live region for price updates */}
           <div aria-live="polite" className="cart-drawer__price-live">
-            {cart ? `Total: ${formatCents(cart.total)}` : ""}
+            {cart ? `Total: ${formatPrice(cart.total)}` : ""}
           </div>
 
           {!cart || cart.bags.length === 0 ? (
@@ -186,7 +183,7 @@ export default function CartDrawer({
             <div className="cart-drawer__summary">
               <div className="cart-drawer__total">
                 <span>Total</span>
-                <span>{formatCents(cart.total)}</span>
+                <span>{formatPrice(cart.total)}</span>
               </div>
             </div>
 
@@ -194,8 +191,7 @@ export default function CartDrawer({
               <Link
                 to="/checkout"
                 onClick={closeDrawer}
-                className="cart-drawer__checkout-btn"
-                style={{ display: "block", textAlign: "center", textDecoration: "none" }}
+                className="cart-drawer__checkout-btn cart-drawer__checkout-btn--link"
               >
                 Proceed to Checkout
               </Link>

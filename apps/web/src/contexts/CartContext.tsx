@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCartSync } from "@ecommerce/shared";
@@ -47,6 +55,12 @@ interface CartContextValue {
   isDrawerOpen: boolean;
   /** Cart health for recovery logic (Story 4.7) */
   cartHealth: CartHealthStatus;
+  /**
+   * Merge failure state is exposed to consumers so the UI can show a notification
+   * when anonymous cart items fail to merge during login. Without this, users
+   * lose cart items silently.
+   */
+  mergeError: string | null;
   openDrawer: () => void;
   closeDrawer: () => void;
   setCart: (cartId: string, violetCartId: string) => void;
@@ -55,6 +69,8 @@ interface CartContextValue {
   setCartHealth: (status: CartHealthStatus) => void;
   /** Clear cart and cookie, guide user to start fresh (Story 4.7) */
   resetCart: () => void;
+  /** Clear the merge error notification */
+  clearMergeError: () => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -100,20 +116,27 @@ export function CartProvider({
   const [violetCartId, setVioletCartId] = useState<string | null>(initialVioletCartId);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [cartHealth, setCartHealth] = useState<CartHealthStatus>("healthy");
+  const [mergeError, setMergeError] = useState<string | null>(null);
 
-  const openDrawer = () => setIsDrawerOpen(true);
-  const closeDrawer = () => setIsDrawerOpen(false);
+  /**
+   * Provider value is memoized to prevent unnecessary re-renders of all cart consumers.
+   * Callback references are stabilized with useCallback.
+   */
+  const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
+  const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
 
-  const setCart = (newCartId: string, newVioletCartId: string) => {
+  const setCart = useCallback((newCartId: string, newVioletCartId: string) => {
     setCartId(newCartId);
     setVioletCartId(newVioletCartId);
     setCartHealth("healthy");
-  };
+  }, []);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCartId(null);
     setVioletCartId(null);
-  };
+  }, []);
+
+  const clearMergeError = useCallback(() => setMergeError(null), []);
 
   /** Clear cart + cookie and reset health — for expired/invalid cart recovery (Story 4.7) */
   const resetCart = useCallback(async () => {
@@ -202,28 +225,45 @@ export function CartProvider({
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[cart-sync] merge/claim failed:", err);
+        setMergeError(
+          "Some items from your previous session could not be added to your cart. Please re-add them manually.",
+        );
       } finally {
         mergeInProgressRef.current = false;
       }
     })();
   }, [userId, violetCartId]);
 
-  return (
-    <CartContext.Provider
-      value={{
-        cartId,
-        violetCartId,
-        isDrawerOpen,
-        cartHealth,
-        openDrawer,
-        closeDrawer,
-        setCart,
-        clearCart,
-        setCartHealth,
-        resetCart,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+  const value = useMemo(
+    () => ({
+      cartId,
+      violetCartId,
+      isDrawerOpen,
+      cartHealth,
+      mergeError,
+      openDrawer,
+      closeDrawer,
+      setCart,
+      clearCart,
+      setCartHealth,
+      resetCart,
+      clearMergeError,
+    }),
+    [
+      cartId,
+      violetCartId,
+      isDrawerOpen,
+      cartHealth,
+      mergeError,
+      openDrawer,
+      closeDrawer,
+      setCart,
+      clearCart,
+      setCartHealth,
+      resetCart,
+      clearMergeError,
+    ],
   );
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

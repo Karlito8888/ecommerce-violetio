@@ -1,4 +1,6 @@
 import { useState } from "react";
+// Using shared formatPrice to avoid duplication — see packages/shared/src/utils/formatPrice.ts
+import { formatPrice } from "@ecommerce/shared";
 import type { CartItem as CartItemType } from "@ecommerce/shared";
 
 interface CartItemProps {
@@ -6,11 +8,6 @@ interface CartItemProps {
   onUpdateQty: (skuId: string, quantity: number) => void;
   onRemove: (skuId: string) => void;
   isUpdating?: boolean;
-}
-
-/** Formats an integer cent value to a dollar string. */
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
 }
 
 /**
@@ -46,8 +43,8 @@ export default function CartItem({ item, onUpdateQty, onRemove, isUpdating }: Ca
       <div className="cart-drawer__item-info">
         <p className="cart-drawer__item-name">{item.name ?? `SKU ${item.skuId}`}</p>
         <p className="cart-drawer__item-price">
-          {formatCents(item.unitPrice)} × {item.quantity} ={" "}
-          <strong>{formatCents(lineTotal)}</strong>
+          {formatPrice(item.unitPrice)} × {item.quantity} ={" "}
+          <strong>{formatPrice(lineTotal)}</strong>
         </p>
       </div>
 

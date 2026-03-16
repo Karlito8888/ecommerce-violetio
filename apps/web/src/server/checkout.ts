@@ -9,11 +9,14 @@
  *
  * ## Sequence (enforced by UI, not here)
  * 1. `setShippingAddressFn` — set address first (required by Violet before step 2)
- * 2. `getAvailableShippingMethodsFn` — fetch carrier rates (slow: 2–5s)
- * 3. `setShippingMethodsFn` — apply selections → returns priced cart
+ * 2. `getAvailableShippingMethodsFn` — fetch carrier rates (slow: 2-5s)
+ * 3. `setShippingMethodsFn` — apply selections -> returns priced cart
  *
  * All functions read `violet_cart_id` from the HttpOnly cookie set at cart creation.
  * The `{ data, error }` pattern is used throughout for consistent error handling.
+ *
+ * All checkout server functions log errors to error_logs for operational visibility.
+ * This ensures complete checkout failure traceability.
  *
  * @see apps/web/src/server/cartActions.ts — same pattern (security boundary + cookie read)
  * @see packages/shared/src/adapters/violetAdapter.ts — shipping methods implementation
@@ -24,6 +27,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
+import { z } from "zod";
 import type {
   ApiResponse,
   Cart,
@@ -31,30 +35,46 @@ import type {
   PaymentIntent,
   OrderDetail,
   OrderSubmitResult,
-  ShippingAddressInput,
   ShippingMethodsAvailable,
   SetShippingMethodInput,
 } from "@ecommerce/shared";
-import { logError } from "@ecommerce/shared";
+import { logError, shippingAddressInputSchema, customerInputSchema } from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
 
 /**
  * Sets the shipping address for the active cart.
  *
+ * All checkout server functions log errors to error_logs for operational visibility.
+ * This ensures complete checkout failure traceability.
+ *
  * ## Flow
  * 1. Read `violet_cart_id` from HttpOnly cookie
- * 2. Map `ShippingAddressInput` (camelCase) → Violet snake_case body (done in VioletAdapter)
+ * 2. Map `ShippingAddressInput` (camelCase) -> Violet snake_case body (done in VioletAdapter)
  * 3. POST to `/checkout/cart/{id}/shipping_address`
  * 4. Return `{ data: null, error: null }` on success
  *
  * Call this BEFORE `getAvailableShippingMethodsFn` — Violet requires a shipping
  * address before it can query carrier APIs for rates.
  *
+ * Runtime input validation prevents malformed client data from reaching
+ * Violet/Supabase. TanStack Start server functions are callable from the
+ * client — input must be treated as untrusted.
+ *
  * @returns `ApiResponse<void>` — success has `data: null, error: null`
  */
 export const setShippingAddressFn = createServerFn({ method: "POST" })
-  .inputValidator((data: ShippingAddressInput) => data)
+  .inputValidator((input: unknown) => {
+    /**
+     * Runtime input validation prevents malformed client data from reaching
+     * Violet/Supabase. TanStack Start server functions are callable from the
+     * client — input must be treated as untrusted.
+     */
+    const schema = shippingAddressInputSchema.extend({
+      phone: z.string().optional(),
+    });
+    return schema.parse(input);
+  })
   .handler(async ({ data: address }): Promise<ApiResponse<void>> => {
     const violetCartId = getCookie("violet_cart_id");
     if (!violetCartId) {
@@ -63,6 +83,10 @@ export const setShippingAddressFn = createServerFn({ method: "POST" })
     const adapter = getAdapter();
     const result = await adapter.setShippingAddress(violetCartId, address);
 
+    /**
+     * All checkout server functions log errors to error_logs for operational visibility.
+     * This ensures complete checkout failure traceability.
+     */
     if (result.error) {
       logError(getSupabaseServer(), {
         source: "web",
@@ -78,8 +102,11 @@ export const setShippingAddressFn = createServerFn({ method: "POST" })
 /**
  * Fetches available shipping methods for all merchant bags in the active cart.
  *
+ * All checkout server functions log errors to error_logs for operational visibility.
+ * This ensures complete checkout failure traceability.
+ *
  * ## Performance note
- * This call is intentionally slow (2–5 seconds) — Violet queries third-party
+ * This call is intentionally slow (2-5 seconds) — Violet queries third-party
  * carrier APIs in real-time. The UI must show a per-bag skeleton loader.
  *
  * ## Prerequisite
@@ -95,12 +122,30 @@ export const getAvailableShippingMethodsFn = createServerFn({ method: "GET" }).h
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    return adapter.getAvailableShippingMethods(violetCartId);
+    const result = await adapter.getAvailableShippingMethods(violetCartId);
+
+    /**
+     * All checkout server functions log errors to error_logs for operational visibility.
+     * This ensures complete checkout failure traceability.
+     */
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "CHECKOUT.SHIPPING_METHODS_FAILED",
+        message: result.error.message,
+        context: { violetCartId, step: "getAvailableShippingMethods" },
+      });
+    }
+
+    return result;
   },
 );
 
 /**
  * Applies shipping method selections for all bags and returns the "priced cart".
+ *
+ * All checkout server functions log errors to error_logs for operational visibility.
+ * This ensures complete checkout failure traceability.
  *
  * ## Why this returns `ApiResponse<Cart>`
  * Violet's POST /shipping response is the full cart with updated `shipping_total`
@@ -120,7 +165,22 @@ export const setShippingMethodsFn = createServerFn({ method: "POST" })
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    return adapter.setShippingMethods(violetCartId, data.selections);
+    const result = await adapter.setShippingMethods(violetCartId, data.selections);
+
+    /**
+     * All checkout server functions log errors to error_logs for operational visibility.
+     * This ensures complete checkout failure traceability.
+     */
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "CHECKOUT.SET_SHIPPING_METHODS_FAILED",
+        message: result.error.message,
+        context: { violetCartId, step: "setShippingMethods" },
+      });
+    }
+
+    return result;
   });
 
 // ─── Story 4.4: Customer, Billing, Payment, Submit ──────────────────────
@@ -128,29 +188,64 @@ export const setShippingMethodsFn = createServerFn({ method: "POST" })
 /**
  * Sets guest customer info on the active cart.
  *
+ * All checkout server functions log errors to error_logs for operational visibility.
+ * This ensures complete checkout failure traceability.
+ *
  * ## Flow
  * Called after shipping confirmation, before billing/payment.
- * Maps `CustomerInput` (camelCase) → Violet snake_case body.
+ * Maps `CustomerInput` (camelCase) -> Violet snake_case body.
  *
  * ## Marketing consent (FR20)
  * When `marketingConsent` is true, includes `communication_preferences`
  * in the Violet payload. Unchecked by default per UX spec.
  *
+ * Runtime input validation prevents malformed client data from reaching
+ * Violet/Supabase. TanStack Start server functions are callable from the
+ * client — input must be treated as untrusted.
+ *
  * @see https://docs.violet.io/api-reference/checkout-cart/apply-guest-customer-to-cart
  */
 export const setCustomerFn = createServerFn({ method: "POST" })
-  .inputValidator((data: CustomerInput) => data)
+  .inputValidator((input: unknown) => {
+    /**
+     * Runtime input validation prevents malformed client data from reaching
+     * Violet/Supabase. TanStack Start server functions are callable from the
+     * client — input must be treated as untrusted.
+     */
+    const schema = customerInputSchema.extend({
+      marketingConsent: z.boolean().optional(),
+    });
+    return schema.parse(input) as CustomerInput;
+  })
   .handler(async ({ data }): Promise<ApiResponse<void>> => {
     const violetCartId = getCookie("violet_cart_id");
     if (!violetCartId) {
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    return adapter.setCustomer(violetCartId, data);
+    const result = await adapter.setCustomer(violetCartId, data);
+
+    /**
+     * All checkout server functions log errors to error_logs for operational visibility.
+     * This ensures complete checkout failure traceability.
+     */
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "CHECKOUT.SET_CUSTOMER_FAILED",
+        message: result.error.message,
+        context: { violetCartId, step: "setCustomer" },
+      });
+    }
+
+    return result;
   });
 
 /**
  * Sets a billing address different from shipping on the active cart.
+ *
+ * All checkout server functions log errors to error_logs for operational visibility.
+ * This ensures complete checkout failure traceability.
  *
  * Only called when the user unchecks "Same as shipping address".
  * If billing matches shipping, this call is skipped entirely.
@@ -164,14 +259,39 @@ export const setCustomerFn = createServerFn({ method: "POST" })
  * @see https://docs.violet.io/api-reference/checkout-cart/set-billing-address
  */
 export const setBillingAddressFn = createServerFn({ method: "POST" })
-  .inputValidator((data: ShippingAddressInput) => data)
+  .inputValidator((input: unknown) => {
+    /**
+     * Runtime input validation prevents malformed client data from reaching
+     * Violet/Supabase. TanStack Start server functions are callable from the
+     * client — input must be treated as untrusted.
+     */
+    const schema = shippingAddressInputSchema.extend({
+      phone: z.string().optional(),
+    });
+    return schema.parse(input);
+  })
   .handler(async ({ data }): Promise<ApiResponse<void>> => {
     const violetCartId = getCookie("violet_cart_id");
     if (!violetCartId) {
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    return adapter.setBillingAddress(violetCartId, data);
+    const result = await adapter.setBillingAddress(violetCartId, data);
+
+    /**
+     * All checkout server functions log errors to error_logs for operational visibility.
+     * This ensures complete checkout failure traceability.
+     */
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "CHECKOUT.SET_BILLING_ADDRESS_FAILED",
+        message: result.error.message,
+        context: { violetCartId, step: "setBillingAddress" },
+      });
+    }
+
+    return result;
   });
 
 /**
@@ -214,6 +334,9 @@ export const getPaymentIntentFn = createServerFn({ method: "GET" }).handler(
 /**
  * Submits the order to Violet after Stripe payment authorization.
  *
+ * All checkout server functions log errors to error_logs for operational visibility.
+ * This ensures complete checkout failure traceability.
+ *
  * ## Complete checkout flow
  * 1. Client: `stripe.confirmPayment()` — authorizes card (does NOT charge)
  * 2. This function: POST /checkout/cart/{id}/submit — Violet charges the card
@@ -224,10 +347,30 @@ export const getPaymentIntentFn = createServerFn({ method: "GET" }).handler(
  * The card is charged ONLY after a successful `/submit`. If submit fails,
  * the authorization falls off within a few business days — the user is NOT charged.
  *
+ * Runtime input validation prevents malformed client data from reaching
+ * Violet/Supabase. TanStack Start server functions are callable from the
+ * client — input must be treated as untrusted.
+ *
  * @see https://docs.violet.io/api-reference/checkout-cart/submit-cart
  */
 export const submitOrderFn = createServerFn({ method: "POST" })
-  .inputValidator((data: { appOrderId: string }) => data)
+  .inputValidator((input: unknown) => {
+    /**
+     * Runtime input validation prevents malformed client data from reaching
+     * Violet/Supabase. TanStack Start server functions are callable from the
+     * client — input must be treated as untrusted.
+     */
+    const schema = z.object({
+      appOrderId: z
+        .string()
+        .min(1, "App order ID is required")
+        .regex(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+          "App order ID must be a valid UUID",
+        ),
+    });
+    return schema.parse(input);
+  })
   .handler(async ({ data }): Promise<ApiResponse<OrderSubmitResult>> => {
     const violetCartId = getCookie("violet_cart_id");
     if (!violetCartId) {
@@ -294,6 +437,14 @@ export const getOrderDetailsFn = createServerFn({ method: "GET" })
  * server-side. This Server Function bridges the gap: the client sends error data,
  * and we persist it using the service-role client.
  *
+ * ## Input sanitization
+ * Client-submitted error data is sanitized to prevent log injection and storage
+ * abuse. Lengths are capped to reasonable maximums while preserving diagnostic value.
+ * - `error_type`: max 100 chars (prevents category namespace abuse)
+ * - `message`: max 2000 chars (reasonable for a human-readable error message)
+ * - `stack_trace`: max 5000 chars (full stack with source maps)
+ * - `context`: max 10KB serialized (prevents oversized payloads)
+ *
  * ## Fire-and-forget on both sides
  * - Server: `logError()` catches its own errors (console.error fallback)
  * - Client: the caller should NOT await this — UI must never block on logging
@@ -311,12 +462,24 @@ export const logClientErrorFn = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
+    /**
+     * Client-submitted error data is sanitized to prevent log injection and storage
+     * abuse. Lengths are capped to reasonable maximums while preserving diagnostic value.
+     */
+    const sanitizedErrorType = data.error_type.slice(0, 100);
+    const sanitizedMessage = data.message.slice(0, 2000);
+    const sanitizedStackTrace = data.stack_trace?.slice(0, 5000);
+    const sanitizedContext =
+      data.context && JSON.stringify(data.context).length > 10000
+        ? { truncated: true }
+        : data.context;
+
     logError(getSupabaseServer(), {
       source: "web",
-      error_type: data.error_type,
-      message: data.message,
-      stack_trace: data.stack_trace,
-      context: data.context,
+      error_type: sanitizedErrorType,
+      message: sanitizedMessage,
+      stack_trace: sanitizedStackTrace,
+      context: sanitizedContext,
     });
     return { data: null, error: null };
   });
@@ -329,10 +492,18 @@ export const logClientErrorFn = createServerFn({ method: "POST" })
  *
  * Uses `maxAge: 0` to immediately expire the cookie (no `deleteCookie` in
  * TanStack Start — `setCookie` with zero max-age is the standard approach).
+ *
+ * HttpOnly cookie with Secure flag in production prevents transmission over
+ * plain HTTP. SameSite=lax prevents CSRF while allowing top-level navigations.
  */
 export const clearCartCookieFn = createServerFn({ method: "POST" }).handler(async () => {
+  /**
+   * HttpOnly cookie with Secure flag in production prevents transmission over
+   * plain HTTP. SameSite=lax prevents CSRF while allowing top-level navigations.
+   */
   setCookie("violet_cart_id", "", {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 0,

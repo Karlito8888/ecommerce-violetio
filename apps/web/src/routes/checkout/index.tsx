@@ -218,6 +218,22 @@ function PaymentForm({
     }
 
     /**
+     * Step 0: Trigger Stripe Elements form validation and collect wallet payment methods.
+     *
+     * Per Stripe docs, elements.submit() must be called before confirmPayment() to
+     * trigger form validation and collect wallet payment methods (Apple Pay, Google Pay).
+     * Skipping this step can cause validation errors to be missed.
+     *
+     * @see https://docs.stripe.com/js/payment_intents/confirm_payment
+     */
+    const { error: submitError } = await elements.submit();
+    if (submitError) {
+      setSubmitError(submitError.message ?? "Please check your payment details and try again.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    /**
      * Step 1: Confirm payment client-side.
      *
      * `redirect: "if_required"` prevents Stripe from redirecting for standard
@@ -262,11 +278,23 @@ function PaymentForm({
         result.error.code === "VIOLET.API_ERROR" ||
         result.error.message.toLowerCase().includes("timeout")
       ) {
+        /**
+         * Lost confirmation polling — check if the order completed despite the error.
+         *
+         * cartCheck.data.id is the Supabase UUID (cart row ID), NOT the Violet order ID.
+         * The onSuccess handler expects a Violet order ID for the confirmation page
+         * navigation. Since the cart response does not contain the Violet order ID,
+         * we navigate the user to home with a success message instead of attempting
+         * to build a confirmation URL with the wrong ID type.
+         */
         for (let i = 0; i < 5; i++) {
           await new Promise((resolve) => setTimeout(resolve, 2000));
           const cartCheck = await getCartFn({ data: violetCartId });
           if (cartCheck.data?.status === "completed") {
-            onSuccess(cartCheck.data.id);
+            await clearCartCookieFn();
+            setSubmitError(null);
+            setIsSubmitting(false);
+            onSuccess("");
             return;
           }
         }
@@ -466,7 +494,8 @@ function CheckoutPage() {
   const [isRetrying, setIsRetrying] = useState(false);
 
   /**
-   * Wraps a Server Function call with timeout detection and retry prompt wiring.
+   * Timeout retry with built-in max retry limit prevents unbounded recursion.
+   * The retry count is tracked internally rather than relying solely on UI-level checks.
    *
    * ## Why this exists (Code Review Fix — H2)
    * The original implementation created the RetryPrompt component and state but never
@@ -476,11 +505,14 @@ function CheckoutPage() {
    * 2. On timeout: shows the RetryPrompt overlay (user-initiated retry, NOT automatic)
    * 3. Preserves all form state (the caller's local state is untouched)
    * 4. Returns the server result on success, or null on timeout (caller checks retryState)
+   * 5. Stops recursing after `maxRetries` attempts to prevent unbounded retry loops
    *
    * @param operationName - Human-readable label for the retry prompt (e.g., "saving your address")
    * @param serverCall - The Server Function call (async)
    * @param onCancel - Called when user cancels from retry prompt (e.g., go back to previous step)
    * @param timeoutMs - Timeout in milliseconds (default 30000)
+   * @param maxRetries - Maximum number of retry attempts before giving up (default 3)
+   * @param _currentAttempt - Internal counter, do not pass manually
    * @returns The server result, or `null` if timed out (retry prompt is now showing)
    */
   const withTimeoutRetry = useCallback(
@@ -489,6 +521,8 @@ function CheckoutPage() {
       serverCall: () => Promise<T>,
       onCancel: () => void,
       timeoutMs = 30000,
+      maxRetries = 3,
+      _currentAttempt = 0,
     ): Promise<T | null> => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -505,6 +539,20 @@ function CheckoutPage() {
       } catch (err) {
         clearTimeout(timeout);
         if (err instanceof Error && err.message === "TIMEOUT") {
+          const nextAttempt = _currentAttempt + 1;
+
+          if (nextAttempt >= maxRetries) {
+            setRetryState({
+              show: false,
+              operationName: "",
+              retryCount: nextAttempt,
+              retryFn: null,
+              cancelFn: null,
+            });
+            onCancel();
+            return null;
+          }
+
           setRetryState((prev) => ({
             show: true,
             operationName,
@@ -515,6 +563,8 @@ function CheckoutPage() {
                 serverCall,
                 onCancel,
                 timeoutMs,
+                maxRetries,
+                nextAttempt,
               );
               if (retryResult !== null) {
                 setRetryState((p) => ({ ...p, show: false }));
@@ -548,11 +598,29 @@ function CheckoutPage() {
     navigate({ to: "/" });
   }, [resetCart, navigate]);
 
-  // ── Story 4.7: Item action handlers for error components ────────────
+  /**
+   * Item action handlers for error components (Story 4.7).
+   *
+   * Server errors must be checked even with optimistic updates because the server
+   * mutation may fail (e.g., item out of stock, cart expired) while the optimistic
+   * UI shows success. Without checking, the user sees a stale UI that diverges from
+   * the actual cart state on the server.
+   */
   const handleRemoveItem = useCallback(
     async (skuId: string) => {
       if (!violetCartId) return;
-      await removeFromCartFn({ data: { violetCartId, skuId } });
+      const result = await removeFromCartFn({ data: { violetCartId, skuId } });
+      if (result.error) {
+        setCheckoutErrors((prev) => [
+          ...prev,
+          {
+            code: result.error!.code,
+            message: result.error!.message,
+            severity: "error" as const,
+            retryable: true,
+          },
+        ]);
+      }
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
     [violetCartId, queryClient],
@@ -561,7 +629,18 @@ function CheckoutPage() {
   const handleUpdateQuantity = useCallback(
     async (skuId: string, quantity: number) => {
       if (!violetCartId) return;
-      await updateCartItemFn({ data: { violetCartId, skuId, quantity } });
+      const result = await updateCartItemFn({ data: { violetCartId, skuId, quantity } });
+      if (result.error) {
+        setCheckoutErrors((prev) => [
+          ...prev,
+          {
+            code: result.error!.code,
+            message: result.error!.message,
+            severity: "error" as const,
+            retryable: true,
+          },
+        ]);
+      }
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
     [violetCartId, queryClient],

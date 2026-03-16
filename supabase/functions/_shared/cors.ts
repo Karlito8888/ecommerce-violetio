@@ -18,5 +18,9 @@ const allowedOrigin = Deno.env.get("ALLOWED_ORIGINS") ?? "*";
 export const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": allowedOrigin,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  /**
+   * Must match all HTTP methods used by Edge Functions. Mismatched methods
+   * cause browsers to reject preflight responses for GET/PUT/DELETE requests.
+   */
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };

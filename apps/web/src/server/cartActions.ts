@@ -45,8 +45,9 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
+import { z } from "zod";
 import type { ApiResponse, Cart, CartItemInput, CreateCartInput } from "@ecommerce/shared";
-import { logError } from "@ecommerce/shared";
+import { cartItemInputSchema, logError } from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
 
@@ -55,20 +56,40 @@ import { getSupabaseServer } from "./supabaseServer";
 /**
  * Looks up a Supabase cart row by Violet cart ID.
  * Returns the Supabase cart UUID, or null if not found.
+ *
+ * Supabase client returns errors in `{ error }` without throwing.
+ * Ignoring this property causes database failures to masquerade as
+ * "not found" results. We explicitly check and log it.
  */
 async function getSupabaseCartId(violetCartId: string): Promise<string | null> {
   const supabase = getSupabaseServer();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("carts")
     .select("id")
     .eq("violet_cart_id", violetCartId)
     .maybeSingle();
+
+  if (error) {
+    logError(supabase, {
+      source: "web",
+      error_type: "DB.QUERY_FAILED",
+      message: `Failed to look up cart by violet_cart_id: ${error.message}`,
+      context: { violetCartId, operation: "getSupabaseCartId", code: error.code },
+    });
+    return null;
+  }
+
   return data?.id ?? null;
 }
 
 /**
  * Upserts a Supabase cart row and returns its UUID.
  * Creates the row if it doesn't exist; updates `updated_at` if it does.
+ *
+ * Supabase client returns errors in `{ error }` without throwing.
+ * The specific error message is logged before returning null so that
+ * constraint violations, RLS denials, and network failures are visible
+ * in the error_logs table for operational debugging.
  */
 async function upsertSupabaseCart(
   violetCartId: string,
@@ -90,7 +111,15 @@ async function upsertSupabaseCart(
     .select("id")
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    logError(supabase, {
+      source: "web",
+      error_type: "DB.UPSERT_FAILED",
+      message: `Failed to upsert cart row: ${error?.message ?? "no data returned"}`,
+      context: { violetCartId, operation: "upsertSupabaseCart", code: error?.code },
+    });
+    return null;
+  }
   return data.id;
 }
 
@@ -107,6 +136,9 @@ function withSupabaseId(cart: Cart, supabaseCartId: string): Cart {
 /**
  * Creates a new Violet cart and persists it to Supabase.
  * Sets `violet_cart_id` HttpOnly cookie on the response.
+ *
+ * HttpOnly cookie with Secure flag in production prevents transmission over
+ * plain HTTP. SameSite=lax prevents CSRF while allowing top-level navigations.
  */
 export const createCartFn = createServerFn({ method: "POST" })
   .inputValidator((input: CreateCartInput) => input)
@@ -134,9 +166,13 @@ export const createCartFn = createServerFn({ method: "POST" })
       };
     }
 
-    // Set HttpOnly cookie — persists cart ID across page loads
+    /**
+     * HttpOnly cookie with Secure flag in production prevents transmission over
+     * plain HTTP. SameSite=lax prevents CSRF while allowing top-level navigations.
+     */
     setCookie("violet_cart_id", violetCartId, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 30, // 30 days
@@ -149,17 +185,31 @@ export const createCartFn = createServerFn({ method: "POST" })
  * Adds a SKU to an existing cart (or creates a new one if none exists).
  * Reads the violet_cart_id from HttpOnly cookie.
  * Also upserts product info (name, thumbnail) into cart_items for display.
+ *
+ * Runtime input validation prevents malformed client data from reaching
+ * Violet/Supabase. TanStack Start server functions are callable from the
+ * client — input must be treated as untrusted.
  */
 export const addToCartFn = createServerFn({ method: "POST" })
-  .inputValidator(
-    (
-      input: CartItemInput & {
-        violetCartId: string;
-        userId?: string | null;
-        sessionId?: string | null;
-      },
-    ) => input,
-  )
+  .inputValidator((input: unknown) => {
+    /**
+     * Runtime input validation prevents malformed client data from reaching
+     * Violet/Supabase. TanStack Start server functions are callable from the
+     * client — input must be treated as untrusted.
+     */
+    const schema = cartItemInputSchema.extend({
+      violetCartId: z.string().min(1, "Violet cart ID is required"),
+      userId: z.string().nullable().optional(),
+      sessionId: z.string().nullable().optional(),
+      productName: z.string().optional(),
+      thumbnailUrl: z.string().optional(),
+    });
+    return schema.parse(input) as CartItemInput & {
+      violetCartId: string;
+      userId?: string | null;
+      sessionId?: string | null;
+    };
+  })
   .handler(async ({ data }): Promise<ApiResponse<Cart>> => {
     const adapter = getAdapter();
     const { violetCartId, userId = null, sessionId = null, ...item } = data;
@@ -201,14 +251,17 @@ export const addToCartFn = createServerFn({ method: "POST" })
       },
       { onConflict: "cart_id, sku_id" },
     );
-    // Non-fatal: product name/thumbnail won't display but cart still works.
-    // Most likely cause: migration 20260315000000_cart_items_product_info.sql not applied.
+    /**
+     * Secondary Supabase operations are non-blocking — Violet is the source of truth.
+     * Errors are logged for diagnostics but don't fail the request.
+     */
     if (itemUpsertError) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[cart_items] upsert failed — product info will not display:",
-        itemUpsertError.message,
-      );
+      logError(supabase, {
+        source: "web",
+        error_type: "DB.CART_ITEMS_UPSERT_FAILED",
+        message: `cart_items upsert failed — product info will not display: ${itemUpsertError.message}`,
+        context: { supabaseCartId, skuId: item.skuId, operation: "addToCart" },
+      });
     }
 
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
@@ -247,21 +300,44 @@ export const updateCartItemFn = createServerFn({ method: "POST" })
       };
     }
 
+    /**
+     * Secondary Supabase operations are non-blocking — Violet is the source of truth.
+     * Errors are logged for diagnostics but don't fail the request.
+     */
+    const supabase = getSupabaseServer();
+
     // Sync quantity to cart_items — row may not exist (e.g., added before migration).
     // update() is a no-op if the row is absent, which is acceptable.
-    const supabase = getSupabaseServer();
-    await supabase
+    const { error: itemUpdateError } = await supabase
       .from("cart_items")
       .update({ quantity: data.quantity })
       .eq("cart_id", supabaseCartId)
       .eq("sku_id", data.skuId);
 
+    if (itemUpdateError) {
+      logError(supabase, {
+        source: "web",
+        error_type: "DB.CART_ITEMS_UPDATE_FAILED",
+        message: `cart_items quantity sync failed: ${itemUpdateError.message}`,
+        context: { supabaseCartId, skuId: data.skuId, operation: "updateCartItem" },
+      });
+    }
+
     // Touch carts row so Supabase Realtime fires for cross-device sync (Story 4.6).
     // The updated_at trigger auto-updates the timestamp on any row modification.
-    await supabase
+    const { error: touchError } = await supabase
       .from("carts")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", supabaseCartId);
+
+    if (touchError) {
+      logError(supabase, {
+        source: "web",
+        error_type: "DB.CART_TOUCH_FAILED",
+        message: `Failed to touch carts.updated_at: ${touchError.message}`,
+        context: { supabaseCartId, operation: "updateCartItem" },
+      });
+    }
 
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
   });
@@ -295,21 +371,44 @@ export const removeFromCartFn = createServerFn({ method: "POST" })
       };
     }
 
+    /**
+     * Secondary Supabase operations are non-blocking — Violet is the source of truth.
+     * Errors are logged for diagnostics but don't fail the request.
+     */
+    const supabase = getSupabaseServer();
+
     // Clean up product info row — Violet has already removed the item from the cart.
     // Non-fatal: orphan rows don't cause incorrect display (item absent from Violet cart)
     // but would cause the cart_items table to grow unbounded.
-    const supabase = getSupabaseServer();
-    await supabase
+    const { error: itemDeleteError } = await supabase
       .from("cart_items")
       .delete()
       .eq("cart_id", supabaseCartId)
       .eq("sku_id", data.skuId);
 
+    if (itemDeleteError) {
+      logError(supabase, {
+        source: "web",
+        error_type: "DB.CART_ITEMS_DELETE_FAILED",
+        message: `cart_items delete failed: ${itemDeleteError.message}`,
+        context: { supabaseCartId, skuId: data.skuId, operation: "removeFromCart" },
+      });
+    }
+
     // Touch carts row so Supabase Realtime fires for cross-device sync (Story 4.6).
-    await supabase
+    const { error: touchError } = await supabase
       .from("carts")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", supabaseCartId);
+
+    if (touchError) {
+      logError(supabase, {
+        source: "web",
+        error_type: "DB.CART_TOUCH_FAILED",
+        message: `Failed to touch carts.updated_at: ${touchError.message}`,
+        context: { supabaseCartId, operation: "removeFromCart" },
+      });
+    }
 
     return { data: withSupabaseId(result.data, supabaseCartId), error: null };
   });
@@ -342,10 +441,24 @@ export const getCartFn = createServerFn({ method: "GET" })
 
     // Enrich cart items with product names/thumbnails from Supabase cart_items
     const supabase = getSupabaseServer();
-    const { data: storedItems } = await supabase
+    const { data: storedItems, error: itemsQueryError } = await supabase
       .from("cart_items")
       .select("sku_id, product_name, thumbnail_url")
       .eq("cart_id", supabaseCartId);
+
+    /**
+     * Secondary Supabase operations are non-blocking — Violet is the source of truth.
+     * Errors are logged for diagnostics but don't fail the request.
+     * If the query fails, we proceed without enrichment (items show without names/thumbnails).
+     */
+    if (itemsQueryError) {
+      logError(supabase, {
+        source: "web",
+        error_type: "DB.CART_ITEMS_QUERY_FAILED",
+        message: `cart_items query failed — items will lack product info: ${itemsQueryError.message}`,
+        context: { supabaseCartId, operation: "getCart" },
+      });
+    }
 
     const productInfoMap: Record<string, { name: string | null; thumbnailUrl: string | null }> = {};
     for (const row of storedItems ?? []) {

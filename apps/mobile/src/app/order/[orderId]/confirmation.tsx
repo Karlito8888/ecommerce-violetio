@@ -23,7 +23,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
+// Using shared OrderDetail type to avoid drift with web implementation
 import { createSupabaseClient, formatPrice } from "@ecommerce/shared";
+import type { OrderDetail } from "@ecommerce/shared";
 
 /** Edge Function base URL for order API calls. */
 const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
@@ -42,51 +44,10 @@ async function getSessionToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-/**
- * Order detail shape returned by the Edge Function.
- * Mirrors the web's `OrderDetail` type from `@ecommerce/shared`.
- */
-interface MobileOrderDetail {
-  id: string;
-  status: string;
-  currency: string;
-  subtotal: number;
-  shippingTotal: number;
-  taxTotal: number;
-  total: number;
-  bags: Array<{
-    id: string;
-    merchantName: string;
-    status: string;
-    items: Array<{
-      skuId: string;
-      name: string;
-      quantity: number;
-      price: number;
-      linePrice: number;
-      thumbnail?: string;
-    }>;
-    subtotal: number;
-    shippingTotal: number;
-    taxTotal: number;
-    total: number;
-    shippingMethod?: { carrier: string; label: string };
-  }>;
-  customer: { email: string; firstName: string; lastName: string };
-  shippingAddress: {
-    address1: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
-  dateSubmitted?: string;
-}
-
 export default function OrderConfirmationScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const router = useRouter();
-  const [order, setOrder] = useState<MobileOrderDetail | null>(null);
+  const [order, setOrder] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

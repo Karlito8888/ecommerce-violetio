@@ -58,6 +58,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-secure-store",
+    // Required for native Stripe SDK linking during expo prebuild / EAS Build
+    "@stripe/stripe-react-native",
     [
       "expo-local-authentication",
       {
