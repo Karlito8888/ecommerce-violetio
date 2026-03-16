@@ -86,7 +86,7 @@ development_status:
   5-1-order-confirmation-data-persistence: done
   5-2-order-status-webhooks-processing: done
   5-3-unified-order-tracking-view: done
-  5-4-guest-order-lookup: backlog
+  5-4-guest-order-lookup: done
   5-5-refund-processing-communication: backlog
   5-6-email-notifications-pipeline: backlog
   epic-5-retrospective: optional

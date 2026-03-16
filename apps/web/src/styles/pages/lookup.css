@@ -1,0 +1,141 @@
+/* ─── Guest Order Lookup Page ──────────────────────────────────────────────────
+ * BEM: .order-lookup
+ *
+ * Story 5.4: Guest Order Lookup.
+ * Design language mirrors auth.css for the form steps and orders.css for results.
+ * Results reuse .order-detail and .orders__card BEM classes from orders.css —
+ * do NOT duplicate those here.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Page container ── */
+
+.order-lookup {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4) var(--space-16);
+}
+
+/* ── Page heading ── */
+
+.order-lookup__title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-2) 0;
+  letter-spacing: -0.01em;
+}
+
+/* ── Subtitle / description ── */
+
+.order-lookup__subtitle {
+  font-size: 1rem;
+  color: var(--color-steel);
+  margin: 0 0 var(--space-6) 0;
+}
+
+/* ── Step indicator (e.g., "Step 1 of 2") ── */
+
+.order-lookup__step-indicator {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-steel);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── "We'll send a 6-digit code to …" label ── */
+
+.order-lookup__email-note {
+  font-size: 0.9375rem;
+  color: var(--color-charcoal);
+  margin: 0 0 var(--space-6) 0;
+}
+
+/* ── Form wrapper ── */
+
+.order-lookup__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+/* ── "Your Orders" heading above the results list ── */
+
+.order-lookup__results-header {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: var(--space-6) 0 var(--space-4) 0;
+}
+
+/* ── Empty state (no orders found) ── */
+
+.order-lookup__empty {
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  font-size: 0.9375rem;
+  color: var(--color-steel);
+  background: var(--color-ivory);
+  border: 1px solid var(--color-sand);
+  border-radius: var(--radius-lg);
+}
+
+/* ── Error message (rate limit, token not found, etc.) ── */
+
+.order-lookup__error {
+  color: var(--color-error, #c0392b);
+  font-size: var(--text-sm, 0.875rem);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(192, 57, 43, 0.08);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(192, 57, 43, 0.2);
+}
+
+/* ── Back / secondary action link ── */
+
+.order-lookup__back-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.875rem;
+  color: var(--color-steel);
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.order-lookup__back-link:hover {
+  color: var(--color-ink);
+}
+
+/* ── Skeleton loading placeholder (token auto-lookup) ── */
+
+.order-lookup__skeleton {
+  margin-top: var(--space-6);
+}
+
+/* ── Result order card: override Link → button reset ──
+ * .orders__card is normally an <a> tag; here we use a <button>.
+ * Reset the button defaults while keeping the existing card styles.
+ * ── */
+
+.order-lookup .orders__card {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* ── Responsive: below 640px ── */
+
+@media (max-width: 640px) {
+  .order-lookup {
+    padding: var(--space-6) var(--space-4) var(--space-12);
+  }
+
+  .order-lookup__title {
+    font-size: 1.5rem;
+  }
+}
