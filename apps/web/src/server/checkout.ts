@@ -39,12 +39,8 @@ import type {
   SetShippingMethodInput,
   PersistOrderResult,
 } from "@ecommerce/shared";
-import {
-  logError,
-  shippingAddressInputSchema,
-  customerInputSchema,
-  persistOrder,
-} from "@ecommerce/shared";
+import { logError, shippingAddressInputSchema, customerInputSchema } from "@ecommerce/shared";
+import { persistOrder } from "@ecommerce/shared/server/utils";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
 

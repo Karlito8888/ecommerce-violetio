@@ -6,7 +6,8 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./server": "./src/clients/supabase.server.ts"
+    "./server": "./src/clients/supabase.server.ts",
+    "./server/utils": "./src/utils/server.ts"
   },
   "scripts": {
     "test": "vitest run"
