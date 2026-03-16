@@ -1,6 +1,50 @@
 /**
  * Zod validation schemas for Violet webhook payloads.
  *
+ * ## Webhook Processing Pipeline Overview
+ *
+ * This file defines the validation layer for inbound Violet.io webhook events.
+ * Violet sends server-to-server HTTP POST requests when commerce events occur
+ * (product changes, order lifecycle, fulfillment updates). The pipeline is:
+ *
+ * ```
+ * Violet.io → POST /handle-webhook → HMAC verify → Header validation (2-phase)
+ *   → Idempotency check (webhook_events.event_id UNIQUE) → Payload validation (here)
+ *   → Processor routing → DB updates → 200 response
+ * ```
+ *
+ * ## Violet Webhook Event Types
+ *
+ * Violet emits these order-related webhook events (per official docs):
+ * - `ORDER_ACCEPTED` — bag accepted by merchant (mapped to BAG_ACCEPTED in our system)
+ * - `ORDER_UPDATED` — catch-all for order/bag property changes
+ * - `ORDER_COMPLETED` — bag fulfillment complete
+ * - `ORDER_SHIPPED` — bag shipped (mapped to BAG_SHIPPED with tracking data)
+ * - `ORDER_DELIVERED` — bag delivered (mapped to BAG_COMPLETED in our system)
+ * - `ORDER_REFUNDED` — full or partial refund processed
+ * - `ORDER_CANCELLED` — bag cancelled by merchant
+ * - `ORDER_FAILED` — order/bag creation failure
+ *
+ * Our system normalizes these into ORDER_* and BAG_* event types since Violet's
+ * webhooks are bag-scoped (one event per merchant bag, identified by X-Violet-Bag-Id).
+ *
+ * ## Security: HMAC-SHA256 Signature Verification
+ *
+ * Every webhook carries an `X-Violet-Hmac` header containing a Base64-encoded
+ * HMAC-SHA256 signature of the raw request body, keyed with VIOLET_APP_SECRET.
+ * Validation uses Web Crypto `crypto.subtle.verify()` for constant-time comparison.
+ *
+ * @see {@link ../../../supabase/functions/_shared/webhookAuth.ts} — HMAC implementation
+ * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Violet webhook docs
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Order event types
+ *
+ * ## Idempotency
+ *
+ * Each webhook carries a unique `X-Violet-Event-Id` header. The handler inserts
+ * this into `webhook_events.event_id` (UNIQUE constraint) before processing.
+ * Duplicate deliveries hit the constraint and return 200 immediately.
+ * Violet retries up to 10 times over 24 hours with exponential backoff on non-2xx.
+ *
  * ## ⚠️ SYNC WARNING — Dual-copy architecture
  *
  * This file is the **canonical source of truth** for webhook validation schemas.
@@ -17,6 +61,7 @@
  * - `supabase/functions/_shared/schemas.ts` (Edge Function copy, webhook section)
  * - `packages/shared/src/types/order.types.ts` (TypeScript type definitions)
  *
+ * @module webhook.schema
  * @see M2 code review fix — added sync documentation
  */
 
@@ -25,14 +70,35 @@ import { z } from "zod";
 /**
  * All webhook event types our system handles.
  *
- * Offer events: triggered by Violet when merchant product data changes (Story 3.7).
- * Sync events: triggered when a full catalog sync lifecycle changes (Story 3.7).
- * Order events: triggered when an order's status changes (Story 5.2).
- * Bag events: triggered when a per-merchant bag's status changes (Story 5.2).
+ * **Offer events** (Story 3.7): Triggered by Violet when merchant product data changes.
+ * - `OFFER_ADDED` / `OFFER_UPDATED` — upsert product embeddings for AI search
+ * - `OFFER_REMOVED` / `OFFER_DELETED` — soft-delete (set available=false)
+ *
+ * **Sync events** (Story 3.7): Triggered during full catalog sync lifecycle.
+ * - `PRODUCT_SYNC_STARTED` / `COMPLETED` / `FAILED` — monitoring/audit only
+ *
+ * **Order events** (Story 5.2): Triggered when Violet order-level status changes.
+ * - `ORDER_UPDATED` / `COMPLETED` / `CANCELED` / `REFUNDED` / `RETURNED`
+ * - All delegate to `processOrderUpdated` which sets the Violet-provided status directly
+ *
+ * **Bag events** (Story 5.2): Triggered per-merchant bag within an order.
+ * - `BAG_SUBMITTED` / `ACCEPTED` / `COMPLETED` / `CANCELED` — generic status update
+ * - `BAG_SHIPPED` — includes tracking_number, tracking_url, carrier fields
+ * - `BAG_REFUNDED` — triggers Violet Refund API fetch for amount/reason details
+ *
+ * ## Missing Violet events (intentionally not handled)
+ *
+ * Violet also emits `ORDER_ACCEPTED`, `ORDER_SHIPPED`, `ORDER_DELIVERED`, and
+ * `ORDER_FAILED` per their docs. These are NOT in our enum because:
+ * - We use bag-level events (BAG_*) as the source of truth for granular tracking
+ * - Order-level status is derived from bag statuses via `deriveAndUpdateOrderStatus()`
+ * - Unknown event types are accepted with 200 (two-phase validation) to prevent
+ *   Violet from disabling our webhook endpoint
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Violet event reference
+ * @see handle-webhook/index.ts — Event routing switch statement
  *
  * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
- *
- * @see handle-webhook/index.ts — Event routing switch statement
  */
 export const webhookEventTypeSchema = z.enum([
   "OFFER_ADDED",
@@ -57,6 +123,18 @@ export const webhookEventTypeSchema = z.enum([
 
 /**
  * Validates extracted Violet webhook headers (after case-insensitive extraction).
+ *
+ * Used in Phase 2 of two-phase validation when the event type is confirmed to be
+ * in our handled enum. Phase 1 uses {@link violetRequiredHeadersSchema} which accepts
+ * any string for eventType.
+ *
+ * Headers extracted from the HTTP request:
+ * - `X-Violet-Hmac` → hmac: HMAC-SHA256 signature (Base64) for authentication
+ * - `X-Violet-Event-Id` → eventId: unique event identifier for idempotency
+ * - `X-Violet-Topic` → eventType: the webhook event type (e.g., "ORDER_UPDATED")
+ *
+ * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Header documentation
+ * @see extractWebhookHeaders in webhookAuth.ts — Header extraction logic
  */
 export const violetWebhookHeadersSchema = z.object({
   hmac: z.string().min(1, "X-Violet-Hmac header is required"),
@@ -141,7 +219,18 @@ export const violetSyncWebhookPayloadSchema = z.object({
 
 /**
  * Validates Violet ORDER_* webhook payload.
- * Status is z.string() (not OrderStatus enum) — Violet may send undocumented values.
+ *
+ * Handles: ORDER_UPDATED, ORDER_COMPLETED, ORDER_CANCELED, ORDER_REFUNDED, ORDER_RETURNED.
+ *
+ * Status is `z.string()` (not a strict enum) because Violet may send undocumented
+ * status values. Known statuses include: IN_PROGRESS, COMPLETED, CANCELED, REFUNDED,
+ * PARTIALLY_REFUNDED, but the list is not exhaustive per Violet's docs.
+ *
+ * The `app_order_id` field contains our internal order reference (set during checkout
+ * via Violet's Cart API). Used for correlating Violet orders with our `orders` table.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Event payloads
+ * @see processOrderUpdated in orderProcessors.ts — Processing logic
  *
  * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
  */
@@ -155,8 +244,26 @@ export const violetOrderWebhookPayloadSchema = z.object({
 
 /**
  * Validates Violet BAG_* webhook payload.
- * BAG_SHIPPED includes tracking_number, tracking_url, carrier.
- * order_id links back to the parent order for status derivation.
+ *
+ * Handles: BAG_SUBMITTED, BAG_ACCEPTED, BAG_SHIPPED, BAG_COMPLETED, BAG_CANCELED, BAG_REFUNDED.
+ *
+ * Bags are per-merchant subdivisions of an order. Each bag is fulfilled independently
+ * by its merchant, so shipping/refund events arrive at the bag level. The `order_id`
+ * field links back to the parent Violet order for status derivation.
+ *
+ * **Tracking fields** (populated on BAG_SHIPPED):
+ * - `tracking_number` — carrier tracking number
+ * - `tracking_url` — direct tracking link
+ * - `carrier` — shipping carrier name (e.g., "UPS", "USPS", "FedEx")
+ *
+ * **Financial fields** (populated on BAG_REFUNDED):
+ * - `financial_status` — e.g., "REFUNDED", "PARTIALLY_REFUNDED"
+ * - Actual refund amounts are NOT in the webhook payload; they must be fetched
+ *   from the Violet Refund API (`GET /v1/orders/{id}/bags/{id}/refunds`)
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Bag event payloads
+ * @see processBagShipped in orderProcessors.ts — Tracking data persistence
+ * @see processBagRefunded in orderProcessors.ts — Refund detail fetching
  *
  * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
  */

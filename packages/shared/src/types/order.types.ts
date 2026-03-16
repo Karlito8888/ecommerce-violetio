@@ -92,16 +92,30 @@ export interface OrderSubmitResult {
 }
 
 /**
- * Violet bag fulfillment status — all 8 states from official docs.
+ * Violet bag fulfillment status — all 9 states from official docs.
  *
- * - `IN_PROGRESS`: initial state until submission
- * - `SUBMITTED`: brief transitional state when submitted to merchant
- * - `ACCEPTED`: successfully received by e-commerce platform
- * - `COMPLETED`: all fulfillments shipped
+ * ## State machine transitions
+ * ```
+ * IN_PROGRESS → SUBMITTED → ACCEPTED (standard path)
+ * ACCEPTED → SHIPPED → COMPLETED (fulfillment path)
+ * ACCEPTED → REFUNDED | PARTIALLY_REFUNDED (return scenarios)
+ * ACCEPTED → CANCELED (merchant cancellation)
+ * ACCEPTED → BACKORDERED (items backordered on merchant platform)
+ * SUBMITTED | IN_PROGRESS → REJECTED (platform rejection after retries)
+ * ```
+ *
+ * - `IN_PROGRESS`: initial state upon bag creation until submission
+ * - `SUBMITTED`: brief transitional state when submitted to merchant's platform
+ * - `ACCEPTED`: successfully received by the e-commerce platform
+ * - `SHIPPED`: bag has been shipped by the merchant — sent in BAG_SHIPPED webhook
+ *   payloads and persisted to the database. Not listed in Violet's official BagStatus
+ *   enum documentation but appears in practice via webhook events.
+ * - `COMPLETED`: all fulfillments shipped and confirmed delivered; bag is finished
  * - `REFUNDED`: all items returned and fully refunded (terminal)
  * - `PARTIALLY_REFUNDED`: some items returned; can transition to REFUNDED
- * - `CANCELED`: merchant cancellation — doesn't trigger automatic refund (terminal)
+ * - `CANCELED`: merchant cancellation — does NOT trigger automatic refund (terminal)
  * - `REJECTED`: e-commerce platform rejected the bag after retries (terminal)
+ * - `BACKORDERED`: items are backordered on the merchant platform
  *
  * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag
  */
@@ -109,23 +123,45 @@ export type BagStatus =
   | "IN_PROGRESS"
   | "SUBMITTED"
   | "ACCEPTED"
+  | "SHIPPED"
   | "COMPLETED"
   | "REFUNDED"
   | "PARTIALLY_REFUNDED"
   | "CANCELED"
-  | "REJECTED";
+  | "REJECTED"
+  | "BACKORDERED";
 
 /**
  * Financial status of a merchant bag — tracks payment state independently from fulfillment.
  *
- * - `UNPAID`: payment not yet captured (pre-submission or pending)
+ * ## State machine transitions
+ * ```
+ * UNPAID → AUTHORIZED → PENDING → PAID (standard payment flow)
+ * AUTHORIZED | PENDING → VOIDED (payment capture failure)
+ * PAID → PARTIALLY_REFUNDED → REFUNDED (refund flow)
+ * PAID → REFUNDED (full refund)
+ * ```
+ *
+ * - `UNPAID`: payment not yet captured (pre-submission or initial state)
+ * - `AUTHORIZED`: payment authorized but not yet captured
+ * - `PENDING`: payment capture in progress
  * - `PAID`: payment successfully captured by merchant
+ * - `PARTIALLY_PAID`: partial payment captured (rare, multi-payment scenarios)
  * - `PARTIALLY_REFUNDED`: some items returned and partially refunded
  * - `REFUNDED`: all items returned and fully refunded (terminal)
+ * - `VOIDED`: payment authorization voided before capture (terminal)
  *
  * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag
  */
-export type BagFinancialStatus = "UNPAID" | "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED";
+export type BagFinancialStatus =
+  | "UNPAID"
+  | "AUTHORIZED"
+  | "PENDING"
+  | "PAID"
+  | "PARTIALLY_PAID"
+  | "PARTIALLY_REFUNDED"
+  | "REFUNDED"
+  | "VOIDED";
 
 /**
  * A completed or in-progress order.

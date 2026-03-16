@@ -1,3 +1,41 @@
+/**
+ * Shared order hooks and query factories for authenticated order management.
+ *
+ * ## Purpose
+ * Provides platform-agnostic TanStack Query options and Supabase Realtime
+ * subscriptions for the authenticated user's order list and detail views.
+ * Used by the web app's account/orders pages. Mobile does not yet consume
+ * these hooks (confirmation and guest lookup use direct fetch calls).
+ *
+ * ## Architecture
+ * Follows a "query options factory" pattern: functions return `queryOptions()`
+ * objects (not hooks) so they can be used in both:
+ * - Route loaders for SSR prefetching (web: `context.queryClient.ensureQueryData(...)`)
+ * - Components via `useSuspenseQuery(ordersQueryOptions(...))`
+ *
+ * Platform-specific data fetching is injected via callback parameters
+ * (`OrdersFetchFn`, `OrderDetailFetchFn`), keeping this module decoupled
+ * from server functions or edge function specifics.
+ *
+ * ## Realtime
+ * The `useOrderRealtime` hook subscribes to Supabase Realtime for live order
+ * and bag status changes, using cache invalidation (not state patching) to
+ * keep the UI fresh.
+ *
+ * ## Mobile integration status
+ * - The `OrderConfirmationScreen` (mobile) does NOT use these hooks — it performs
+ *   a one-shot fetch because confirmation is transient.
+ * - The `GuestLookupScreen` (mobile) does NOT use these hooks — guest data comes
+ *   from a different Edge Function with snake_case types.
+ * - Future mobile order list/detail screens SHOULD use `ordersQueryOptions()` and
+ *   `orderDetailQueryOptions()` with a mobile-specific fetch function.
+ *
+ * @module useOrders
+ * @see {@link file://apps/web/src/routes/account/orders/index.tsx} — web consumer
+ * @see {@link file://apps/mobile/src/app/order/[orderId]/confirmation.tsx} — does NOT use this
+ * @see {@link file://apps/mobile/src/app/order/lookup.tsx} — does NOT use this
+ */
+
 import { queryOptions } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import type { QueryClient } from "@tanstack/react-query";

@@ -1,20 +1,42 @@
 /**
  * Order Detail Page — /account/orders/:orderId
  *
+ * @module routes/account/orders/$orderId
+ *
  * Shows the full order with per-merchant bag tracking (FR25):
- * - Order header: ID, date, overall status, total
+ * - Order header: ID (truncated UUID), date, overall status, total
  * - Per-merchant bags: merchant name, bag status, items with thumbnails
  * - Tracking link for SHIPPED bags (carrier + tracking number)
  * - Mixed bag state summary (e.g., "2 of 3 packages shipped")
+ * - Refund notice for REFUNDED/PARTIALLY_REFUNDED bags
  * - Pricing breakdown: subtotal, shipping, tax, total
  * - Live status updates via Supabase Realtime (FR54)
  *
- * ## SSR
- * Route loader prefetches order detail server-side via `ensureQueryData`.
+ * ## Data loading strategy
+ * Hybrid SSR + client-side, same pattern as order list:
+ * 1. **Route loader** (SSR): Prefetches via `ensureQueryData(orderDetailQueryOptions)`.
+ *    The `orderId` param is a Supabase UUID (NOT Violet's numeric ID).
+ * 2. **useQuery** (CSR): Re-uses `orderDetailQueryOptions` for cache management.
+ * 3. **Realtime** (WebSocket): `useOrderRealtime` subscribes to Supabase Realtime
+ *    channel `orders:user_{userId}`. On any UPDATE event, invalidates the TanStack
+ *    Query cache which triggers an automatic re-fetch.
  *
- * ## Realtime
- * `useOrderRealtime` subscribes to `orders:user_{userId}` channel.
- * On UPDATE event, invalidates TanStack Query cache → triggers re-fetch.
+ * ## Violet order status mapping
+ * The `status` field on orders and bags comes from Violet's lifecycle:
+ * - Order: IN_PROGRESS → PROCESSING → COMPLETED → CANCELED/REFUNDED/PARTIALLY_REFUNDED
+ * - Bag: IN_PROGRESS → SUBMITTED → ACCEPTED → COMPLETED → SHIPPED → DELIVERED
+ *   (with possible CANCELED/REFUNDED/PARTIALLY_REFUNDED/REJECTED/BACKORDERED)
+ * We also derive synthetic states like "PARTIALLY_SHIPPED" when bags have mixed statuses.
+ *
+ * ## Authentication
+ * Route is nested under `/account/` (auth guard in layout). Server function also
+ * verifies authentication + RLS ensures user can only see their own order.
+ *
+ * @see {@link getOrderDetailFn} — server function that fetches the order
+ * @see {@link useOrderRealtime} — Supabase Realtime subscription hook
+ * @see {@link orderDetailQueryOptions} — shared query options (web + mobile)
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart — Order lifecycle
+ * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states — Bag status states
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -47,6 +69,18 @@ export const Route = createFileRoute("/account/orders/$orderId")({
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
+/**
+ * Maps a Violet bag status to a BEM modifier class for visual styling.
+ *
+ * Status-to-color mapping:
+ * - COMPLETED → "delivered" (green)
+ * - SHIPPED → "shipped" (blue)
+ * - CANCELED/REFUNDED/PARTIALLY_REFUNDED → "canceled" (red/muted)
+ * - All others (IN_PROGRESS, SUBMITTED, ACCEPTED, etc.) → "processing" (neutral)
+ *
+ * @param status - Bag fulfillment status from Supabase (originally from Violet).
+ * @returns BEM modifier class string for the status badge element.
+ */
 function getBagStatusClass(status: string): string {
   switch (status) {
     case "COMPLETED":
@@ -64,6 +98,16 @@ function getBagStatusClass(status: string): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+/**
+ * Renders a single line item within a bag card.
+ *
+ * Displays thumbnail (or placeholder), item name, optional quantity badge,
+ * and line price. The `line_price` is in integer cents (Violet convention)
+ * and formatted by `formatPrice()`.
+ *
+ * @param item - Order item row from Supabase (persisted from Violet's SKU data).
+ * @param currency - ISO 4217 currency code from the parent order.
+ */
 function ItemRow({ item, currency }: { item: OrderItemRow; currency: string }) {
   return (
     <div className="order-detail__item">
@@ -116,6 +160,25 @@ function RefundNotice({ refunds, currency }: { refunds: OrderRefundRow[]; curren
   );
 }
 
+/**
+ * Renders a single merchant bag card with items, tracking info, and refund notices.
+ *
+ * Each bag represents one merchant's fulfillment within the multi-merchant order.
+ * Bags have independent statuses per Violet's model — e.g., one bag can be SHIPPED
+ * while another is still ACCEPTED.
+ *
+ * Sections (conditionally rendered):
+ * - Header: merchant name + status badge
+ * - Line items: thumbnails, names, quantities, prices
+ * - Tracking info: shown only for SHIPPED bags with a tracking URL
+ * - Refund notice: shown only for bags with non-empty `order_refunds`
+ * - Footer: shipping method + bag total (with refund annotation if applicable)
+ *
+ * @param bag - Bag row with nested items and refunds from Supabase.
+ * @param orderCurrency - ISO 4217 currency code from the parent order.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag — Bag status lifecycle
+ */
 function BagCard({ bag, orderCurrency }: { bag: OrderBagWithItems; orderCurrency: string }) {
   const statusLabel = BAG_STATUS_LABELS[bag.status] ?? bag.status;
 

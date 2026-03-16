@@ -1,28 +1,74 @@
 /**
  * Webhook event processors for Violet order and bag status events (Story 5.2).
  *
+ * ## Pipeline position
+ *
+ * These processors are invoked by `handle-webhook/index.ts` AFTER HMAC verification,
+ * idempotency check, event claim, and Zod payload validation. They handle only
+ * business logic — no HTTP, no auth, no deduplication concerns.
+ *
  * ## Architecture: Extension of existing processor pattern
  *
  * Follows the same structure as processors.ts (OFFER_* events) — separate file
  * to keep order domain logic isolated from product catalog logic.
  * Imports `updateEventStatus` from processors.ts (no duplication).
  *
+ * ## Violet order webhook event mapping
+ *
+ * Violet's webhook events are bag-scoped (one event per merchant bag, identified
+ * by `X-Violet-Bag-Id` header). Our system handles both ORDER_* and BAG_* events:
+ *
+ * | Violet Event      | Our Processor          | DB Tables Affected              |
+ * |-------------------|------------------------|---------------------------------|
+ * | ORDER_UPDATED     | processOrderUpdated    | orders.status                   |
+ * | ORDER_COMPLETED   | processOrderUpdated    | orders.status                   |
+ * | ORDER_CANCELED    | processOrderUpdated    | orders.status                   |
+ * | ORDER_REFUNDED    | processOrderUpdated    | orders.status                   |
+ * | ORDER_RETURNED    | processOrderUpdated    | orders.status                   |
+ * | BAG_SUBMITTED     | processBagUpdated      | order_bags.status + orders      |
+ * | BAG_ACCEPTED      | processBagUpdated      | order_bags.status + orders      |
+ * | BAG_SHIPPED       | processBagShipped      | order_bags.* + tracking + orders|
+ * | BAG_COMPLETED     | processBagUpdated      | order_bags.status + orders      |
+ * | BAG_CANCELED      | processBagUpdated      | order_bags.status + orders      |
+ * | BAG_REFUNDED      | processBagRefunded     | order_bags + order_refunds      |
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Event reference
+ *
  * ## Status derivation (FR25)
  *
  * After each bag status update, `deriveAndUpdateOrderStatus()` re-reads all bags
  * for the order and computes the derived order-level status:
- * - All bags same status → that status
- * - Mixed with SHIPPED → PARTIALLY_SHIPPED
- * - Mixed with COMPLETED → PARTIALLY_COMPLETED
- * - Other mixed → PROCESSING
+ * - All bags same status -> that status (unanimous)
+ * - Mixed with SHIPPED -> PARTIALLY_SHIPPED
+ * - Mixed with COMPLETED -> PARTIALLY_COMPLETED
+ * - Other mixed -> PROCESSING
  *
- * CANCELED ≠ REFUNDED — tracked separately (AC#3).
+ * CANCELED != REFUNDED — tracked separately (AC#3). A canceled bag does not
+ * imply a refund; refunds are confirmed via BAG_REFUNDED + Violet Refund API.
+ *
+ * ## Idempotency within processors
+ *
+ * - Bag status updates are idempotent (UPDATE with same values is a no-op)
+ * - Refund upserts use `ON CONFLICT violet_refund_id` (safe for retries)
+ * - Order status derivation is self-correcting (re-reads all bags each time)
+ * - send-notification is fire-and-forget (notification_logs has its own dedup)
+ *
+ * ## Error handling
+ *
+ * All processors catch errors internally and call `updateEventStatus("failed", msg)`.
+ * They never throw. The HTTP response is always 200 to prevent Violet retries.
+ * Best-effort operations (refund fetch, notifications) log warnings but don't
+ * fail the webhook event.
  *
  * ## Realtime
  *
  * No explicit Realtime broadcast needed. The `orders` and `order_bags` tables
  * are in the `supabase_realtime` publication (20260320000000_orders_realtime.sql).
  * Any UPDATE triggers automatic WebSocket broadcast to subscribed clients.
+ *
+ * @module orderProcessors
+ * @see processors.ts — Offer/sync event processors (Story 3.7)
+ * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Retry/disable policy
  */
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
@@ -113,6 +159,25 @@ async function deriveAndUpdateOrderStatus(
 
 // ─── ORDER event processors ──────────────────────────────────────────
 
+/**
+ * Processes ORDER_UPDATED, ORDER_COMPLETED, ORDER_CANCELED, ORDER_REFUNDED, ORDER_RETURNED events.
+ *
+ * Updates the `orders.status` column directly with the Violet-provided status value.
+ * All ORDER_* events delegate here because Violet sends the final/current status
+ * in the payload — no transformation needed.
+ *
+ * Note: This updates the order-level status from Violet's perspective. Bag-level
+ * events separately trigger `deriveAndUpdateOrderStatus()` which computes a
+ * derived status from all bags. Both mechanisms coexist — ORDER_* events provide
+ * Violet's authoritative status, while BAG_* events provide our computed view.
+ *
+ * @param supabase - Admin Supabase client (service_role)
+ * @param eventId - Violet's X-Violet-Event-Id for webhook_events tracking
+ * @param payload - Validated ORDER_* webhook payload with id and status
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — ORDER_UPDATED fires
+ *   on any order property change including status, address, contact updates
+ */
 export async function processOrderUpdated(
   supabase: SupabaseClient,
   eventId: string,
@@ -154,8 +219,24 @@ export const processOrderReturned = processOrderUpdated;
 // ─── BAG event processors ────────────────────────────────────────────
 
 /**
- * Generic bag status update processor.
- * Updates bag row, then derives order-level status from all bags.
+ * Generic bag status update processor for BAG_SUBMITTED, BAG_ACCEPTED, BAG_COMPLETED, BAG_CANCELED.
+ *
+ * Updates the `order_bags` row with the new status (and financial_status if present),
+ * then triggers order-level status derivation from all bags.
+ *
+ * For BAG_COMPLETED (delivery confirmation), also fires a `send-notification`
+ * invocation (fire-and-forget) to trigger the delivery email (Story 5.6).
+ *
+ * ## Idempotency
+ * UPDATE with the same values is a database no-op. Derived status recalculation
+ * is deterministic (always reads current bag states). Safe for duplicate webhooks.
+ *
+ * @param supabase - Admin Supabase client (service_role)
+ * @param eventId - Violet's X-Violet-Event-Id for webhook_events tracking
+ * @param payload - Validated BAG_* webhook payload with bag id, order_id, status
+ *
+ * @see deriveAndUpdateOrderStatus — Order-level status computation
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — BAG events
  */
 export async function processBagUpdated(
   supabase: SupabaseClient,
@@ -181,6 +262,22 @@ export async function processBagUpdated(
     }
 
     await deriveAndUpdateOrderStatus(supabase, String(payload.order_id));
+    // Fire-and-forget: bag delivered notification for COMPLETED status only (Story 5.6)
+    if (payload.status === "COMPLETED") {
+      supabase.functions
+        .invoke("send-notification", {
+          body: {
+            type: "bag_delivered",
+            order_id: String(payload.order_id),
+            bag_id: String(payload.id),
+          },
+        })
+        .catch((err: unknown) => {
+          console.warn(
+            `[processBagUpdated] send-notification invoke failed (non-critical): ${err instanceof Error ? err.message : "Unknown"}`,
+          );
+        });
+    }
     await updateEventStatus(supabase, eventId, "processed");
   } catch (err) {
     await updateEventStatus(
@@ -193,8 +290,25 @@ export async function processBagUpdated(
 }
 
 /**
- * BAG_SHIPPED — includes tracking info (tracking_number, tracking_url, carrier).
- * Separate from processBagUpdated because it persists additional tracking fields.
+ * Processes BAG_SHIPPED events — persists tracking info alongside status update.
+ *
+ * Separate from `processBagUpdated` because BAG_SHIPPED carries additional fields:
+ * - `tracking_number` — carrier tracking number (e.g., "1Z999AA10123456784")
+ * - `tracking_url` — direct tracking link from the carrier
+ * - `carrier` — shipping carrier name (e.g., "UPS", "USPS", "FedEx")
+ *
+ * These fields are persisted to `order_bags` for display in the tracking UI (Story 5.3).
+ * Also fires a `send-notification` invocation for the shipping confirmation email (Story 5.6).
+ *
+ * Per Violet docs, ORDER_SHIPPED fires when fulfillment status becomes SHIPPED or
+ * PARTIALLY_SHIPPED. At the bag level, BAG_SHIPPED indicates this specific merchant
+ * bag has shipped.
+ *
+ * @param supabase - Admin Supabase client (service_role)
+ * @param eventId - Violet's X-Violet-Event-Id for webhook_events tracking
+ * @param payload - Validated BAG_SHIPPED payload with tracking fields
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — ORDER_SHIPPED event
  */
 export async function processBagShipped(
   supabase: SupabaseClient,
@@ -226,6 +340,20 @@ export async function processBagShipped(
     }
 
     await deriveAndUpdateOrderStatus(supabase, String(payload.order_id));
+    // Fire-and-forget: bag shipped notification (Story 5.6)
+    supabase.functions
+      .invoke("send-notification", {
+        body: {
+          type: "bag_shipped",
+          order_id: String(payload.order_id),
+          bag_id: String(payload.id),
+        },
+      })
+      .catch((err: unknown) => {
+        console.warn(
+          `[processBagShipped] send-notification invoke failed (non-critical): ${err instanceof Error ? err.message : "Unknown"}`,
+        );
+      });
     await updateEventStatus(supabase, eventId, "processed");
   } catch (err) {
     await updateEventStatus(
@@ -336,11 +464,61 @@ async function fetchAndStoreRefundDetails(
 }
 
 /**
- * BAG_REFUNDED — updates bag status, derives order status, fetches refund details
- * from the Violet API, and fires a send-notification invocation (fire-and-forget).
+ * Background helper: fetches refund details from Violet and sends the refund notification.
+ *
+ * Runs as a fire-and-forget promise — never awaited by the webhook handler.
+ * If anything fails here, the webhook has already returned 200 and the bag status
+ * is persisted. The only consequence is missing refund amount details in the DB
+ * and/or no email being sent, both of which are non-critical UX enhancements.
+ *
+ * @param supabase - Admin Supabase client (service_role)
+ * @param orderId - Violet order ID (string)
+ * @param bagId - Violet bag ID (string)
+ * @param payload - Original BAG_REFUNDED webhook payload
+ */
+async function fetchRefundDetailsAndNotify(
+  supabase: SupabaseClient,
+  orderId: string,
+  bagId: string,
+  payload: VioletBagPayload,
+): Promise<void> {
+  // Fetch order_bags.id (UUID) for FK in order_refunds
+  const { data: bagRow } = await supabase
+    .from("order_bags")
+    .select("id")
+    .eq("violet_bag_id", bagId)
+    .single();
+
+  if (bagRow) {
+    await fetchAndStoreRefundDetails(supabase, payload, bagRow.id);
+  }
+
+  // Trigger refund email (Story 5.6 implements send-notification)
+  await supabase.functions.invoke("send-notification", {
+    body: {
+      type: "refund_processed",
+      bag_id: bagId,
+      order_id: orderId,
+    },
+  });
+}
+
+/**
+ * Processes BAG_REFUNDED events — updates bag status, derives order status,
+ * then kicks off refund detail fetching and notification as a background task.
  *
  * Replaces the `processBagRefunded = processBagUpdated` stub from Story 5.4.
  * Does NOT call `processBagUpdated` — logic is inlined to avoid a double DB round-trip.
+ *
+ * ## Violet webhook timeout constraint
+ * Violet expects a 2xx response within **10 seconds** or it will consider the
+ * delivery failed and schedule a retry (then eventually disable the endpoint).
+ * The Violet Refund API call (`GET /v1/orders/{id}/bags/{id}/refunds`) and the
+ * `send-notification` edge function invocation are both network-bound and could
+ * exceed this budget. They are therefore **fire-and-forget** — launched but not
+ * awaited, so the webhook returns 200 immediately after the critical DB writes.
+ *
+ * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Retry/timeout policy
  *
  * ## Violet REFUNDED vs CANCELED distinction
  * Per Violet docs, CANCELED is merchant-initiated order rejection that does NOT
@@ -351,12 +529,23 @@ async function fetchAndStoreRefundDetails(
  * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md
  *
  * ## Processing order (resilience-first)
- * 1. Update bag status (critical — always persisted first)
- * 2. Derive order-level status from all bags
- * 3. Fetch refund details from Violet API (best-effort, see {@link fetchAndStoreRefundDetails})
- * 4. Fire send-notification (fire-and-forget — Story 5.6 implements the function)
+ * 1. **Synchronous (critical):** Update bag status in `order_bags`
+ * 2. **Synchronous (critical):** Derive order-level status from all bags
+ * 3. **Synchronous (critical):** Mark webhook_events as "processed"
+ * 4. **Fire-and-forget (best-effort):** Fetch refund details from Violet API
+ *    and send refund notification email ({@link fetchRefundDetailsAndNotify})
  *
- * Steps 3-4 cannot fail the webhook event. The bag status is the source of truth.
+ * If the background task (step 4) fails, refund amount/reason won't be stored
+ * in `order_refunds` and no email is sent — but the bag status (REFUNDED) is
+ * already persisted and the webhook is acknowledged. The refund details are a
+ * UX enhancement, not a correctness requirement.
+ *
+ * @param supabase - Admin Supabase client (service_role)
+ * @param eventId - Violet's X-Violet-Event-Id for webhook_events tracking
+ * @param payload - Validated BAG_REFUNDED webhook payload
+ *
+ * @see fetchRefundDetailsAndNotify — Background task for refund details + notification
+ * @see fetchAndStoreRefundDetails — Violet Refund API fetch + upsert logic
  */
 export async function processBagRefunded(
   supabase: SupabaseClient,
@@ -364,7 +553,7 @@ export async function processBagRefunded(
   payload: VioletBagPayload,
 ): Promise<void> {
   try {
-    // Step 1: Update bag status (same as processBagUpdated)
+    // Step 1: Update bag status (critical — must complete before returning)
     const updateData: Record<string, unknown> = { status: payload.status };
     if (payload.financial_status) updateData.financial_status = payload.financial_status;
     const { error: bagError } = await supabase
@@ -380,33 +569,18 @@ export async function processBagRefunded(
       );
       return;
     }
-    // Step 2: Derive and update parent order status
+    // Step 2: Derive and update parent order status (critical)
     await deriveAndUpdateOrderStatus(supabase, String(payload.order_id));
-    // Step 3: Get order_bags.id (UUID) for FK in order_refunds
-    const { data: bagRow } = await supabase
-      .from("order_bags")
-      .select("id")
-      .eq("violet_bag_id", String(payload.id))
-      .single();
-    // Step 4: Fetch refund details from Violet API (best-effort — bag status already saved)
-    if (bagRow) {
-      await fetchAndStoreRefundDetails(supabase, payload, bagRow.id);
-    }
-    // Step 5: Trigger refund email (fire-and-forget — Story 5.6 implements send-notification)
-    supabase.functions
-      .invoke("send-notification", {
-        body: {
-          type: "refund_processed",
-          bag_id: String(payload.id),
-          order_id: String(payload.order_id),
-        },
-      })
-      .catch((err: unknown) => {
-        console.warn(
-          `[processBagRefunded] send-notification invoke failed (non-critical, Story 5.6): ${err instanceof Error ? err.message : "Unknown"}`,
-        );
-      });
+    // Step 3: Mark event as processed (critical — before background work)
     await updateEventStatus(supabase, eventId, "processed");
+    // Step 4: Fire-and-forget — fetch refund details and send notification
+    // These must not block the webhook 200 response (Violet 10s timeout)
+    void fetchRefundDetailsAndNotify(
+      supabase,
+      String(payload.order_id),
+      String(payload.id),
+      payload,
+    ).catch((err) => console.error("[processBagRefunded] background task failed:", err));
   } catch (err) {
     await updateEventStatus(
       supabase,

@@ -1,18 +1,81 @@
 /**
  * Order Confirmation Screen — the mobile "Post-Purchase Wow Moment".
  *
- * ## Architecture
- * Fetches order details from the Supabase Edge Function (GET /orders/{orderId}),
- * which proxies to Violet's GET /orders/{id}. The orderId is passed via the
- * URL parameter from the checkout screen after successful submission.
+ * Route: `/order/[orderId]/confirmation`
  *
- * ## Data source
- * Unlike web (which uses a TanStack Start loader for SSR), mobile fetches
- * client-side on mount. The Edge Function base URL is the same as checkout
- * but uses a different path (/orders/{id} instead of /cart/{id}).
+ * ## Purpose
+ * Displays a full order confirmation after successful checkout, including:
+ * - Success header with checkmark icon
+ * - Guest tracking token card (when `token` search param is present)
+ * - Per-merchant bag breakdown with item thumbnails, quantities, and prices
+ * - Order pricing summary (subtotal, shipping, tax, total)
+ * - Shipping address
+ * - "Continue Shopping" CTA that navigates to the home screen
  *
- * @see supabase/functions/cart/index.ts — Edge Function routes (Task 8 adds GET /orders)
- * @see apps/web/src/routes/order/$orderId/confirmation.tsx — web equivalent
+ * ## Navigation flow
+ * - **Entry**: Redirected from the checkout screen (`/checkout`) after successful
+ *   Stripe payment confirmation. Params: `orderId` (path), `token` (optional query).
+ * - **Exit**: "Continue Shopping" button calls `router.replace("/")` to go home.
+ *   Back navigation is disabled (`headerBackVisible: false`) since returning to
+ *   checkout after payment would be confusing.
+ *
+ * ## Data dependencies
+ * - Fetches order via Supabase Edge Function: `GET {SUPABASE_URL}/functions/v1/cart/orders/{orderId}`
+ * - Requires a valid Supabase JWT (obtained via `getSessionAccessToken()`)
+ * - Uses the shared `OrderDetail` type from `@ecommerce/shared`
+ * - Uses `formatPrice()` from `@ecommerce/shared` for consistent currency formatting
+ *
+ * ## Relationship with shared hooks
+ * This screen does NOT use the shared `useOrders` hook or TanStack Query. It performs
+ * a one-shot fetch via `useEffect` + `useState` because:
+ * 1. The confirmation screen is transient — no caching or refetching is needed
+ * 2. Mobile doesn't have a TanStack Query provider set up for order data (yet)
+ * 3. The data shape (`OrderDetail`) comes from the Violet proxy, not Supabase tables
+ *
+ * When a dedicated order detail screen is added (Story 5.3 mobile), it should use
+ * `orderDetailQueryOptions()` from `useOrders.ts` with a mobile-specific fetch function.
+ *
+ * ## Architecture differences from web
+ * - **Web**: Uses TanStack Start loader for SSR prefetching of order data
+ * - **Mobile**: Client-side fetch on mount (no SSR), same Edge Function endpoint
+ * - Both share the `OrderDetail` type and `formatPrice` utility
+ *
+ * ## Error handling
+ * - Missing `orderId` or `EDGE_FN_BASE` config: Shows error immediately
+ * - Auth failure (no session): Shows "Not authenticated" error
+ * - HTTP errors: Shows status code in error message
+ * - Network errors: Caught by try/catch, shows generic connectivity message
+ * - **Gap**: No retry button — user must navigate away and come back
+ *
+ * ## Accessibility (updated)
+ * - Success icon: `accessibilityLabel="Order confirmed successfully"` so VoiceOver
+ *   reads a meaningful phrase instead of the raw "✓" character
+ * - Section titles (ORDER SUMMARY, SHIPPING ADDRESS, SAVE YOUR TRACKING LINK):
+ *   `accessibilityRole="header"` for proper VoiceOver heading navigation
+ * - "Continue Shopping" button: `accessibilityRole="button"` and
+ *   `accessibilityLabel="Continue Shopping"` for explicit screen reader announcement
+ * - "Copy" guest token button: `accessibilityLabel="Copy guest token"` and
+ *   `accessibilityHint="Copies your order lookup token to clipboard"` for context
+ *
+ * ## Styling
+ * Uses `ThemedText` and `ThemedView` from `@/components/` for dark mode support.
+ * Design tokens are imported from `@/constants/theme` (Spacing). This is the correct
+ * pattern for the mobile app — `@ecommerce/ui` tokens are also valid but `@/constants/theme`
+ * is the established convention in confirmation screens.
+ *
+ * ## Platform-specific behaviors
+ * - Uses `SafeAreaView` with `edges={["bottom"]}` to avoid bottom inset overlap
+ * - Guest token "copy" uses `Alert.alert()` instead of clipboard (expo-clipboard
+ *   not installed) — see `handleCopyToken` docstring
+ * - Header back button is explicitly hidden via `Stack.Screen` options
+ *
+ * ## Deep linking
+ * Supports deep links via Expo Router path: `order/{orderId}/confirmation?token={token}`.
+ * The `useLocalSearchParams` hook extracts both `orderId` (path) and `token` (query).
+ *
+ * @see {@link file://supabase/functions/cart/index.ts} — Edge Function routes
+ * @see {@link file://apps/web/src/routes/order/$orderId/confirmation.tsx} — web equivalent
+ * @see {@link file://packages/shared/src/hooks/useOrders.ts} — shared query options (unused here)
  * @see Story 4.5 — Payment Confirmation & 3D Secure Handling
  */
 
@@ -148,7 +211,7 @@ export default function OrderConfirmationScreen() {
           <>
             {/* ── Success header ── */}
             <ThemedView style={styles.header}>
-              <View style={styles.successIcon}>
+              <View style={styles.successIcon} accessibilityLabel="Order confirmed successfully">
                 <ThemedText style={styles.successIconText}>✓</ThemedText>
               </View>
               <ThemedText style={styles.heading}>Order Confirmed</ThemedText>
@@ -162,7 +225,9 @@ export default function OrderConfirmationScreen() {
             {/* ── Guest order tracking token (Story 5.1) ── */}
             {token && (
               <ThemedView style={styles.guestTokenCard}>
-                <ThemedText style={styles.sectionTitle}>SAVE YOUR TRACKING LINK</ThemedText>
+                <ThemedText style={styles.sectionTitle} accessibilityRole="header">
+                  SAVE YOUR TRACKING LINK
+                </ThemedText>
                 <ThemedText style={styles.guestTokenHint}>
                   Since you checked out as a guest, save this token to track your order later. This
                   is the only time it will be shown.
@@ -171,7 +236,13 @@ export default function OrderConfirmationScreen() {
                   <ThemedText style={styles.guestTokenValue} numberOfLines={1}>
                     {token.slice(0, 20)}...
                   </ThemedText>
-                  <Pressable style={styles.guestTokenCopy} onPress={handleCopyToken}>
+                  <Pressable
+                    style={styles.guestTokenCopy}
+                    onPress={handleCopyToken}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy guest token"
+                    accessibilityHint="Copies your order lookup token to clipboard"
+                  >
                     <ThemedText style={styles.guestTokenCopyText}>
                       {copied ? "Copied!" : "Copy"}
                     </ThemedText>
@@ -219,7 +290,9 @@ export default function OrderConfirmationScreen() {
 
             {/* ── Price breakdown ── */}
             <ThemedView style={styles.pricingCard}>
-              <ThemedText style={styles.sectionTitle}>ORDER SUMMARY</ThemedText>
+              <ThemedText style={styles.sectionTitle} accessibilityRole="header">
+                ORDER SUMMARY
+              </ThemedText>
               <View style={styles.pricingRow}>
                 <ThemedText style={styles.pricingLabel}>Subtotal</ThemedText>
                 <ThemedText style={styles.pricingValue}>
@@ -248,7 +321,9 @@ export default function OrderConfirmationScreen() {
 
             {/* ── Shipping address ── */}
             <ThemedView style={styles.addressCard}>
-              <ThemedText style={styles.sectionTitle}>SHIPPING ADDRESS</ThemedText>
+              <ThemedText style={styles.sectionTitle} accessibilityRole="header">
+                SHIPPING ADDRESS
+              </ThemedText>
               <ThemedText style={styles.addressText}>
                 {order.customer.firstName} {order.customer.lastName}
               </ThemedText>
@@ -261,7 +336,12 @@ export default function OrderConfirmationScreen() {
 
             {/* ── Continue shopping button ── */}
             <View style={styles.ctaContainer}>
-              <Pressable style={styles.ctaButtonContainer} onPress={() => router.replace("/")}>
+              <Pressable
+                style={styles.ctaButtonContainer}
+                onPress={() => router.replace("/")}
+                accessibilityRole="button"
+                accessibilityLabel="Continue Shopping"
+              >
                 <ThemedText style={styles.ctaButton}>Continue Shopping</ThemedText>
               </Pressable>
               <ThemedText style={styles.trackingHint}>

@@ -1,26 +1,125 @@
 /**
- * Guest Order Lookup Screen — /order/lookup
+ * Guest Order Lookup Screen — `/order/lookup`
  *
+ * Route: `/order/lookup`
+ *
+ * ## Purpose
  * React Native implementation of the guest order lookup feature (AC: #1, #2, #3, #6, #7).
- * Mirrors the web route `/order/lookup` but uses React Native components and
- * calls the `guest-order-lookup` Supabase Edge Function (mobile cannot call
- * TanStack Start Server Functions directly).
+ * Allows guest users (who checked out without creating an account) to find and view
+ * their order details. Mirrors the web route `/order/lookup` but uses React Native
+ * components and calls the `guest-order-lookup` Supabase Edge Function directly
+ * (mobile cannot call TanStack Start Server Functions).
  *
- * ## Two entry paths
+ * ## Navigation flow
+ * - **Entry point 1**: Profile/Settings screen -> "Track an Order" link
+ *   (`router.push("/order/lookup")` in `profile.tsx`)
+ * - **Entry point 2**: Deep link with token: `myapp://order/lookup?token=abc123`
+ *   (e.g., from the tracking link shown on the confirmation screen)
+ * - **Exit**: Back button in the Stack header navigates back to the previous screen
+ * - **No forward navigation**: Orders are displayed inline (expanded/collapsed),
+ *   not as links to a separate detail screen
  *
+ * ## Two entry paths (data flow)
  * 1. **Token-based**: URL param `?token=<value>` triggers auto-lookup on mount.
- * 2. **Email-based**: Guest enters email → receives 6-digit OTP → views their orders.
+ *    Calls the Edge Function with `{ type: "token", token }` — no auth required.
+ *    Displays a single order detail view directly.
+ * 2. **Email-based**: Guest enters email -> Supabase OTP sent -> user enters 6-digit
+ *    code -> OTP verified -> Edge Function called with `{ type: "email" }` + Bearer token
+ *    -> displays list of all orders for that email.
+ *
+ * ## State machine (LookupStep)
+ * ```
+ * "email" -> (submit email) -> "verify" -> (submit OTP) -> "results"
+ *                                                          -> orders[] displayed in FlatList
+ * "email" -> (token param present) -> "token-result"
+ *                                      -> single order displayed
+ * ```
+ *
+ * ## Data dependencies
+ * - `EXPO_PUBLIC_SUPABASE_URL` environment variable for Edge Function URL
+ * - `guest-order-lookup` Supabase Edge Function (handles both token and email lookups)
+ * - Supabase Auth OTP flow for email verification
+ * - Shared utilities: `formatPrice()`, `formatDate()`, `ORDER_STATUS_LABELS`,
+ *   `BAG_STATUS_LABELS` from `@ecommerce/shared`
+ * - Design tokens: `colors`, `spacing`, `typography` from `@ecommerce/ui`
+ *
+ * ## Relationship with shared hooks
+ * This screen does NOT use the shared `useOrders` hook or TanStack Query because:
+ * 1. Guest lookups are transient — no persistent cache needed
+ * 2. The data comes from the `guest-order-lookup` Edge Function with a different
+ *    shape (snake_case from Supabase) than the Violet-proxied `OrderDetail` type
+ * 3. The OTP auth flow is unique to guest lookup and doesn't fit the query pattern
+ *
+ * The local `GuestOrder` / `OrderBag` / `OrderItem` types mirror the Supabase table
+ * structure (snake_case) rather than the Violet API shape (camelCase). If a shared
+ * type is added later, these should be consolidated.
  *
  * ## Session cleanup
- * After OTP verification and fetching orders, we immediately sign out to prevent
- * leaving a stale Supabase session the guest doesn't know about.
+ * After OTP verification and fetching orders, we immediately sign out
+ * (`supabase.auth.signOut()`) to prevent leaving a stale Supabase session the
+ * guest doesn't know about. This is wrapped in a `finally` block to ensure
+ * cleanup even if the order fetch fails.
+ *
+ * ## Error handling
+ * - Empty email: Validated client-side before submission
+ * - OTP errors: Invalid/expired code message displayed inline
+ * - Rate limiting: Detected via status 429 or message content, shown as user-friendly text
+ * - Network errors: Generic "unexpected error" message via catch blocks
+ * - Token lookup failure: Shows "order not found" with expiration hint
+ * - **Gap**: No retry mechanism for failed lookups — user must re-enter data
+ * - **Gap**: No offline detection — errors are generic, not offline-specific
+ *
+ * ## Accessibility (updated)
+ * - Order cards in the results list have `accessibilityRole="button"` and
+ *   `accessibilityState={{ expanded }}` for proper VoiceOver announcement
+ * - `textContentType="oneTimeCode"` on OTP input enables iOS autofill from SMS
+ * - `textContentType="emailAddress"` and `autoComplete="email"` for email input
+ * - `keyboardShouldPersistTaps="handled"` prevents keyboard dismissal on button press
+ * - `accessibilityLabel` on all `TextInput` fields (email and OTP) so screen readers
+ *   do not rely solely on placeholder text
+ * - `accessibilityLiveRegion="polite"` on error message containers so screen readers
+ *   announce errors dynamically when they appear
+ * - `accessibilityRole="link"` on the "Use a different email" back button
+ * - `OrderDetailView` has `accessibilityRole="header"` on the "Order Summary" pricing
+ *   title and the order ID heading for VoiceOver heading navigation
+ *
+ * ## Styling (updated)
+ * Now uses `ThemedText` and `ThemedView` from `@/components/` for dark mode support,
+ * matching the confirmation screen's approach. Design tokens are still imported from
+ * `@ecommerce/ui` (`colors`, `spacing`, `typography`) because this screen was authored
+ * with those tokens and they provide richer typographic control than `@/constants/theme`.
+ * Both import paths are valid — `@/constants/theme` is the simpler convention used by
+ * the confirmation screen, while `@ecommerce/ui` offers the full design system. The
+ * key fix is replacing raw `Text`/`View` with themed variants for dark mode.
+ *
+ * ## Platform-specific behaviors
+ * - `KeyboardAvoidingView` with `behavior="padding"` on iOS only (Android handles
+ *   keyboard avoidance differently via `windowSoftInputMode`)
+ * - Font family: Georgia on iOS, generic serif on Android (for heading text)
+ * - `FlatList` used for order results (virtualized, performant for long lists)
+ *
+ * ## Deep linking
+ * Supports `order/lookup?token=<value>` — the `useLocalSearchParams` hook extracts
+ * the `token` query param. When present, the screen skips the email step and
+ * immediately performs a token-based lookup.
+ *
+ * ## Differences from web counterpart
+ * - Web uses TanStack Start Server Functions; mobile uses Edge Function directly
+ * - Web uses CSS + BEM styling; mobile uses StyleSheet with design tokens
+ * - Both share the same Edge Function backend and OTP verification flow
+ * - Mobile includes refund display (from Story 5.5) inline within bag cards
+ *
+ * @see {@link file://apps/web/src/routes/order/lookup.tsx} — web equivalent
+ * @see {@link file://supabase/functions/guest-order-lookup/index.ts} — Edge Function
+ * @see {@link file://packages/shared/src/hooks/useOrders.ts} — shared query options (unused here)
+ * @see {@link file://apps/mobile/src/app/profile.tsx} — navigation entry point
+ * @see Story 5.4 — Guest Order Lookup
  */
 
 import React, { useState, useEffect } from "react";
 import {
   ScrollView,
   View,
-  Text,
   TextInput,
   Pressable,
   StyleSheet,
@@ -38,9 +137,15 @@ import {
   BAG_STATUS_LABELS,
 } from "@ecommerce/shared";
 import { colors, spacing, typography } from "@ecommerce/ui";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Line item within an order bag, as returned by the Supabase `guest-order-lookup`
+ * Edge Function. Uses snake_case to match Supabase table columns directly.
+ */
 interface OrderItem {
   id: string;
   name: string;
@@ -49,6 +154,7 @@ interface OrderItem {
   thumbnail: string | null;
 }
 
+/** Refund record associated with an order bag. Added in Story 5.5. */
 interface OrderRefund {
   id: string;
   amount: number;
@@ -56,6 +162,10 @@ interface OrderRefund {
   currency: string;
 }
 
+/**
+ * Merchant bag with nested items and optional refunds. Maps to the `order_bags`
+ * Supabase table with joined `order_items` and `order_refunds`.
+ */
 interface OrderBag {
   id: string;
   merchant_name: string | null;
@@ -69,6 +179,10 @@ interface OrderBag {
   order_refunds?: OrderRefund[];
 }
 
+/**
+ * Top-level guest order with nested bags. Returned by the `guest-order-lookup`
+ * Edge Function for both token-based and email-based lookups.
+ */
 interface GuestOrder {
   id: string;
   status: string;
@@ -81,6 +195,10 @@ interface GuestOrder {
   order_bags: OrderBag[];
 }
 
+/**
+ * Discriminated union representing the current step in the lookup wizard.
+ * Drives which UI is rendered — each step has its own render branch.
+ */
 type LookupStep =
   | { step: "email" }
   | { step: "verify"; email: string }
@@ -92,6 +210,14 @@ type LookupStep =
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const EDGE_FN_URL = `${SUPABASE_URL}/functions/v1/guest-order-lookup`;
 
+/**
+ * Looks up a single order by its guest tracking token.
+ * No authentication required — the token itself is the secret.
+ *
+ * @param token - The guest tracking token from the confirmation screen
+ * @returns The order if found, or `null` if the token is invalid/expired
+ * @throws Error if the HTTP request fails (non-2xx status)
+ */
 async function lookupByToken(token: string): Promise<GuestOrder | null> {
   const res = await fetch(EDGE_FN_URL, {
     method: "POST",
@@ -103,6 +229,15 @@ async function lookupByToken(token: string): Promise<GuestOrder | null> {
   return json.data ?? null;
 }
 
+/**
+ * Looks up all orders associated with the authenticated email.
+ * Requires a valid Supabase JWT obtained after OTP verification.
+ * The Edge Function uses the JWT's email claim to query orders.
+ *
+ * @param accessToken - Supabase session JWT from OTP verification
+ * @returns Array of orders (empty if none found for the email)
+ * @throws Error if the HTTP request fails (non-2xx status)
+ */
 async function lookupByEmail(accessToken: string): Promise<GuestOrder[]> {
   const res = await fetch(EDGE_FN_URL, {
     method: "POST",
@@ -119,38 +254,70 @@ async function lookupByEmail(accessToken: string): Promise<GuestOrder[]> {
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
+/**
+ * Renders the full detail view for a single guest order.
+ *
+ * Displays order header (ID, date, status), per-merchant bag cards with line items,
+ * shipping tracking info (when shipped), refund notices (Story 5.5), and a pricing
+ * summary card.
+ *
+ * Used in two contexts:
+ * 1. **Token lookup result**: Rendered directly as the sole content
+ * 2. **Email lookup results**: Rendered inline below an expanded order card in the FlatList
+ *
+ * ## Accessibility
+ * - Order ID text has `accessibilityRole="header"` for VoiceOver heading navigation
+ * - "Order Summary" pricing title has `accessibilityRole="header"`
+ * - Refund notices use semantic text for screen reader clarity
+ *
+ * ## Styling
+ * Uses `ThemedText` and `ThemedView` for dark mode support. Colors from `@ecommerce/ui`
+ * are applied via StyleSheet for fine-grained control over typography and layout.
+ *
+ * @param props.order - The guest order data from the Edge Function
+ */
 function OrderDetailView({ order }: { order: GuestOrder }) {
   return (
     <View style={styles.detailContainer}>
       <View style={styles.detailHeader}>
-        <Text style={styles.detailId}>Order #{order.id.slice(0, 8).toUpperCase()}</Text>
-        <Text style={styles.detailDate}>{formatDate(order.created_at, "long")}</Text>
-        <Text style={styles.detailStatus}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</Text>
+        <ThemedText style={styles.detailId} accessibilityRole="header">
+          Order #{order.id.slice(0, 8).toUpperCase()}
+        </ThemedText>
+        <ThemedText style={styles.detailDate}>{formatDate(order.created_at, "long")}</ThemedText>
+        <ThemedText style={styles.detailStatus}>
+          {ORDER_STATUS_LABELS[order.status] ?? order.status}
+        </ThemedText>
       </View>
 
       {order.order_bags.map((bag) => (
-        <View key={bag.id} style={styles.bagCard}>
+        <ThemedView key={bag.id} style={styles.bagCard}>
           <View style={styles.bagHeader}>
-            <Text style={styles.merchantName}>{bag.merchant_name || "Merchant"}</Text>
-            <Text style={styles.bagStatus}>{BAG_STATUS_LABELS[bag.status] ?? bag.status}</Text>
+            <ThemedText style={styles.merchantName}>{bag.merchant_name || "Merchant"}</ThemedText>
+            <ThemedText style={styles.bagStatus}>
+              {BAG_STATUS_LABELS[bag.status] ?? bag.status}
+            </ThemedText>
           </View>
 
           {bag.order_items.map((item) => (
             <View key={item.id} style={styles.itemRow}>
               <View style={styles.itemDetails}>
-                <Text style={styles.itemName} numberOfLines={2}>
+                <ThemedText style={styles.itemName} numberOfLines={2}>
                   {item.name}
-                </Text>
-                {item.quantity > 1 && <Text style={styles.itemQty}>Qty: {item.quantity}</Text>}
+                </ThemedText>
+                {item.quantity > 1 && (
+                  <ThemedText style={styles.itemQty}>Qty: {item.quantity}</ThemedText>
+                )}
               </View>
-              <Text style={styles.itemPrice}>{formatPrice(item.line_price, order.currency)}</Text>
+              <ThemedText style={styles.itemPrice}>
+                {formatPrice(item.line_price, order.currency)}
+              </ThemedText>
             </View>
           ))}
 
           {bag.status === "SHIPPED" && bag.tracking_number && (
-            <Text style={styles.trackingInfo}>
+            <ThemedText style={styles.trackingInfo}>
               {bag.carrier ? `${bag.carrier} — ` : ""}#{bag.tracking_number}
-            </Text>
+            </ThemedText>
           )}
 
           {/* Refund notice — optional chaining because older data from the Edge Function
@@ -158,44 +325,67 @@ function OrderDetailView({ order }: { order: GuestOrder }) {
               have refund data; only REFUNDED/PARTIALLY_REFUNDED bags do.
               @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md */}
           {bag.order_refunds && bag.order_refunds.length > 0 && (
-            <Text style={styles.refundNotice}>
+            <ThemedText style={styles.refundNotice}>
               {`Refund of ${formatPrice(
                 bag.order_refunds.reduce((s: number, r: { amount: number }) => s + r.amount, 0),
                 order.currency,
               )} processed`}
               {bag.order_refunds[0]?.reason ? ` — ${bag.order_refunds[0].reason}` : ""}
-            </Text>
+            </ThemedText>
           )}
-        </View>
+        </ThemedView>
       ))}
 
-      <View style={styles.pricingCard}>
-        <Text style={styles.pricingTitle}>Order Summary</Text>
+      <ThemedView style={styles.pricingCard}>
+        <ThemedText style={styles.pricingTitle} accessibilityRole="header">
+          Order Summary
+        </ThemedText>
         <View style={styles.pricingRow}>
-          <Text style={styles.pricingLabel}>Subtotal</Text>
-          <Text style={styles.pricingValue}>{formatPrice(order.subtotal, order.currency)}</Text>
+          <ThemedText style={styles.pricingLabel}>Subtotal</ThemedText>
+          <ThemedText style={styles.pricingValue}>
+            {formatPrice(order.subtotal, order.currency)}
+          </ThemedText>
         </View>
         <View style={styles.pricingRow}>
-          <Text style={styles.pricingLabel}>Shipping</Text>
-          <Text style={styles.pricingValue}>
+          <ThemedText style={styles.pricingLabel}>Shipping</ThemedText>
+          <ThemedText style={styles.pricingValue}>
             {formatPrice(order.shipping_total, order.currency)}
-          </Text>
+          </ThemedText>
         </View>
         <View style={styles.pricingRow}>
-          <Text style={styles.pricingLabel}>Tax</Text>
-          <Text style={styles.pricingValue}>{formatPrice(order.tax_total, order.currency)}</Text>
+          <ThemedText style={styles.pricingLabel}>Tax</ThemedText>
+          <ThemedText style={styles.pricingValue}>
+            {formatPrice(order.tax_total, order.currency)}
+          </ThemedText>
         </View>
         <View style={[styles.pricingRow, styles.pricingRowTotal]}>
-          <Text style={styles.pricingTotalLabel}>Total</Text>
-          <Text style={styles.pricingTotalValue}>{formatPrice(order.total, order.currency)}</Text>
+          <ThemedText style={styles.pricingTotalLabel}>Total</ThemedText>
+          <ThemedText style={styles.pricingTotalValue}>
+            {formatPrice(order.total, order.currency)}
+          </ThemedText>
         </View>
-      </View>
+      </ThemedView>
     </View>
   );
 }
 
 // ─── Page Component ────────────────────────────────────────────────────────────
 
+/**
+ * Main screen component for guest order lookup.
+ *
+ * Implements a multi-step wizard using the `LookupStep` discriminated union.
+ * Each step renders a different UI branch. The component manages all state
+ * locally (no external state management) since the lookup flow is transient.
+ *
+ * ## Accessibility
+ * - All `TextInput` fields have explicit `accessibilityLabel` props
+ * - Error messages use `accessibilityLiveRegion="polite"` for dynamic announcements
+ * - "Use a different email" back link has `accessibilityRole="link"`
+ * - Order cards have `accessibilityRole="button"` with `accessibilityState={{ expanded }}`
+ *
+ * @see LookupStep for the state machine definition
+ */
 export default function GuestLookupScreen() {
   const params = useLocalSearchParams<{ token?: string }>();
   const token = params.token ?? "";
@@ -329,7 +519,11 @@ export default function GuestLookupScreen() {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Stack.Screen options={{ title: "Track Your Order" }} />
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? (
+          <View accessibilityLiveRegion="polite">
+            <ThemedText style={styles.errorText}>{error}</ThemedText>
+          </View>
+        ) : null}
         <OrderDetailView order={currentStep.order} />
       </ScrollView>
     );
@@ -343,9 +537,9 @@ export default function GuestLookupScreen() {
         <Stack.Screen options={{ title: "Your Orders" }} />
         {orders.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
+            <ThemedText style={styles.emptyText}>
               No orders found for this email. Check the address or contact support.
-            </Text>
+            </ThemedText>
           </View>
         ) : (
           <FlatList
@@ -363,21 +557,25 @@ export default function GuestLookupScreen() {
                     accessibilityState={{ expanded: isExpanded }}
                   >
                     <View style={styles.cardHeader}>
-                      <Text style={styles.cardDate}>{formatDate(order.created_at, "short")}</Text>
-                      <Text style={styles.cardStatus}>
+                      <ThemedText style={styles.cardDate}>
+                        {formatDate(order.created_at, "short")}
+                      </ThemedText>
+                      <ThemedText style={styles.cardStatus}>
                         {ORDER_STATUS_LABELS[order.status] ?? order.status}
-                      </Text>
+                      </ThemedText>
                     </View>
-                    <Text style={styles.cardId}>Order #{order.id.slice(0, 8).toUpperCase()}</Text>
+                    <ThemedText style={styles.cardId}>
+                      Order #{order.id.slice(0, 8).toUpperCase()}
+                    </ThemedText>
                     <View style={styles.cardFooter}>
-                      <Text style={styles.cardMerchants}>
+                      <ThemedText style={styles.cardMerchants}>
                         {order.order_bags.length === 1
                           ? "1 merchant"
                           : `${order.order_bags.length} merchants`}
-                      </Text>
-                      <Text style={styles.cardTotal}>
+                      </ThemedText>
+                      <ThemedText style={styles.cardTotal}>
                         {formatPrice(order.total, order.currency)}
-                      </Text>
+                      </ThemedText>
                     </View>
                   </Pressable>
                   {isExpanded && <OrderDetailView order={order} />}
@@ -398,22 +596,29 @@ export default function GuestLookupScreen() {
       >
         <Stack.Screen options={{ title: "Verify Email" }} />
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.heading}>Check Your Email</Text>
-          <Text style={styles.subheading}>
-            We sent a 6-digit code to <Text style={styles.emailHighlight}>{currentStep.email}</Text>
-          </Text>
+          <ThemedText style={styles.heading}>Check Your Email</ThemedText>
+          <ThemedText style={styles.subheading}>
+            We sent a 6-digit code to{" "}
+            <ThemedText style={styles.emailHighlight}>{currentStep.email}</ThemedText>
+          </ThemedText>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <View accessibilityLiveRegion="polite">
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
+            </View>
+          ) : null}
 
           <TextInput
             style={styles.input}
             value={otp}
             onChangeText={(v) => setOtp(v.replace(/\D/g, ""))}
             placeholder="000000"
+            placeholderTextColor={colors.steel}
             keyboardType="number-pad"
             maxLength={6}
             autoFocus
             textContentType="oneTimeCode"
+            accessibilityLabel="Verification code"
           />
 
           <Pressable
@@ -421,9 +626,9 @@ export default function GuestLookupScreen() {
             onPress={handleOtpSubmit}
             disabled={isLoading}
           >
-            <Text style={styles.buttonText}>
-              {isLoading ? "Verifying…" : "Verify & View Orders"}
-            </Text>
+            <ThemedText style={styles.buttonText}>
+              {isLoading ? "Verifying\u2026" : "Verify & View Orders"}
+            </ThemedText>
           </Pressable>
 
           <Pressable
@@ -432,8 +637,9 @@ export default function GuestLookupScreen() {
               setError("");
               setOtp("");
             }}
+            accessibilityRole="link"
           >
-            <Text style={styles.backLink}>← Use a different email</Text>
+            <ThemedText style={styles.backLink}>{"\u2190"} Use a different email</ThemedText>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -448,23 +654,29 @@ export default function GuestLookupScreen() {
     >
       <Stack.Screen options={{ title: "Track Your Order" }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.heading}>Track Your Order</Text>
-        <Text style={styles.subheading}>
+        <ThemedText style={styles.heading}>Track Your Order</ThemedText>
+        <ThemedText style={styles.subheading}>
           Enter your email to receive a verification code and view your orders.
-        </Text>
+        </ThemedText>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? (
+          <View accessibilityLiveRegion="polite">
+            <ThemedText style={styles.errorText}>{error}</ThemedText>
+          </View>
+        ) : null}
 
         <TextInput
           style={styles.input}
           value={email}
           onChangeText={setEmail}
           placeholder="your@email.com"
+          placeholderTextColor={colors.steel}
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
           textContentType="emailAddress"
           autoFocus
+          accessibilityLabel="Email address"
         />
 
         <Pressable
@@ -472,9 +684,9 @@ export default function GuestLookupScreen() {
           onPress={handleEmailSubmit}
           disabled={isLoading}
         >
-          <Text style={styles.buttonText}>
-            {isLoading ? "Sending code…" : "Send Verification Code"}
-          </Text>
+          <ThemedText style={styles.buttonText}>
+            {isLoading ? "Sending code\u2026" : "Send Verification Code"}
+          </ThemedText>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

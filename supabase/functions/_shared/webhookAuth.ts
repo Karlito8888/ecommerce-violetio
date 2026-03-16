@@ -1,11 +1,17 @@
 /**
  * Webhook authentication utilities for Violet HMAC signature validation.
  *
+ * This module is the security gate for the webhook processing pipeline. It runs
+ * as Step 5 in the handle-webhook flow, AFTER header extraction but BEFORE
+ * idempotency checks or payload processing.
+ *
  * ## How Violet signs webhooks
  *
  * Violet computes HMAC-SHA256 of the raw request body using the App Secret
  * as the key, then Base64-encodes the result and sends it in the
  * `X-Violet-Hmac` header. We recompute the HMAC locally and compare.
+ *
+ * Algorithm: `Base64(HMAC-SHA256(VIOLET_APP_SECRET, rawRequestBody))`
  *
  * ## Why Web Crypto API (not CryptoJS)
  *
@@ -17,8 +23,31 @@
  *
  * The HMAC is computed on the raw string body, NOT parsed JSON.
  * Always call `validateHmac()` before `JSON.parse()`.
+ * The main handler reads `req.text()` first, validates HMAC, then parses.
  *
+ * ## Error handling
+ *
+ * HMAC failure is the ONLY case where handle-webhook returns non-2xx (401).
+ * This signals a configuration problem to Violet (wrong app secret).
+ * All other errors return 200 to prevent Violet's retry/disable mechanism:
+ * - 10 retries over 24 hours with exponential backoff
+ * - Auto-disable after 50+ failures in 30 minutes
+ * - Permanent disable after 3 rounds of temporary suspension
+ *
+ * ## Violet webhook headers reference
+ *
+ * | Header                  | Purpose                                    |
+ * |-------------------------|--------------------------------------------|
+ * | X-Violet-Hmac           | HMAC-SHA256 signature (Base64)             |
+ * | X-Violet-Event-Id       | Unique event ID for idempotency            |
+ * | X-Violet-Topic          | Event type (e.g., "ORDER_UPDATED")         |
+ * | X-Violet-Bag-Id         | Which bag triggered the event              |
+ * | X-Violet-Webhook-Id     | Webhook configuration ID                   |
+ * | X-Violet-Entity-Length  | Entity size in bytes                       |
+ *
+ * @module webhookAuth
  * @see https://docs.violet.io/prism/webhooks/handling-webhooks — HMAC validation
+ * @see https://docs.violet.io/prism/webhooks/managing-webhook-headers — Header reference
  */
 
 const encoder = new TextEncoder();

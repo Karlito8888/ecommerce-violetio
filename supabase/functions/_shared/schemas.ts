@@ -58,25 +58,37 @@ export const searchQuerySchema = z.object({
 export type GenerateEmbeddingsInput = z.infer<typeof generateEmbeddingsRequestSchema>;
 export type SearchQueryInput = z.infer<typeof searchQuerySchema>;
 
-// ─── Webhook Schemas (Story 3.7) ─────────────────────────────────────
+// ─── Webhook Schemas (Story 3.7 + Story 5.2) ─────────────────────────
 //
 // These schemas validate inbound Violet webhook payloads in the handle-webhook
 // Edge Function. They mirror the TypeScript types in packages/shared/src/types/order.types.ts
 // and MUST be kept in sync (same Deno/Node constraint as the schemas above).
+//
+// Pipeline: Violet POST → HMAC verify → 2-phase header validation → idempotency
+// check (webhook_events.event_id UNIQUE) → payload validation (these schemas)
+// → processor routing → DB updates → 200 response.
+//
+// Violet retries up to 10 times over 24 hours with exponential backoff on non-2xx,
+// and auto-disables webhooks after 50+ failures in 30 minutes.
+// @see https://docs.violet.io/prism/webhooks/handling-webhooks
 
 /**
  * All webhook event types our system handles.
  *
- * Offer events trigger product embedding updates (Story 3.7).
- * Sync events are logged for monitoring only (Story 3.7).
- * Order events update order status in Supabase (Story 5.2).
- * Bag events update per-merchant bag status + tracking info (Story 5.2).
+ * **Offer events** (Story 3.7): Product embedding upsert/soft-delete for AI search.
+ * **Sync events** (Story 3.7): Monitoring/audit trail only — no product-level action.
+ * **Order events** (Story 5.2): Direct order status update from Violet.
+ * **Bag events** (Story 5.2): Per-merchant bag status, tracking, refund processing.
+ *
+ * Violet also emits ORDER_ACCEPTED, ORDER_SHIPPED, ORDER_DELIVERED, ORDER_FAILED
+ * which are NOT in this enum. Unknown types are accepted (200) via two-phase
+ * header validation to prevent Violet from disabling the endpoint.
  *
  * ⚠️ SYNC WARNING: This schema is a manual copy of
  * `packages/shared/src/schemas/webhook.schema.ts` (Deno cannot import Node workspace
  * packages). Any change here MUST be mirrored there, and vice versa.
  *
- * @see https://docs.violet.io/prism/webhooks — Violet event type reference
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Violet event reference
  * @see packages/shared/src/schemas/webhook.schema.ts — Canonical source (Node side)
  */
 export const webhookEventTypeSchema = z.enum([
@@ -195,7 +207,13 @@ export const violetSyncWebhookPayloadSchema = z.object({
 
 /**
  * Validates Violet ORDER_* webhook payload.
- * Status is z.string() (not OrderStatus enum) — Violet may send undocumented values.
+ *
+ * Handles: ORDER_UPDATED, ORDER_COMPLETED, ORDER_CANCELED, ORDER_REFUNDED, ORDER_RETURNED.
+ * Status is `z.string()` (not a strict enum) — Violet may send undocumented values.
+ * `app_order_id` correlates Violet orders with our `orders` table.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Event payloads
+ * @see processOrderUpdated in handle-webhook/orderProcessors.ts
  *
  * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
  */
@@ -209,8 +227,14 @@ export const violetOrderWebhookPayloadSchema = z.object({
 
 /**
  * Validates Violet BAG_* webhook payload.
- * BAG_SHIPPED includes tracking_number, tracking_url, carrier.
- * order_id links back to the parent order for status derivation.
+ *
+ * Handles: BAG_SUBMITTED, BAG_ACCEPTED, BAG_SHIPPED, BAG_COMPLETED, BAG_CANCELED, BAG_REFUNDED.
+ * BAG_SHIPPED populates tracking_number, tracking_url, carrier.
+ * BAG_REFUNDED triggers a Violet Refund API fetch (amounts not in webhook payload).
+ * `order_id` links to parent Violet order for derived status computation.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Bag event payloads
+ * @see processBagShipped, processBagRefunded in handle-webhook/orderProcessors.ts
  *
  * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
  */

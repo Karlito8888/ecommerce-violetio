@@ -1,21 +1,48 @@
 /**
  * Edge Function: handle-webhook
  *
- * Receives inbound Violet webhook events (server-to-server) and processes them.
- * This is the first Edge Function that handles INBOUND requests from an external
- * service, as opposed to generate-embeddings/search-products which serve our apps.
+ * Receives inbound Violet.io webhook events (server-to-server) and processes them.
+ * This is the single entry point for ALL Violet webhook events — product catalog
+ * (Epic 3), order lifecycle, and bag fulfillment (Epic 5).
  *
  * ## Request flow
  *
+ * ```
  * 1. CORS preflight (OPTIONS) — kept for consistency with other Edge Functions
- * 2. POST only — reject other methods
+ * 2. POST only — reject other methods with 405
  * 3. Read raw body as text (HMAC must validate raw string, not parsed JSON)
- * 4. Extract + validate webhook headers via Zod
- * 5. Validate HMAC-SHA256 signature → 401 if invalid
- * 6. Idempotency check: query webhook_events for event_id → 200 if duplicate
- * 7. Insert webhook_events row (status: received) — claims the event
- * 8. Process event inline (Zod validation + processor call)
- * 9. Return 200 to Violet after processing completes
+ * 4. Extract + validate webhook headers via Zod (two-phase validation)
+ *    Phase 1: Structural validation (hmac, eventId, eventType as strings)
+ *    Phase 2: eventType enum check — unknown types get 200 + log (not 400)
+ * 5. Validate HMAC-SHA256 signature → 401 if invalid (ONLY non-2xx case)
+ * 6. Idempotency check: SELECT webhook_events WHERE event_id = ? → 200 if exists
+ * 7. INSERT webhook_events (status: received) — claims the event via UNIQUE constraint
+ *    Race condition: concurrent INSERT hits unique violation → 200 (already claimed)
+ * 8. Parse JSON body → validate with event-specific Zod schema
+ * 9. Route to processor (processOrderUpdated, processBagShipped, etc.)
+ * 10. Return 200 to Violet after processing completes
+ * ```
+ *
+ * ## Violet webhook event types handled
+ *
+ * | Event Type          | Processor                | Action                                    |
+ * |---------------------|--------------------------|-------------------------------------------|
+ * | OFFER_ADDED         | processOfferAdded        | Generate product embedding for AI search  |
+ * | OFFER_UPDATED       | processOfferUpdated      | Re-generate embedding with new data       |
+ * | OFFER_REMOVED       | processOfferRemoved      | Soft-delete (available=false)             |
+ * | OFFER_DELETED       | processOfferDeleted      | Soft-delete (available=false)             |
+ * | PRODUCT_SYNC_*      | processSyncEvent         | Audit trail only                          |
+ * | ORDER_UPDATED       | processOrderUpdated      | Update orders.status                      |
+ * | ORDER_COMPLETED     | processOrderUpdated      | Update orders.status                      |
+ * | ORDER_CANCELED      | processOrderUpdated      | Update orders.status                      |
+ * | ORDER_REFUNDED      | processOrderUpdated      | Update orders.status                      |
+ * | ORDER_RETURNED      | processOrderUpdated      | Update orders.status                      |
+ * | BAG_SUBMITTED       | processBagUpdated        | Update bag status + derive order status   |
+ * | BAG_ACCEPTED        | processBagUpdated        | Update bag status + derive order status   |
+ * | BAG_SHIPPED         | processBagShipped        | Persist tracking info + notification      |
+ * | BAG_COMPLETED       | processBagUpdated        | Update bag status + delivery notification |
+ * | BAG_CANCELED        | processBagUpdated        | Update bag status + derive order status   |
+ * | BAG_REFUNDED        | processBagRefunded       | Fetch refund details + notification       |
  *
  * ## ⚠️ KNOWN LIMITATION: Synchronous processing (H1 code review)
  *
@@ -31,7 +58,14 @@
  *   status and can be retried manually or via a cleanup cron.
  * - For true async, migrate to Supabase Queues or pg_cron + DB-driven processing.
  *
- * @see H1 code review fix — documented this limitation honestly
+ * ## Idempotency mechanism
+ *
+ * Violet may deliver the same event multiple times (up to 10 retries over 24h
+ * with exponential backoff). Deduplication works at two levels:
+ * 1. **SELECT check**: Fast path — if event_id exists in webhook_events, return 200
+ * 2. **INSERT with UNIQUE constraint**: Race condition guard — if two concurrent
+ *    requests pass the SELECT check, the second INSERT fails with code 23505
+ *    (unique violation) and returns 200
  *
  * ## Authentication: HMAC, not service_role
  *
@@ -40,11 +74,17 @@
  *
  * ## Error handling: Always return 2xx (except HMAC failure)
  *
- * Violet retries on non-2xx and will disable the webhook after 50+ failures.
+ * Violet retries on non-2xx and will disable the webhook after 50+ failures
+ * within 30 minutes (temporary 1h/3h/24h suspensions, then permanent disable).
  * Even if processing fails, return 200 and log the error to webhook_events.
  * Only HMAC failure returns 401 (to signal a configuration problem to Violet).
  *
- * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Retry policy
+ * @module handle-webhook
+ * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Retry policy & best practices
+ * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Order event reference
+ * @see webhookAuth.ts — HMAC signature verification
+ * @see processors.ts — Offer/sync event processors
+ * @see orderProcessors.ts — Order/bag event processors
  */
 
 import { corsHeaders } from "../_shared/cors.ts";

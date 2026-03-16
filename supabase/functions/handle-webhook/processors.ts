@@ -1,8 +1,18 @@
 /**
- * Webhook event processors for Violet offer and sync events.
+ * Webhook event processors for Violet offer and sync events (Epic 3 / Story 3.7).
  *
- * Each processor handles a specific event type and updates the webhook_events
- * row with the processing outcome (status: processed | failed).
+ * Each processor handles a specific Violet webhook event type and updates the
+ * `webhook_events` row with the processing outcome (status: processed | failed).
+ *
+ * ## Pipeline position
+ *
+ * These processors are invoked by `handle-webhook/index.ts` AFTER:
+ * 1. HMAC signature verification (webhookAuth.ts)
+ * 2. Idempotency check (webhook_events.event_id UNIQUE)
+ * 3. Event claim (INSERT with status: received)
+ * 4. Zod payload validation (schemas.ts)
+ *
+ * The processor's job is purely business logic — no HTTP, no auth, no deduplication.
  *
  * ## Architecture: Why separate processors?
  *
@@ -17,7 +27,17 @@
  * This keeps embedding logic in one place — if the model or text format changes,
  * only generate-embeddings needs updating.
  *
+ * ## Error handling strategy
+ *
+ * All processors catch errors internally and call `updateEventStatus("failed", msg)`.
+ * They never throw — the caller (index.ts) has a catch-all, but processors are
+ * self-contained to provide precise error messages in webhook_events.error_message.
+ * The HTTP response is ALWAYS 200 regardless of processor outcome.
+ *
+ * @module processors
  * @see generate-embeddings/index.ts — The target function for embedding upserts
+ * @see orderProcessors.ts — Order/bag event processors (Story 5.2)
+ * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Violet best practices
  */
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";

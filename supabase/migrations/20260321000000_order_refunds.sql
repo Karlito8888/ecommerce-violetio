@@ -10,10 +10,25 @@
 -- Refund API and persisted here for display in the order detail views.
 -- See: https://docs.violet.io/prism/webhooks/events/order-webhooks.md
 --
+-- ## Violet Refund API
+-- Endpoint: POST /orders/{order_id}/bags/{bag_id}/refunds (create refund)
+-- Endpoint: GET  /orders/{order_id}/bags/{bag_id}/refunds (list refunds)
+-- Supports both full and partial refunds per bag.
+-- A bag can have multiple partial refunds (each stored as a separate row here).
+-- Bags with status IN_PROGRESS, REFUNDED, or CANCELED cannot be refunded.
+-- See: https://docs.violet.io/api-reference/orders-and-checkout/order-refunds/refund-bag.md
+--
+-- ## Violet Cancel API (related but distinct)
+-- Cancel Order: POST /orders/{order_id}/cancel — cancels ALL bags, full refund per bag
+-- Cancel Bag:   POST /orders/{order_id}/bags/{bag_id}/cancel — cancels one bag, full refund
+-- See: https://docs.violet.io/api-reference/orders-and-checkout/order-cancellations/cancel-order.md
+-- See: https://docs.violet.io/api-reference/orders-and-checkout/order-cancellations/cancel-bag.md
+--
 -- ## CANCELED ≠ REFUNDED (Violet semantics)
--- Per Violet docs, CANCELED is merchant-initiated rejection WITHOUT automatic refund.
--- REFUNDED/PARTIALLY_REFUNDED confirm actual monetary transactions occurred.
--- A CANCELED bag will never have rows in this table.
+-- CANCELED is merchant-initiated rejection. Cancel endpoints DO issue refunds, but
+-- the bag status becomes CANCELED (not REFUNDED). REFUNDED/PARTIALLY_REFUNDED are
+-- explicit statuses from the Refund API. A CANCELED bag may or may not have rows
+-- here depending on whether cancellation triggers a BAG_REFUNDED webhook.
 -- See: https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md
 --
 -- ## Immutability
@@ -26,7 +41,7 @@ CREATE TABLE order_refunds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_bag_id UUID NOT NULL REFERENCES order_bags(id) ON DELETE CASCADE,
   violet_refund_id TEXT NOT NULL UNIQUE,
-  amount INTEGER NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount > 0),
   reason TEXT,
   currency TEXT NOT NULL DEFAULT 'USD',
   status TEXT NOT NULL DEFAULT 'PROCESSED',

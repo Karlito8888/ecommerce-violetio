@@ -1,21 +1,57 @@
 /**
  * Guest Order Lookup Page — /order/lookup
  *
+ * @module routes/order/lookup
+ *
  * Multi-step page that lets guest buyers track their orders without an account.
  *
  * ## Two entry paths
  *
  * 1. **Token-based** (`?token=<base64url>`): Arrived from the confirmation page link.
  *    On mount, the token is auto-submitted to `lookupOrderByTokenFn` which hashes it
- *    server-side and returns the order. Shows skeleton during lookup.
+ *    server-side (SHA-256) and queries Supabase by hash. Shows skeleton during lookup.
+ *    This path requires NO authentication — the token's 256-bit entropy is the auth.
  *
  * 2. **Email-based** (no token): The guest enters their email to receive a 6-digit OTP
  *    via Supabase Auth (`signInWithOtp`). After verifying, all orders for that email
- *    are fetched and the temporary OTP session is signed out immediately.
+ *    are fetched via `lookupOrdersByEmailFn` and the temporary OTP session is signed
+ *    out immediately to prevent the guest from accessing authenticated routes.
+ *
+ * ## State machine
+ * ```
+ * "email" → (submit email) → "verify" → (submit OTP) → "results"
+ *    ↑                            |
+ *    └──── (back button) ─────────┘
+ *
+ * URL has ?token → auto-submit → "token-result"
+ * ```
+ *
+ * ## Data source
+ * Uses Supabase local mirror (NOT Violet API). The server functions in guestOrders.ts
+ * query with service_role since guest orders have no user_id for RLS.
+ *
+ * ## Security measures
+ * - **Token path**: No rate limiting needed (256-bit search space).
+ * - **Email path**: Rate limiting handled by Supabase Auth OTP limits.
+ *   The `isRateLimited` state disables the submit button on 429 responses.
+ * - **OTP session cleanup**: `signOut()` is called in a `finally` block after
+ *   fetching results, ensuring cleanup even if the fetch fails.
+ * - **shouldCreateUser: true**: Creates a Supabase user for OTP verification.
+ *   This is necessary because Supabase requires a user record for OTP. The
+ *   immediate signOut prevents this user from accessing authenticated routes.
  *
  * ## SEO: noindex
  * Guest lookup pages should not be indexed — they contain transient personal data
  * and are not useful for search engine crawlers.
+ *
+ * ## Component duplication note
+ * Several sub-components (ItemRow, RefundNotice, BagCard, OrderDetailContent) are
+ * duplicated from $orderId.tsx. A future refactor should extract these into shared
+ * components under a common order-detail module.
+ *
+ * @see {@link lookupOrderByTokenFn} — token-based server function
+ * @see {@link lookupOrdersByEmailFn} — email-based server function
+ * @see Story 5.4 — Guest Order Lookup (web + mobile)
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -41,6 +77,14 @@ const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
 // ─── State Machine ─────────────────────────────────────────────────────────────
 
+/**
+ * Discriminated union representing the current step of the guest lookup flow.
+ *
+ * - `"email"`: Initial state — show email input form (or token error fallback).
+ * - `"verify"`: OTP sent — show 6-digit code input for the given email.
+ * - `"results"`: Email verified — show order list (may be empty).
+ * - `"token-result"`: Token lookup succeeded — show single order detail.
+ */
 type LookupStep =
   | { step: "email" }
   | { step: "verify"; email: string }
@@ -213,6 +257,14 @@ function BagCard({ bag, orderCurrency }: { bag: OrderBagWithItems; orderCurrency
   );
 }
 
+/**
+ * Renders the full order detail view (header, bags, pricing breakdown).
+ * Used for both single token-result and expanded orders in the email results list.
+ *
+ * This component uses the Supabase row shape (`OrderWithBagsAndItems` with snake_case
+ * fields), unlike the confirmation page's similar component which uses Violet's
+ * `OrderDetail` shape (camelCase fields).
+ */
 function OrderDetailContent({ order }: { order: OrderWithBagsAndItems }) {
   const bagStatuses = order.order_bags.map((b) => b.status);
   const hasMultipleBags = order.order_bags.length > 1;
@@ -288,7 +340,13 @@ function LookupPage() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isRateLimited, setIsRateLimited] = useState(false);
 
-  // ── Token auto-lookup on mount ─────────────────────────────────────────────
+  /**
+   * Token auto-lookup on mount.
+   * If the URL contains a `?token=...` search param, automatically submit it
+   * to the server for hash-based lookup. This fires once on mount (token is stable).
+   * On success, transitions to "token-result" step. On failure, shows error and
+   * falls back to the email form so the guest can try an alternative lookup method.
+   */
   useEffect(() => {
     if (!token) return;
 
@@ -311,7 +369,15 @@ function LookupPage() {
       });
   }, [token]);
 
-  // ── Step: Email form ───────────────────────────────────────────────────────
+  /**
+   * Handles email form submission — sends a Supabase OTP to the entered email.
+   *
+   * Uses `signInWithOtp({ shouldCreateUser: true })` to ensure OTP works even
+   * for emails that don't have a Supabase user record. On success, transitions
+   * to the "verify" step. Handles rate limiting (429) by disabling the submit button.
+   *
+   * @param e - Form submit event. Email is read from the named input element.
+   */
   async function handleEmailSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -354,7 +420,15 @@ function LookupPage() {
     }
   }
 
-  // ── Step: OTP verification ─────────────────────────────────────────────────
+  /**
+   * Handles OTP verification — verifies the 6-digit code and fetches orders.
+   *
+   * Flow: verify OTP → fetch orders via server function → sign out OTP session.
+   * The `signOut()` is in a `finally` block to ensure cleanup even if the order
+   * fetch fails. On success, transitions to the "results" step.
+   *
+   * @param e - Form submit event. OTP is read from the named input element.
+   */
   async function handleOtpSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");

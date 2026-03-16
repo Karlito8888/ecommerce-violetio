@@ -1,28 +1,46 @@
 /**
  * Order Confirmation Page — the "Post-Purchase Wow Moment".
  *
+ * @module routes/order/$orderId/confirmation
+ *
  * ## Architecture
  * This page uses a TanStack Start `loader` to fetch order data SSR — unlike the
  * checkout page (which is CSR because Stripe.js is client-side only), the confirmation
  * page has no client-side payment dependency and benefits from server-side rendering
  * for faster first paint and bookmarkable/shareable URLs.
  *
+ * ## Data source — Violet API (NOT Supabase)
+ * Unlike the order tracking pages (/account/orders, /order/lookup) which query the
+ * local Supabase mirror, this page fetches directly from Violet's GET /orders/{id}
+ * endpoint via `getOrderDetailsFn`. This is because:
+ * 1. The order may not yet be persisted to Supabase (persistence happens async via
+ *    `persistAndConfirmOrderFn` which is called from the checkout submit handler).
+ * 2. The Violet response uses `OrderDetail` shape (camelCase fields, nested
+ *    `bags[].items[]`), NOT the Supabase row shape (`order_bags[].order_items[]`).
+ *
+ * ## Data types distinction
+ * - This page: uses `OrderDetail` / `OrderBag` (Violet API response types)
+ * - Order tracking pages: use `OrderWithBagsAndItems` / `OrderBagWithItems` (Supabase row types)
+ * These are structurally different (camelCase vs snake_case, different nesting).
+ *
  * ## Editorial warmth mode (from UX spec)
  * The checkout uses "search-forward" mode (efficiency, Inter font). The confirmation
  * switches to "editorial" mode (Cormorant Garamond headline, generous whitespace,
  * success accents) to create the "quiet luxury" emotional payoff.
- *
- * ## Data source
- * Fetches from Violet GET /orders/{id} via `getOrderDetailsFn`. The order exists
- * in Violet's system after POST /checkout/cart/{id}/submit. The `orderId` comes
- * from the submit response and is passed via the URL parameter.
  *
  * ## Story 5.1 additions
  * - Guest lookup token display (from `token` search param)
  * - GDPR session cleanup (cart cache cleared on mount)
  * - Email confirmation notice
  *
- * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
+ * ## Error handling
+ * The `getOrderDetailsFn` returns `{ data, error }` (NOT throws). If Violet's API
+ * returns an error or the order is not found, the error state is rendered with a
+ * "Continue Shopping" CTA. Note: per Violet docs, responses may return HTTP 200
+ * while containing errors in the `errors` field — the server function handles this.
+ *
+ * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id — Violet GET /orders/{id}
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart — Cart-to-order transition
  * @see Story 4.5 — Payment Confirmation & 3D Secure Handling
  * @see Story 5.1 — Order Confirmation & Data Persistence
  */
