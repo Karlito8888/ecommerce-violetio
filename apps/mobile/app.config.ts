@@ -41,8 +41,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: "automatic",
   ios: {
     icon: "./assets/expo.icon",
+    bundleIdentifier: "com.maisonemile.app",
+    associatedDomains: ["applinks:www.maisonemile.com"],
   },
   android: {
+    package: "com.maisonemile.app",
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
       foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -50,6 +53,35 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
     predictiveBackGestureEnabled: false,
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [
+          {
+            scheme: "https",
+            host: "www.maisonemile.com",
+            pathPrefix: "/products",
+          },
+          {
+            scheme: "https",
+            host: "www.maisonemile.com",
+            pathPrefix: "/order",
+          },
+          {
+            scheme: "https",
+            host: "www.maisonemile.com",
+            pathPrefix: "/account",
+          },
+          {
+            scheme: "https",
+            host: "www.maisonemile.com",
+            pathPrefix: "/search",
+          },
+        ],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+    ],
   },
   web: {
     output: "static" as const,
@@ -86,5 +118,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supabaseUrl: process.env.SUPABASE_URL ?? "http://localhost:54321",
     // Set via .env.local — empty in dev is OK, required for production
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
+    eas: {
+      projectId: process.env.EAS_PROJECT_ID ?? "",
+    },
   },
 });

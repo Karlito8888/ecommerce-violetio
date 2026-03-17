@@ -1,0 +1,44 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "XXXXXXXXXX.com.maisonemile.app"
+        ],
+        "components": [
+          {
+            "/": "/products/*",
+            "comment": "Product detail pages"
+          },
+          {
+            "/": "/order/*",
+            "comment": "Order pages (confirmation, lookup, tracking)"
+          },
+          {
+            "/": "/account/*",
+            "comment": "Account pages (profile, orders, wishlist)"
+          },
+          {
+            "/": "/search",
+            "comment": "Search screen"
+          },
+          {
+            "exclude": true,
+            "/": "/auth/*",
+            "comment": "Auth flows stay in browser"
+          },
+          {
+            "exclude": true,
+            "/": "/checkout/*",
+            "comment": "Checkout stays in browser (Stripe.js required)"
+          },
+          {
+            "exclude": true,
+            "/": "/cart",
+            "comment": "Cart stays in browser"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -16,6 +16,8 @@ export {
   BAG_STATUS_LABELS,
   ORDER_STATUS_LABELS,
 } from "./orderStatusDerivation.js";
+export { webUrlToMobilePath, mobilePushDataToPath, ROUTE_MAPPINGS } from "./deepLink.js";
+export type { RouteMapping } from "./deepLink.js";
 // guestToken and orderPersistence are server-only (use node:crypto).
 // Import them directly: "@ecommerce/shared/src/utils/guestToken" / "orderPersistence"
 // Do NOT re-export here — it breaks the client bundle.

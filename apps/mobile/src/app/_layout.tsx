@@ -6,7 +6,12 @@ import * as SecureStore from "expo-secure-store";
 import { StripeProvider } from "@stripe/stripe-react-native";
 
 import { router } from "expo-router";
-import { configureEnv, createSupabaseClient, useCartSync } from "@ecommerce/shared";
+import {
+  configureEnv,
+  createSupabaseClient,
+  useCartSync,
+  mobilePushDataToPath,
+} from "@ecommerce/shared";
 import {
   setupNotificationHandler,
   usePushRegistration,
@@ -58,8 +63,9 @@ function AppContent() {
   const pushUserId = user && !isAnonymous ? user.id : undefined;
   usePushRegistration(pushUserId);
   useNotificationListeners((data) => {
-    if (data.screen === "order" && data.order_id) {
-      router.push(`/order/${data.order_id}` as never);
+    const path = mobilePushDataToPath(data);
+    if (path) {
+      router.push(path as never);
     }
   });
 

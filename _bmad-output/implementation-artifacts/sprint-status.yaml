@@ -100,7 +100,7 @@ development_status:
   6-5-product-recommendations: done
   6-6-recently-viewed-products: done
   6-7-push-notification-infrastructure-preferences: done
-  6-8-deep-linking-universal-links: backlog
+  6-8-deep-linking-universal-links: done
   epic-6-retrospective: optional
 
   # Epic 7: Content, SEO & Editorial
