@@ -1,0 +1,73 @@
+/* ── Recently Viewed Row (Story 6.6) ── */
+
+.recently-viewed-row {
+  padding-top: var(--space-6);
+}
+
+.recently-viewed-row__heading {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink);
+}
+
+.recently-viewed-row__grid {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: var(--space-2);
+}
+
+.recently-viewed-row__grid::-webkit-scrollbar {
+  display: none;
+}
+
+.recently-viewed-row__card {
+  min-width: 220px;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+
+/* Skeleton loading placeholders */
+.recently-viewed-row__skeleton {
+  min-width: 220px;
+  flex-shrink: 0;
+  aspect-ratio: 3 / 4.5;
+  background: var(--color-sand);
+  border-radius: var(--radius-sm);
+  animation: recently-viewed-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes recently-viewed-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Desktop: show up to 6 cards without scroll */
+@media (min-width: 1024px) {
+  .recently-viewed-row__grid {
+    overflow: hidden;
+    scroll-snap-type: none;
+  }
+
+  .recently-viewed-row__card {
+    flex: 1;
+    min-width: 0;
+    max-width: calc(100% / 6);
+  }
+
+  .recently-viewed-row__skeleton {
+    flex: 1;
+    min-width: 0;
+    max-width: calc(100% / 6);
+  }
+}

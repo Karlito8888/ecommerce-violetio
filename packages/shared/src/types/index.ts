@@ -118,3 +118,4 @@ export type {
   RecommendationResponse,
   RecommendationFetchFn,
 } from "./recommendation.types.js";
+export type { RecentlyViewedEntry, RecentlyViewedItem } from "./recentlyViewed.types.js";

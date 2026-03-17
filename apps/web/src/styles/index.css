@@ -33,6 +33,7 @@
 @import "./components/toast.css";
 @import "./components/wishlist-button.css";
 @import "./components/recommendation-row.css";
+@import "./components/recently-viewed-row.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";

@@ -45,4 +45,8 @@ export const queryKeys = {
   recommendations: {
     forProduct: (productId: string) => ["recommendations", productId] as const,
   },
+  recentlyViewed: {
+    forUser: (userId: string) => ["recentlyViewed", userId] as const,
+    anonymous: () => ["recentlyViewed", "anonymous"] as const,
+  },
 } as const;

@@ -1,12 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import { ScrollView, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useMobileTracking } from "@/hooks/useMobileTracking";
+import { useAuth } from "@/context/AuthContext";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import ProductList from "@/components/product/ProductList";
 import { Colors, Spacing, BottomTabInset, MaxContentWidth } from "@/constants/theme";
+import { useRecentlyViewed } from "@ecommerce/shared";
 import type { Product } from "@ecommerce/shared";
 
 /**
@@ -84,6 +94,8 @@ export default function HomeScreen() {
           })}
         </ScrollView>
 
+        <RecentlyViewedSection />
+
         <ProductList
           products={products}
           total={0}
@@ -93,6 +105,77 @@ export default function HomeScreen() {
         />
       </SafeAreaView>
     </ThemedView>
+  );
+}
+
+/**
+ * Recently Viewed section for the mobile home screen (Story 6.6).
+ *
+ * Shows a horizontal FlatList of recently viewed products for authenticated users.
+ * Uses user_events table (cross-device) via useRecentlyViewed hook.
+ *
+ * ### Product enrichment — not yet wired up
+ * Fetching full product details from the Violet API requires Edge Function
+ * integration (pending Story 3.2-mobile). For now, shows placeholder cards
+ * that are tappable and navigate to the product detail screen, which already
+ * fetches full data — so this is a functional navigation shortcut even
+ * without client-side enrichment.
+ *
+ * ### [H3 code-review fix] Options-object signature
+ * Uses `useRecentlyViewed({ userId })` (options object) instead of the
+ * previous positional `useRecentlyViewed(userId)` — matches AC #7 spec.
+ *
+ * ### [M2 code-review fix] Accessibility labels
+ * accessibilityLabel uses a generic "View recently viewed product" instead
+ * of exposing raw UUIDs to screen readers. Once product enrichment is wired
+ * up, this should be updated to include the product name.
+ */
+function RecentlyViewedSection() {
+  const { user, isAnonymous } = useAuth();
+  const userId = user && !isAnonymous ? user.id : undefined;
+  const { data: productIds, isLoading } = useRecentlyViewed({ userId });
+  const router = useRouter();
+
+  if (isLoading) {
+    return (
+      <View style={styles.recentSection}>
+        <ThemedText type="subtitle" style={styles.recentHeading}>
+          Recently Viewed
+        </ThemedText>
+        <ActivityIndicator size="small" style={styles.recentLoader} />
+      </View>
+    );
+  }
+
+  if (!productIds || productIds.length === 0) return null;
+
+  return (
+    <View style={styles.recentSection}>
+      <ThemedText type="subtitle" style={styles.recentHeading}>
+        Recently Viewed
+      </ThemedText>
+      <FlatList
+        data={productIds}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.recentList}
+        keyExtractor={(id) => id}
+        renderItem={({ item: productId }) => (
+          <TouchableOpacity
+            style={styles.recentCard}
+            onPress={() => router.push(`/products/${productId}` as never)}
+            accessibilityRole="button"
+            accessibilityLabel="View recently viewed product"
+          >
+            <View style={styles.recentPlaceholder}>
+              <ThemedText type="small" style={styles.recentPlaceholderText}>
+                View Product
+              </ThemedText>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
   );
 }
 
@@ -134,5 +217,37 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: Colors.light.background,
+  },
+  recentSection: {
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.two,
+  },
+  recentHeading: {
+    paddingHorizontal: Spacing.four,
+    marginBottom: Spacing.two,
+  },
+  recentLoader: {
+    paddingVertical: Spacing.four,
+  },
+  recentList: {
+    paddingHorizontal: Spacing.three,
+    gap: Spacing.two,
+  },
+  recentCard: {
+    width: 140,
+    borderRadius: Spacing.two,
+    overflow: "hidden",
+    backgroundColor: Colors.light.backgroundElement,
+  },
+  recentPlaceholder: {
+    width: "100%",
+    aspectRatio: 3 / 4,
+    backgroundColor: Colors.light.backgroundSelected,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recentPlaceholderText: {
+    color: Colors.light.textSecondary,
+    fontSize: 12,
   },
 });

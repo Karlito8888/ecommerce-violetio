@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildPageMeta, buildWebSiteJsonLd } from "@ecommerce/shared";
 import SearchBar from "../components/search/SearchBar";
+import RecentlyViewedRow from "../components/product/RecentlyViewedRow";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
@@ -74,6 +75,8 @@ function App() {
           </Link>
         </div>
       </section>
+
+      <RecentlyViewedRow />
 
       <section className="features">
         {[

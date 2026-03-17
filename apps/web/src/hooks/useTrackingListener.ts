@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { useTracking } from "@ecommerce/shared";
+import { useTracking, addToRecentlyViewedStorage } from "@ecommerce/shared";
 import type { TrackingEvent } from "@ecommerce/shared";
 import { trackEventFn } from "../server/tracking";
 
@@ -31,6 +31,16 @@ export function useWebTracking(userId: string | undefined) {
 }
 
 /**
+ * [M3 code-review fix] Extracted shared product route regex.
+ *
+ * Both the localStorage subscription (anonymous + auth) and the server-side
+ * tracking subscription (auth only) need to detect `/products/:productId`
+ * navigations. Previously the same regex was duplicated in both `useEffect`
+ * callbacks. A single constant avoids drift and makes the pattern testable.
+ */
+const PRODUCT_ROUTE_PATTERN = /^\/products\/([^/]+)$/;
+
+/**
  * Router-level tracking listener — fires `product_view` and `category_view`
  * events on TanStack Router navigation.
  *
@@ -48,13 +58,33 @@ export function useWebTracking(userId: string | undefined) {
  * - `/products/:productId` → `product_view` with `{ product_id }`
  * - `/products?category=X` → `category_view` with `{ category_id, category_name }`
  *
+ * ## Two separate subscriptions — by design
+ * The localStorage write (first `useEffect`) runs for ALL users including
+ * anonymous, while the server tracking (second `useEffect`) only fires for
+ * authenticated users. Merging them would require conditional logic inside
+ * a single subscription and re-subscribe on `userId` changes, which is more
+ * fragile than two independent effects with clear responsibilities.
+ *
  * Mounted once in `__root.tsx` — covers all page navigations app-wide.
  *
- * @param userId - Authenticated user ID. Tracking is skipped for anonymous users.
+ * @param userId - Authenticated user ID. Server-side tracking is skipped for anonymous users.
  */
 export function useTrackingListener(userId: string | undefined) {
   const router = useRouter();
   const { trackEvent } = useWebTracking(userId);
+
+  // Record product views to localStorage for ALL users (anonymous + authenticated).
+  // This powers the "Recently Viewed" section on the homepage.
+  // Runs independently of server-side tracking (which requires userId).
+  useEffect(() => {
+    const unsubscribe = router.subscribe("onResolved", (event) => {
+      const productMatch = event.toLocation.pathname.match(PRODUCT_ROUTE_PATTERN);
+      if (productMatch) {
+        addToRecentlyViewedStorage(productMatch[1]);
+      }
+    });
+    return unsubscribe;
+  }, [router]);
 
   useEffect(() => {
     if (!userId) return;
@@ -64,7 +94,7 @@ export function useTrackingListener(userId: string | undefined) {
       const search = event.toLocation.search as Record<string, unknown>;
 
       // Product detail page: /products/$productId
-      const productMatch = pathname.match(/^\/products\/([^/]+)$/);
+      const productMatch = pathname.match(PRODUCT_ROUTE_PATTERN);
       if (productMatch) {
         trackEvent({
           event_type: "product_view",

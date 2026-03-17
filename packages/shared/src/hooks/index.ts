@@ -48,3 +48,10 @@ export {
   useRemoveFromWishlist,
 } from "./useWishlist.js";
 export { recommendationQueryOptions, useRecommendations } from "./useRecommendations.js";
+export {
+  recentlyViewedQueryOptions,
+  useRecentlyViewed,
+  getRecentlyViewedFromStorage,
+  addToRecentlyViewedStorage,
+} from "./useRecentlyViewed.js";
+export type { UseRecentlyViewedOptions } from "./useRecentlyViewed.js";
