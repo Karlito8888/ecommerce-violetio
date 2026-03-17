@@ -15,27 +15,23 @@
  *
  * Unlike search-products, this function does NOT generate a new embedding —
  * it reuses the source product's existing embedding as the query vector.
+ *
+ * ## Security (C2 review fix)
+ * user_id for personalization is now extracted from the JWT Authorization header,
+ * NOT from the request body. This prevents a malicious caller from passing another
+ * user's ID to indirectly reveal their browsing preferences through re-ranking.
+ * The `user_id` field in the request body schema is IGNORED and kept only for
+ * backward compatibility (the schema still validates but the value is discarded).
  */
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { getVioletHeaders } from "../_shared/violetAuth.ts";
 import { recommendationRequestSchema } from "../_shared/schemas.ts";
+import { applyPersonalizationBoost, type UserSearchProfile } from "../_shared/personalization.ts";
 
 // ─── Types ───────────────────────────────────────────────────────
-// Keep in sync with packages/shared/src/types/personalization.types.ts
-
-interface CategoryAffinity {
-  category: string;
-  view_count: number;
-}
-
-interface UserSearchProfile {
-  top_categories: CategoryAffinity[];
-  avg_order_price: number;
-  recent_product_ids: string[];
-  total_events: number;
-}
 
 interface PgvectorMatch {
   product_id: string;
@@ -59,51 +55,6 @@ interface VioletProduct {
     primary_media?: { url: string };
     media?: Array<{ url: string; display_order?: number; primary?: boolean }>;
   }>;
-}
-
-// ─── Personalization (reused from search-products) ──────────────
-
-function extractCategory(textContent: string): string | null {
-  const match = textContent.match(/Category:\s*([^.]+)/i);
-  return match ? match[1].trim() : null;
-}
-
-function applyPersonalizationBoost(
-  products: Array<Record<string, unknown>>,
-  profile: UserSearchProfile,
-  textContentMap: Map<string, string>,
-): Array<Record<string, unknown>> {
-  const categoryBoostMap = new Map<string, number>();
-  const boostValues = [1.0, 0.7, 0.5, 0.3, 0.3];
-  profile.top_categories.forEach((cat, i) => {
-    categoryBoostMap.set(cat.category.toLowerCase(), boostValues[i] ?? 0.3);
-  });
-
-  const boosted = products.map((product) => {
-    const textContent = textContentMap.get(product.id as string) ?? "";
-    const originalSimilarity = product.similarity as number;
-
-    const productCategory = extractCategory(textContent);
-    const categoryBoost = productCategory
-      ? (categoryBoostMap.get(productCategory.toLowerCase()) ?? 0)
-      : 0;
-
-    let priceProximity = 0.5;
-    if (profile.avg_order_price > 0) {
-      const productPrice = product.minPrice as number;
-      const priceDiff = Math.abs(productPrice - profile.avg_order_price);
-      priceProximity = Math.max(0, 1 - Math.min(priceDiff / profile.avg_order_price, 1));
-    }
-
-    const finalScore = originalSimilarity * 0.7 + categoryBoost * 0.2 + priceProximity * 0.1;
-
-    return {
-      ...product,
-      similarity: Math.round(finalScore * 10000) / 10000,
-    };
-  });
-
-  return boosted.sort((a, b) => (b.similarity as number) - (a.similarity as number));
 }
 
 // ─── Violet enrichment ──────────────────────────────────────────
@@ -183,10 +134,41 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { product_id, user_id, limit } = validation.data;
+    const { product_id, limit } = validation.data;
     const matchCount = limit ?? 8;
 
     const supabase = getSupabaseAdmin();
+
+    /**
+     * C2 review fix: Extract user_id from JWT, not from request body.
+     *
+     * BEFORE: user_id was taken from `validation.data.user_id` (client-provided),
+     * allowing any caller to pass another user's UUID and get personalized results
+     * based on that user's browsing history — an indirect data exposure.
+     *
+     * NOW: user_id is extracted from the Authorization JWT header (same pattern
+     * as track-event and search-products). If no valid JWT or anonymous user,
+     * personalization is skipped and base similarity results are returned.
+     */
+    let authUserId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      try {
+        const userClient = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: authHeader } } },
+        );
+        const {
+          data: { user },
+        } = await userClient.auth.getUser();
+        if (user && !user.is_anonymous) {
+          authUserId = user.id;
+        }
+      } catch {
+        // Auth extraction failure is non-fatal — proceed without personalization
+      }
+    }
 
     // 1. Look up the source product's embedding
     const { data: embeddingRow, error: embeddingError } = await supabase
@@ -249,8 +231,8 @@ Deno.serve(async (req: Request) => {
     // 4. Fetch Violet data + optional user profile in parallel
     const [violetProducts, profileResult] = await Promise.all([
       fetchVioletProducts(productIds),
-      user_id
-        ? supabase.rpc("get_user_search_profile", { p_user_id: user_id })
+      authUserId
+        ? supabase.rpc("get_user_search_profile", { p_user_id: authUserId })
         : Promise.resolve({ data: null, error: null }),
     ]);
 
@@ -289,7 +271,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const searchProfile = profileResult?.data as UserSearchProfile | null;
-    if (user_id && searchProfile && searchProfile.total_events > 0 && products.length > 0) {
+    if (authUserId && searchProfile && searchProfile.total_events > 0 && products.length > 0) {
       products = applyPersonalizationBoost(products, searchProfile, textContentMap);
       personalized = true;
     }
@@ -310,7 +292,12 @@ Deno.serve(async (req: Request) => {
         data: null,
         error: {
           code: "RECOMMENDATIONS.INTERNAL_ERROR",
-          message: error instanceof Error ? error.message : "Unknown error",
+          /**
+           * M7 review fix: Sanitize error messages in 500 responses.
+           * The real error is logged server-side; clients get a generic message
+           * to avoid leaking infrastructure details (hostnames, SQL errors, etc.).
+           */
+          message: "An internal error occurred while fetching recommendations",
         },
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

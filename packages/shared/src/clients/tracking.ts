@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createSupabaseClient } from "./supabase";
-import type { TrackingEvent, TrackingEventType, UserEvent } from "../types/tracking.types";
+/** M6 review fix: Added .js extensions for ESM consistency. */
+import { createSupabaseClient } from "./supabase.js";
+import type { TrackingEvent, TrackingEventType, UserEvent } from "../types/tracking.types.js";
 
 /**
  * Records a tracking event. Must be called with a service_role client

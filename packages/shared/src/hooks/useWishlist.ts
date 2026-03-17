@@ -117,7 +117,19 @@ export function useAddToWishlist(userId: string) {
         queryClient.setQueryData<Wishlist>(wishlistKeys.all(userId), {
           ...previousWishlist,
           items: [
-            { id: crypto.randomUUID(), product_id: productId, added_at: new Date().toISOString() },
+            /**
+             * M2 review fix: Use Date.now() fallback instead of crypto.randomUUID().
+             *
+             * crypto.randomUUID() is not available on React Native without a polyfill
+             * (expo-crypto). Since this ID is only used as a temporary optimistic
+             * placeholder — replaced by the real server-generated UUID on onSettled
+             * invalidation — a unique-enough timestamp-based ID is sufficient.
+             */
+            {
+              id: `optimistic-${Date.now()}`,
+              product_id: productId,
+              added_at: new Date().toISOString(),
+            },
             ...previousWishlist.items,
           ],
         });

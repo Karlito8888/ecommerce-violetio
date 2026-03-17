@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
-import type { TrackingEvent } from "../types/tracking.types";
+/** M6 review fix: Added .js extension for ESM consistency. */
+import type { TrackingEvent } from "../types/tracking.types.js";
 
 interface UseTrackingOptions {
   userId: string | undefined;

@@ -59,17 +59,37 @@ export default function BaseProductCard({
   const priceDisplay = formatPrice(minPrice, currency);
   const imageAlt = `${name} by ${merchantName}`;
 
-  if (imageError) return null;
+  /**
+   * M10 review fix: Show placeholder instead of hiding the entire card on image error.
+   *
+   * BEFORE: `if (imageError) return null` caused the entire card to vanish when a
+   * single image failed to load (CDN timeout, 404, etc.). The user lost access to
+   * the product entirely — no way to click through, no price visible.
+   *
+   * NOW: Image errors fall through to the existing SVG placeholder (already rendered
+   * for `thumbnailUrl === null`). We set thumbnailUrl to null-equivalent by checking
+   * imageError in the image conditional below.
+   */
 
   return (
     <article
-      role="listitem"
+      /**
+       * M10 review fix: Removed hardcoded role="listitem".
+       *
+       * BEFORE: role="listitem" was always set, but BaseProductCard is used in contexts
+       * without a parent role="list" (e.g., wishlist page, product detail recommendations).
+       * An orphaned role="listitem" is an ARIA violation per WAI-ARIA spec.
+       *
+       * NOW: role is omitted — the parent component (RecommendationRow, RecentlyViewedRow)
+       * adds role="listitem" on the wrapper div when inside a role="list" container.
+       * This is the correct ARIA pattern: the list structure is the parent's responsibility.
+       */
       className={`product-card${isOutOfStock ? " product-card--out-of-stock" : ""}`}
       aria-label={`${name}, ${priceDisplay}`}
     >
       <Link to="/products/$productId" params={{ productId: id }} className="product-card__link">
         <div className="product-card__image-wrap">
-          {thumbnailUrl ? (
+          {thumbnailUrl && !imageError ? (
             <img
               src={thumbnailUrl}
               alt={imageAlt}

@@ -7,13 +7,18 @@
  * @module track-event
  */
 
+/**
+ * M4 review fix: Use shared CORS headers instead of hardcoded ones.
+ *
+ * BEFORE: Hardcoded `Access-Control-Allow-Origin: *` bypassed the production
+ * `ALLOWED_ORIGINS` env var logic in `_shared/cors.ts`. In production, this
+ * Edge Function remained open to all origins even when ALLOWED_ORIGINS was set.
+ *
+ * NOW: Uses the shared corsHeaders which respects ALLOWED_ORIGINS for production.
+ */
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const VALID_EVENT_TYPES = new Set(["product_view", "search", "category_view"]);
 

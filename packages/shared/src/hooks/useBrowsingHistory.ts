@@ -1,6 +1,13 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { getUserEvents } from "../clients/tracking";
-import type { TrackingEventType } from "../types/tracking.types";
+/**
+ * M6 review fix: Added .js extensions to local imports for ESM consistency.
+ *
+ * Several Epic 6 files used extensionless imports (`./tracking` instead of
+ * `./tracking.js`). While the bundler resolves both, strict ESM resolution
+ * requires the extension. The rest of the codebase uses .js consistently.
+ */
+import { getUserEvents } from "../clients/tracking.js";
+import type { TrackingEventType } from "../types/tracking.types.js";
 
 export const browsingHistoryKeys = {
   all: (userId: string) => ["browsingHistory", userId] as const,

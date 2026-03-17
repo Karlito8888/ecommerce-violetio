@@ -1,5 +1,6 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { getUserEvents } from "../clients/tracking";
+/** M6 review fix: Added .js extension for ESM consistency. */
+import { getUserEvents } from "../clients/tracking.js";
 import { queryKeys } from "../utils/constants.js";
 import type { RecentlyViewedEntry } from "../types/recentlyViewed.types.js";
 
@@ -12,8 +13,18 @@ const MAX_RECENTLY_VIEWED = 12;
  * Reads recently viewed product entries from localStorage.
  * Returns empty array on SSR, parse failure, or missing key.
  */
+/**
+ * M3 review fix: Added `typeof localStorage !== "undefined"` guard.
+ *
+ * The original `typeof window === "undefined"` guard is insufficient for
+ * React Native, where `window` IS defined but `localStorage` is NOT.
+ * Without this fix, calling this function on mobile (anonymous path)
+ * would throw `ReferenceError: localStorage is not defined`.
+ *
+ * The double guard covers both SSR (no window) and React Native (no localStorage).
+ */
 export function getRecentlyViewedFromStorage(): RecentlyViewedEntry[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return [];
   try {
     const stored = localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -28,7 +39,7 @@ export function getRecentlyViewedFromStorage(): RecentlyViewedEntry[] {
  * No-op on SSR or localStorage failure (private browsing, quota).
  */
 export function addToRecentlyViewedStorage(productId: string): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return;
   try {
     const entries = getRecentlyViewedFromStorage();
     const filtered = entries.filter((e) => e.productId !== productId);

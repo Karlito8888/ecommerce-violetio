@@ -54,9 +54,35 @@ function errorResponse(message: string): Response {
   });
 }
 
+/**
+ * C3 review fix: Service-to-service authorization.
+ *
+ * This Edge Function is invoked fire-and-forget by other Edge Functions
+ * (handle-webhook, checkout) via `supabase.functions.invoke("send-push")`.
+ * Without auth, anyone who knows the URL could spam push notifications.
+ *
+ * We verify the caller provides the Supabase service_role key in the
+ * Authorization header. When Edge Functions invoke each other via
+ * `supabase.functions.invoke()`, the admin client automatically sends
+ * the service_role key as a Bearer token. External callers won't have it.
+ *
+ * NOTE: The `SUPABASE_SERVICE_ROLE_KEY` env var is always available in
+ * Supabase Edge Functions. We compare against it for validation.
+ */
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // C3: Verify service-to-service auth
+  const authHeader = req.headers.get("Authorization");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!authHeader || !serviceRoleKey) {
+    return errorResponse("Unauthorized: missing credentials");
+  }
+  const token = authHeader.replace("Bearer ", "");
+  if (token !== serviceRoleKey) {
+    return errorResponse("Unauthorized: invalid service key");
   }
 
   let payload: SendPushRequest;

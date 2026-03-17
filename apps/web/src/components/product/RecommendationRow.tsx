@@ -50,9 +50,16 @@ function RecommendationRowInner({ productId }: { productId: string }) {
   return (
     <section className="recommendation-row" aria-label="Product recommendations">
       <h3 className="recommendation-row__heading">You might also like</h3>
+      {/**
+       * M10 review fix: Added role="listitem" on grid children.
+       *
+       * The container has role="list" but children were missing role="listitem",
+       * which is an ARIA violation (screen readers announce a list but can't
+       * enumerate items). RecentlyViewedRow already had this correct.
+       */}
       <div className="recommendation-row__grid" role="list">
         {data.products.map((product) => (
-          <div key={product.id} className="recommendation-row__card">
+          <div key={product.id} className="recommendation-row__card" role="listitem">
             <BaseProductCard
               id={product.id}
               name={product.name}

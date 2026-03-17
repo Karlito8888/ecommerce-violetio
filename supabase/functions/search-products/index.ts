@@ -25,19 +25,7 @@ import { getVioletHeaders } from "../_shared/violetAuth.ts";
 import { searchQuerySchema } from "../_shared/schemas.ts";
 
 // ─── Types ───────────────────────────────────────────────────────
-// Keep in sync with packages/shared/src/types/personalization.types.ts
-
-interface CategoryAffinity {
-  category: string;
-  view_count: number;
-}
-
-interface UserSearchProfile {
-  top_categories: CategoryAffinity[];
-  avg_order_price: number;
-  recent_product_ids: string[];
-  total_events: number;
-}
+// M5 review fix: CategoryAffinity and UserSearchProfile moved to _shared/personalization.ts
 
 interface PgvectorMatch {
   product_id: string;
@@ -46,67 +34,11 @@ interface PgvectorMatch {
   similarity: number;
 }
 
-// ─── Personalization ─────────────────────────────────────────────
+// ─── Personalization (M5 review fix: shared module) ─────────────
+// Functions extracted to _shared/personalization.ts to avoid duplication
+// with get-recommendations/index.ts. See that file for JSDoc.
 
-/**
- * Extracts a product category from the text_content field.
- *
- * text_content format (from generate-embeddings):
- *   "Name. Description. Brand: X. Category: Y. Tags: a, b, c"
- */
-function extractCategory(textContent: string): string | null {
-  const match = textContent.match(/Category:\s*([^.]+)/i);
-  return match ? match[1].trim() : null;
-}
-
-/**
- * Applies personalization boosting to search results.
- *
- * Scoring formula: final = 0.7 × semantic + 0.2 × category + 0.1 × price
- *
- * - category_boost: 1.0 for #1 category, 0.7 #2, 0.5 #3, 0.3 #4-5, 0 otherwise
- * - price_proximity: 1.0 when product price equals user avg, 0 at 2× distance
- * - If no order history: price_proximity = 0.5 (neutral)
- */
-function applyPersonalizationBoost(
-  products: Array<Record<string, unknown>>,
-  profile: UserSearchProfile,
-  textContentMap: Map<string, string>,
-): Array<Record<string, unknown>> {
-  const categoryBoostMap = new Map<string, number>();
-  const boostValues = [1.0, 0.7, 0.5, 0.3, 0.3];
-  profile.top_categories.forEach((cat, i) => {
-    categoryBoostMap.set(cat.category.toLowerCase(), boostValues[i] ?? 0.3);
-  });
-
-  const boosted = products.map((product) => {
-    const textContent = textContentMap.get(product.id as string) ?? "";
-    const originalSimilarity = product.similarity as number;
-
-    // Category boost
-    const productCategory = extractCategory(textContent);
-    const categoryBoost = productCategory
-      ? (categoryBoostMap.get(productCategory.toLowerCase()) ?? 0)
-      : 0;
-
-    // Price proximity boost
-    let priceProximity = 0.5;
-    if (profile.avg_order_price > 0) {
-      const productPrice = product.minPrice as number;
-      const priceDiff = Math.abs(productPrice - profile.avg_order_price);
-      priceProximity = Math.max(0, 1 - Math.min(priceDiff / profile.avg_order_price, 1));
-    }
-
-    const finalScore = originalSimilarity * 0.7 + categoryBoost * 0.2 + priceProximity * 0.1;
-
-    return {
-      ...product,
-      similarity: Math.round(finalScore * 10000) / 10000,
-    };
-  });
-
-  return boosted.sort((a, b) => (b.similarity as number) - (a.similarity as number));
-}
+import { applyPersonalizationBoost, type UserSearchProfile } from "../_shared/personalization.ts";
 
 // ─── Match explanation ───────────────────────────────────────────
 

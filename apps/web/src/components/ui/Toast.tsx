@@ -79,14 +79,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ success, error }}>
       {children}
+      {/**
+       * M9 review fix: Removed duplicate aria-live/role from individual toasts.
+       *
+       * BEFORE: Both the container AND each toast had `aria-live="polite"` + `role="status"`.
+       * This caused screen readers to double-announce every toast message.
+       *
+       * NOW: Only the container has the live region attributes. New toast children
+       * are automatically announced by the container's live region. Individual
+       * toasts use a plain div — the container handles accessibility.
+       */}
       <div className="toast-container" aria-live="polite" role="status">
         {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`toast toast--${toast.type}`}
-            role="status"
-            aria-live="polite"
-          >
+          <div key={toast.id} className={`toast toast--${toast.type}`}>
             <span className="toast__icon">{toast.type === "success" ? "✓" : "✕"}</span>
             <span className="toast__message">{toast.message}</span>
             <button
