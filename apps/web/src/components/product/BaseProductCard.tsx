@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { formatPrice } from "@ecommerce/shared";
+import WishlistButton from "./WishlistButton";
 
 /**
  * Minimal props interface for the base product card.
@@ -86,6 +87,12 @@ export default function BaseProductCard({
             </div>
           )}
           {isOutOfStock && <span className="product-card__badge">Sold Out</span>}
+          <WishlistButton
+            productId={id}
+            productName={name}
+            size="sm"
+            className="product-card__wishlist"
+          />
         </div>
 
         <div className="product-card__info">

@@ -21,6 +21,7 @@ import { Route as OrderLookupRouteImport } from './routes/order/lookup'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AccountWishlistRouteImport } from './routes/account/wishlist'
 import { Route as AccountProfileRouteImport } from './routes/account/profile'
 import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
 import { Route as OrderOrderIdConfirmationRouteImport } from './routes/order/$orderId/confirmation'
@@ -86,6 +87,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountWishlistRoute = AccountWishlistRouteImport.update({
+  id: '/wishlist',
+  path: '/wishlist',
+  getParentRoute: () => AccountRouteRoute,
+} as any)
 const AccountProfileRoute = AccountProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/account/profile': typeof AccountProfileRoute
+  '/account/wishlist': typeof AccountWishlistRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/account/profile': typeof AccountProfileRoute
+  '/account/wishlist': typeof AccountWishlistRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/account/profile': typeof AccountProfileRoute
+  '/account/wishlist': typeof AccountWishlistRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/about'
     | '/account/profile'
+    | '/account/wishlist'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/about'
     | '/account/profile'
+    | '/account/wishlist'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/about'
     | '/account/profile'
+    | '/account/wishlist'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -322,6 +334,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/wishlist': {
+      id: '/account/wishlist'
+      path: '/wishlist'
+      fullPath: '/account/wishlist'
+      preLoaderRoute: typeof AccountWishlistRouteImport
+      parentRoute: typeof AccountRouteRoute
+    }
     '/account/profile': {
       id: '/account/profile'
       path: '/profile'
@@ -355,12 +374,14 @@ declare module '@tanstack/react-router' {
 
 interface AccountRouteRouteChildren {
   AccountProfileRoute: typeof AccountProfileRoute
+  AccountWishlistRoute: typeof AccountWishlistRoute
   AccountOrdersOrderIdRoute: typeof AccountOrdersOrderIdRoute
   AccountOrdersIndexRoute: typeof AccountOrdersIndexRoute
 }
 
 const AccountRouteRouteChildren: AccountRouteRouteChildren = {
   AccountProfileRoute: AccountProfileRoute,
+  AccountWishlistRoute: AccountWishlistRoute,
   AccountOrdersOrderIdRoute: AccountOrdersOrderIdRoute,
   AccountOrdersIndexRoute: AccountOrdersIndexRoute,
 }

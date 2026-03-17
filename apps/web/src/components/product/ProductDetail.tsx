@@ -5,6 +5,7 @@ import type { AddToCartFn } from "@ecommerce/shared";
 import ImageGallery from "./ImageGallery";
 import VariantSelector from "./VariantSelector";
 import PriceBreakdown from "./PriceBreakdown";
+import WishlistButton from "./WishlistButton";
 import { useCartContext } from "../../contexts/CartContext";
 import { createCartFn, addToCartFn } from "../../server/cartActions";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
@@ -233,6 +234,11 @@ export default function ProductDetail({ product }: { product: Product }) {
                 ? "Add to Bag"
                 : "Notify When Available"}
         </button>
+
+        <div className="product-detail__wishlist-row">
+          <WishlistButton productId={product.id} productName={product.name} size="md" />
+          <span className="product-detail__wishlist-label">Wishlist</span>
+        </div>
 
         <p className="product-detail__affiliate">
           We earn a commission on purchases — this doesn&apos;t affect the price you pay.

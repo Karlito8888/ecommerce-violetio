@@ -15,3 +15,9 @@ export { getProfile, updateProfile } from "./profile.js";
 export type { SocialProvider } from "./auth.js";
 export { signInWithSocialProvider, signInWithSocialProviderMobile } from "./auth.js";
 export { recordEvent, getUserEvents } from "./tracking.js";
+export {
+  getWishlist,
+  getWishlistProductIds,
+  addToWishlist,
+  removeFromWishlist,
+} from "./wishlist.js";

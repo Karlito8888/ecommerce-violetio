@@ -53,3 +53,4 @@ export {
   userPreferencesSchema,
   updateProfileSchema,
 } from "./profile.schema.js";
+export { wishlistItemSchema, wishlistSchema, addToWishlistInputSchema } from "./wishlist.schema.js";

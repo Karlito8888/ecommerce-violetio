@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useUser } from "@ecommerce/shared";
 import ThemeToggle from "./ThemeToggle";
 import SearchBar from "./search/SearchBar";
 
@@ -27,8 +28,19 @@ const CATEGORY_LINKS: { to: string; label: string; search?: Record<string, strin
   { to: "/about", label: "About" },
 ];
 
+/**
+ * Site header with brand, search, account actions, and category navigation.
+ *
+ * ## Code Review Fix M4 — Wishlist icon auth-gated
+ * AC #8 requires: "the wishlist heart icon is NOT shown" for anonymous/guest users.
+ * Previously the wishlist icon was rendered unconditionally. Now it checks
+ * `useUser()` and only renders for authenticated (non-anonymous) users.
+ * Guests see account + cart icons only, matching the spec.
+ */
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { data: user } = useUser();
+  const isAuthenticated = !!user && !user.is_anonymous;
 
   return (
     <header className="site-header">
@@ -91,6 +103,24 @@ export default function Header() {
               <circle cx="12" cy="7" r="4" />
             </svg>
           </Link>
+          {/* Wishlist icon — only for authenticated users (AC #8, Code Review Fix M4) */}
+          {isAuthenticated && (
+            <Link to="/account/wishlist" className="site-header__wishlist" aria-label="Wishlist">
+              <svg
+                viewBox="0 0 24 24"
+                width="24"
+                height="24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            </Link>
+          )}
           {/* TODO(Epic-4): Change to="/cart" when cart route exists */}
           <Link to="/" className="site-header__cart" aria-label="Cart">
             <svg

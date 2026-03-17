@@ -10,6 +10,7 @@ import { AppBannerContext, useAppBannerProvider } from "../hooks/useAppBanner";
 import { initAnonymousSession } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../utils/supabase";
 import { CartProvider } from "../contexts/CartContext";
+import { ToastProvider } from "../components/ui/Toast";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useTrackingListener } from "../hooks/useTrackingListener";
 import CartDrawer from "../features/cart/CartDrawer";
@@ -102,27 +103,29 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <CartProvider
-          initialVioletCartId={initialVioletCartId}
-          supabase={supabase}
-          userId={syncUserId}
-        >
-          <AppBannerContext.Provider value={appBanner}>
-            <a href="#main-content" className="sr-only sr-only--focusable">
-              Skip to content
-            </a>
-            <AppBanner />
-            <Header />
-            <main id="main-content">{children}</main>
-            <Footer />
-          </AppBannerContext.Provider>
-          {/* CartDrawer mounted inside CartProvider — always available app-wide */}
-          <CartDrawer
-            fetchCartFn={fetchCart}
-            updateCartItemFn={updateCartItem}
-            removeFromCartFn={removeFromCart}
-          />
-        </CartProvider>
+        <ToastProvider>
+          <CartProvider
+            initialVioletCartId={initialVioletCartId}
+            supabase={supabase}
+            userId={syncUserId}
+          >
+            <AppBannerContext.Provider value={appBanner}>
+              <a href="#main-content" className="sr-only sr-only--focusable">
+                Skip to content
+              </a>
+              <AppBanner />
+              <Header />
+              <main id="main-content">{children}</main>
+              <Footer />
+            </AppBannerContext.Provider>
+            {/* CartDrawer mounted inside CartProvider — always available app-wide */}
+            <CartDrawer
+              fetchCartFn={fetchCart}
+              updateCartItemFn={updateCartItem}
+              removeFromCartFn={removeFromCart}
+            />
+          </CartProvider>
+        </ToastProvider>
         <TanStackDevtools
           config={{ position: "bottom-right" }}
           plugins={[{ name: "Tanstack Router", render: <TanStackRouterDevtoolsPanel /> }]}

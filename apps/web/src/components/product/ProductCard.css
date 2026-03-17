@@ -59,6 +59,15 @@
   max-height: 120px;
 }
 
+/* ── Wishlist Button Overlay ── */
+
+.product-card__wishlist {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+}
+
 /* ── Out of Stock ── */
 
 .product-card--out-of-stock .product-card__image {

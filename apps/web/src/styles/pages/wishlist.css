@@ -1,0 +1,218 @@
+/* ─── Wishlist Page ───
+ * BEM block: .wishlist
+ * Grid layout displaying saved products with live pricing.
+ */
+
+.wishlist {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4);
+}
+
+.wishlist__heading {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-6);
+}
+
+.wishlist__count {
+  font-weight: 400;
+  color: var(--color-steel);
+}
+
+/* ── Empty state ── */
+
+.wishlist__empty {
+  text-align: center;
+  padding: var(--space-8) 0;
+}
+
+.wishlist__empty-message {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--color-steel);
+  margin: 0 0 var(--space-4);
+}
+
+.wishlist__empty-cta {
+  display: inline-block;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-gold);
+  color: var(--color-midnight);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background var(--transition-fast);
+}
+
+.wishlist__empty-cta:hover {
+  background: var(--color-amber);
+}
+
+/* ── Grid ── */
+
+.wishlist__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+/* ── Wishlist Item Card ── */
+
+.wishlist-item {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-ivory);
+  transition: box-shadow 400ms ease;
+}
+
+.wishlist-item:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.wishlist-item__link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.wishlist-item__image-wrap {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  background: var(--color-linen);
+}
+
+.wishlist-item__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wishlist-item__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 3rem;
+  color: var(--color-stone);
+}
+
+.wishlist-item__badge {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-ivory);
+  background: var(--color-midnight);
+  border-radius: var(--radius-sm);
+}
+
+.wishlist-item__info {
+  padding: var(--space-3);
+}
+
+.wishlist-item__name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-1);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.wishlist-item__price {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+/* ── Out of stock ── */
+
+.wishlist-item--out-of-stock .wishlist-item__image {
+  filter: saturate(0.5);
+}
+
+.wishlist-item--out-of-stock .wishlist-item__placeholder {
+  filter: saturate(0.5);
+}
+
+/* ── Merchant name (Code Review Fix M1) ── */
+
+.wishlist-item__merchant {
+  font-size: 0.8rem;
+  color: var(--color-steel);
+  margin: 0 0 var(--space-1);
+}
+
+/* ── Actions ── */
+
+.wishlist-item__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Add to Bag button — AC #5 (Code Review Fix H1) */
+.wishlist-item__add-to-cart {
+  border: 1px solid var(--color-gold);
+  background: var(--color-gold);
+  color: var(--color-midnight);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.wishlist-item__add-to-cart:hover:not(:disabled) {
+  background: var(--color-amber);
+  border-color: var(--color-amber);
+}
+
+.wishlist-item__add-to-cart:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wishlist-item__sold-out-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-steel);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wishlist-item__remove {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+  text-decoration: underline;
+  transition: color var(--transition-fast);
+  margin-left: auto;
+}
+
+.wishlist-item__remove:hover {
+  color: var(--color-error);
+}

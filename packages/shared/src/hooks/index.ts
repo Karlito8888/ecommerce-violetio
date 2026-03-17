@@ -37,3 +37,13 @@ export {
   browsingHistoryKeys,
   browsingHistoryQueryOptions,
 } from "./useBrowsingHistory.js";
+export {
+  wishlistKeys,
+  wishlistQueryOptions,
+  wishlistProductIdsQueryOptions,
+  useWishlist,
+  useWishlistProductIds,
+  useIsInWishlist,
+  useAddToWishlist,
+  useRemoveFromWishlist,
+} from "./useWishlist.js";

@@ -1,0 +1,47 @@
+/* ─── Wishlist Button ───
+ * Heart icon toggle for product cards and detail page.
+ * BEM: .wishlist-btn / .wishlist-btn--active / .wishlist-btn--sm / .wishlist-btn--md
+ */
+
+.wishlist-btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition:
+    transform var(--transition-fast),
+    color var(--transition-fast);
+  color: var(--color-steel);
+  line-height: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wishlist-btn:hover {
+  transform: scale(1.15);
+  color: var(--color-error);
+}
+
+.wishlist-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.wishlist-btn--active {
+  color: var(--color-error);
+}
+
+.wishlist-btn--sm {
+  width: 32px;
+  height: 32px;
+  font-size: 1.125rem;
+}
+
+.wishlist-btn--md {
+  width: 40px;
+  height: 40px;
+  font-size: 1.375rem;
+}

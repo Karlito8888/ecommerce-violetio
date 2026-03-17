@@ -30,6 +30,9 @@
 @import "./components/cart-drawer.css";
 @import "./components/checkout-errors.css";
 
+@import "./components/toast.css";
+@import "./components/wishlist-button.css";
+
 /* 5. Page-specific styles */
 @import "./pages/home.css";
 @import "./pages/about.css";
@@ -42,3 +45,4 @@
 @import "./pages/orders.css";
 @import "./pages/lookup.css";
 @import "./pages/profile.css";
+@import "./pages/wishlist.css";

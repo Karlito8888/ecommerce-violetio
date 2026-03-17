@@ -103,3 +103,13 @@ export type {
   UserSearchProfile,
   PersonalizationBoost,
 } from "./personalization.types.js";
+export type {
+  WishlistItem,
+  Wishlist,
+  AddToWishlistInput,
+  RemoveFromWishlistInput,
+  WishlistFetchFn,
+  WishlistProductIdsFetchFn,
+  AddToWishlistFn,
+  RemoveFromWishlistFn,
+} from "./wishlist.types.js";
