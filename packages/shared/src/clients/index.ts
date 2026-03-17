@@ -28,3 +28,4 @@ export {
   getNotificationPreferences,
   upsertNotificationPreference,
 } from "./notifications.js";
+export { getContentPageBySlug, getContentPages } from "./content.js";

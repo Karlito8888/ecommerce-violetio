@@ -61,3 +61,5 @@ export {
   useNotificationPreferences,
   useUpdateNotificationPreference,
 } from "./useNotificationPreferences.js";
+export { contentDetailQueryOptions, contentListQueryOptions } from "./useContent.js";
+export type { ContentDetailFetchFn, ContentListFetchFn } from "./useContent.js";

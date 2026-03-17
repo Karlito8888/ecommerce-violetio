@@ -18,6 +18,7 @@ import { Route as CheckoutIndexRouteImport } from './routes/checkout/index'
 import { Route as CartIndexRouteImport } from './routes/cart/index'
 import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
 import { Route as OrderLookupRouteImport } from './routes/order/lookup'
+import { Route as ContentSlugRouteImport } from './routes/content/$slug'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
@@ -72,6 +73,11 @@ const OrderLookupRoute = OrderLookupRouteImport.update({
   path: '/order/lookup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContentSlugRoute = ContentSlugRouteImport.update({
+  id: '/content/$slug',
+  path: '/content/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthVerifyRoute = AuthVerifyRouteImport.update({
   id: '/auth/verify',
   path: '/auth/verify',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/content/$slug': typeof ContentSlugRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/cart/': typeof CartIndexRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/content/$slug': typeof ContentSlugRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/cart': typeof CartIndexRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/content/$slug': typeof ContentSlugRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/cart/': typeof CartIndexRoute
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
+    | '/content/$slug'
     | '/order/lookup'
     | '/products/$productId'
     | '/cart/'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
+    | '/content/$slug'
     | '/order/lookup'
     | '/products/$productId'
     | '/cart'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
+    | '/content/$slug'
     | '/order/lookup'
     | '/products/$productId'
     | '/cart/'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
+  ContentSlugRoute: typeof ContentSlugRoute
   OrderLookupRoute: typeof OrderLookupRoute
   ProductsProductIdRoute: typeof ProductsProductIdRoute
   CartIndexRoute: typeof CartIndexRoute
@@ -311,6 +324,13 @@ declare module '@tanstack/react-router' {
       path: '/order/lookup'
       fullPath: '/order/lookup'
       preLoaderRoute: typeof OrderLookupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/content/$slug': {
+      id: '/content/$slug'
+      path: '/content/$slug'
+      fullPath: '/content/$slug'
+      preLoaderRoute: typeof ContentSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/verify': {
@@ -397,6 +417,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,
   AuthVerifyRoute: AuthVerifyRoute,
+  ContentSlugRoute: ContentSlugRoute,
   OrderLookupRoute: OrderLookupRoute,
   ProductsProductIdRoute: ProductsProductIdRoute,
   CartIndexRoute: CartIndexRoute,

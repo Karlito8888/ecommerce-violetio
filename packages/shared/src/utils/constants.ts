@@ -1,4 +1,4 @@
-import type { ProductQuery, SearchFilters } from "../types/index.js";
+import type { ProductQuery, SearchFilters, ContentListParams } from "../types/index.js";
 
 /**
  * Base URL for the Violet.io commerce API.
@@ -51,5 +51,10 @@ export const queryKeys = {
   },
   notifications: {
     preferences: (userId: string) => ["notifications", "preferences", userId] as const,
+  },
+  content: {
+    all: () => ["content"] as const,
+    detail: (slug: string) => ["content", "detail", slug] as const,
+    list: (params?: ContentListParams) => ["content", "list", params] as const,
   },
 } as const;

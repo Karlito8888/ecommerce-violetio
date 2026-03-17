@@ -104,8 +104,8 @@ development_status:
   epic-6-retrospective: optional
 
   # Epic 7: Content, SEO & Editorial
-  epic-7: backlog
-  7-1-editorial-content-pages: backlog
+  epic-7: in-progress
+  7-1-editorial-content-pages: done
   7-2-content-listing-navigation: backlog
   7-3-advanced-seo-implementation: backlog
   7-4-sitemap-indexing: backlog

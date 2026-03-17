@@ -128,3 +128,10 @@ export type {
   SendPushPayload,
 } from "./notification.types.js";
 export { DEFAULT_NOTIFICATION_PREFERENCES, PUSH_TYPE_TO_PREFERENCE } from "./notification.types.js";
+export type {
+  ContentType,
+  ContentStatus,
+  ContentPage,
+  ContentListParams,
+  ContentListResult,
+} from "./content.types.js";
