@@ -72,6 +72,10 @@ export interface SearchResponse {
   products: ProductMatch[];
   total: number;
   explanations: MatchExplanations;
+  /** True when results were personalized based on user history (Story 6.3). */
+  personalized?: boolean;
+  /** Human-readable personalization hint, shown above results. */
+  personalizationHint?: string;
 }
 
 /** The result of a semantic/AI product search (adapter-level). */

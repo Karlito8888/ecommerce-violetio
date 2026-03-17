@@ -52,6 +52,8 @@ export const searchResponseSchema = z.object({
   products: z.array(productMatchSchema),
   total: z.number().int().nonnegative(),
   explanations: z.record(z.string(), z.string()),
+  personalized: z.boolean().optional(),
+  personalizationHint: z.string().optional(),
 });
 
 export type SearchQueryInput = z.infer<typeof searchQuerySchema>;

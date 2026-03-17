@@ -98,3 +98,8 @@ export type {
   SearchPayload,
   CategoryViewPayload,
 } from "./tracking.types.js";
+export type {
+  CategoryAffinity,
+  UserSearchProfile,
+  PersonalizationBoost,
+} from "./personalization.types.js";

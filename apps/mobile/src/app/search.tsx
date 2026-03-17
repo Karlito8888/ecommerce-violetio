@@ -151,6 +151,12 @@ export default function SearchScreen() {
           </View>
         )}
 
+        {!isLoading && !error && products.length > 0 && data?.personalized && (
+          <ThemedText type="small" style={styles.personalizationHint}>
+            {data.personalizationHint ?? "Results tailored to your preferences"}
+          </ThemedText>
+        )}
+
         {!isLoading && !error && products.length > 0 && (
           <FlatList
             data={products}
@@ -255,6 +261,12 @@ const styles = StyleSheet.create({
     marginTop: Spacing.one,
     fontStyle: "italic",
     color: Colors.light.textSecondary,
+  },
+  personalizationHint: {
+    color: Colors.light.textSecondary,
+    fontStyle: "italic",
+    paddingHorizontal: Spacing.one,
+    marginBottom: Spacing.two,
   },
   suggestionsContainer: {
     paddingTop: Spacing.four,

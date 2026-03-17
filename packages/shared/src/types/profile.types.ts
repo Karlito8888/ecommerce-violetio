@@ -16,6 +16,8 @@ export interface UserProfile {
 export interface UserPreferences {
   theme?: "light" | "dark" | "system";
   newsletter_opt_in?: boolean;
+  /** Personalized search results toggle (Story 6.3). Default: true (undefined = true). */
+  personalized_search?: boolean;
 }
 
 /** Payload for updating profile fields via updateProfile(). */

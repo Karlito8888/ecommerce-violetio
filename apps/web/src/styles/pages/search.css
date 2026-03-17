@@ -53,6 +53,15 @@
   max-width: 640px;
 }
 
+/* ── Personalization hint (Story 6.3) ── */
+
+.search-results__personalization-hint {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--color-steel);
+  margin-bottom: var(--space-4);
+}
+
 /* ── Skeleton for pending state ── */
 
 .search-page__skeleton-chips {

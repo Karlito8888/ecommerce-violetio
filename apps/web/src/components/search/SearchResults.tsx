@@ -16,6 +16,8 @@ interface SearchResultsProps {
   query: string;
   isLoading: boolean;
   error: Error | null;
+  personalized?: boolean;
+  personalizationHint?: string;
 }
 
 /**
@@ -42,6 +44,8 @@ export default function SearchResults({
   query,
   isLoading,
   error,
+  personalized,
+  personalizationHint,
 }: SearchResultsProps) {
   if (isLoading) {
     return <SearchResultsSkeleton />;
@@ -102,6 +106,11 @@ export default function SearchResults({
 
   return (
     <div className="search-results" aria-live="polite">
+      {personalized && (
+        <p className="search-results__personalization-hint">
+          {personalizationHint ?? "Results tailored to your preferences"}
+        </p>
+      )}
       <div className="search-results__grid" role="list">
         {products.map((product) => (
           <div key={product.id} className="search-results__item">

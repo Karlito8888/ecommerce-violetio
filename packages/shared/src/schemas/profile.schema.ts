@@ -21,6 +21,7 @@ export const avatarUrlSchema = z
 export const userPreferencesSchema = z.object({
   theme: z.enum(["light", "dark", "system"]).optional(),
   newsletter_opt_in: z.boolean().optional(),
+  personalized_search: z.boolean().optional(),
 });
 
 /** Validates the updateProfile payload (all fields optional). */

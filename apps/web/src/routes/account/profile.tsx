@@ -55,6 +55,7 @@ function ProfilePage() {
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [preferenceError, setPreferenceError] = useState("");
 
   useEffect(() => {
     if (profile.data) {
@@ -209,6 +210,39 @@ function ProfilePage() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* ── Preferences Section (Story 6.3) ── */}
+      <div className="profile__section">
+        <h2 className="profile__section-title">Preferences</h2>
+        {preferenceError && <div className="profile__error">{preferenceError}</div>}
+        <div className="profile__field profile__field--toggle">
+          <div className="profile__toggle-info">
+            <label className="profile__label" htmlFor="personalized-search">
+              Personalized search results
+            </label>
+            <p className="profile__field-hint">
+              When enabled, search results are tailored based on your browsing history and
+              preferences.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            id="personalized-search"
+            className="profile__checkbox"
+            checked={profile.data?.preferences?.personalized_search !== false}
+            onChange={async (e) => {
+              setPreferenceError("");
+              try {
+                await updateProfile.mutateAsync({
+                  preferences: { personalized_search: e.target.checked },
+                });
+              } catch {
+                setPreferenceError("Failed to update preference. Please try again.");
+              }
+            }}
+          />
+        </div>
       </div>
 
       {/* ── Password Section ── */}

@@ -298,6 +298,8 @@ function SearchPage() {
           query={q ?? ""}
           isLoading={isLoading}
           error={error}
+          personalized={data?.personalized}
+          personalizationHint={data?.personalizationHint}
         />
       </div>
     </div>

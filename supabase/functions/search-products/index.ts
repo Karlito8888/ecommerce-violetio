@@ -7,19 +7,106 @@
  *
  * ## Data flow
  * 1. Validate input with Zod (M1 fix)
- * 2. Generate query embedding via OpenAI text-embedding-3-small
- * 3. pgvector cosine similarity search via match_products() RPC
- * 4. Fetch live product data from Violet API (parallel fetching)
- * 5. Apply post-search filters on enriched data
- * 6. Generate template-based match explanations (no LLM — 2s budget)
- * 7. Return { data, error } discriminated union response
+ * 2. Extract authenticated user from JWT (Story 6.3 — personalization)
+ * 3. Generate query embedding via OpenAI text-embedding-3-small
+ * 4. pgvector cosine similarity search via match_products() RPC
+ * 5. Fetch live product data from Violet API (parallel with user profile fetch)
+ * 6. Apply post-search filters on enriched data
+ * 7. Apply personalization boosting if user is authenticated (Story 6.3)
+ * 8. Generate template-based match explanations (no LLM — 2s budget)
+ * 9. Return { data, error } discriminated union response
  */
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { generateEmbedding } from "../_shared/openai.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { getVioletHeaders } from "../_shared/violetAuth.ts";
 import { searchQuerySchema } from "../_shared/schemas.ts";
+
+// ─── Types ───────────────────────────────────────────────────────
+// Keep in sync with packages/shared/src/types/personalization.types.ts
+
+interface CategoryAffinity {
+  category: string;
+  view_count: number;
+}
+
+interface UserSearchProfile {
+  top_categories: CategoryAffinity[];
+  avg_order_price: number;
+  recent_product_ids: string[];
+  total_events: number;
+}
+
+interface PgvectorMatch {
+  product_id: string;
+  product_name: string;
+  text_content: string;
+  similarity: number;
+}
+
+// ─── Personalization ─────────────────────────────────────────────
+
+/**
+ * Extracts a product category from the text_content field.
+ *
+ * text_content format (from generate-embeddings):
+ *   "Name. Description. Brand: X. Category: Y. Tags: a, b, c"
+ */
+function extractCategory(textContent: string): string | null {
+  const match = textContent.match(/Category:\s*([^.]+)/i);
+  return match ? match[1].trim() : null;
+}
+
+/**
+ * Applies personalization boosting to search results.
+ *
+ * Scoring formula: final = 0.7 × semantic + 0.2 × category + 0.1 × price
+ *
+ * - category_boost: 1.0 for #1 category, 0.7 #2, 0.5 #3, 0.3 #4-5, 0 otherwise
+ * - price_proximity: 1.0 when product price equals user avg, 0 at 2× distance
+ * - If no order history: price_proximity = 0.5 (neutral)
+ */
+function applyPersonalizationBoost(
+  products: Array<Record<string, unknown>>,
+  profile: UserSearchProfile,
+  textContentMap: Map<string, string>,
+): Array<Record<string, unknown>> {
+  const categoryBoostMap = new Map<string, number>();
+  const boostValues = [1.0, 0.7, 0.5, 0.3, 0.3];
+  profile.top_categories.forEach((cat, i) => {
+    categoryBoostMap.set(cat.category.toLowerCase(), boostValues[i] ?? 0.3);
+  });
+
+  const boosted = products.map((product) => {
+    const textContent = textContentMap.get(product.id as string) ?? "";
+    const originalSimilarity = product.similarity as number;
+
+    // Category boost
+    const productCategory = extractCategory(textContent);
+    const categoryBoost = productCategory
+      ? (categoryBoostMap.get(productCategory.toLowerCase()) ?? 0)
+      : 0;
+
+    // Price proximity boost
+    let priceProximity = 0.5;
+    if (profile.avg_order_price > 0) {
+      const productPrice = product.minPrice as number;
+      const priceDiff = Math.abs(productPrice - profile.avg_order_price);
+      priceProximity = Math.max(0, 1 - Math.min(priceDiff / profile.avg_order_price, 1));
+    }
+
+    const finalScore = originalSimilarity * 0.7 + categoryBoost * 0.2 + priceProximity * 0.1;
+
+    return {
+      ...product,
+      similarity: Math.round(finalScore * 10000) / 10000,
+    };
+  });
+
+  return boosted.sort((a, b) => (b.similarity as number) - (a.similarity as number));
+}
 
 // ─── Match explanation ───────────────────────────────────────────
 
@@ -163,6 +250,45 @@ Deno.serve(async (req: Request) => {
     const { query, filters, limit } = validation.data;
     const matchCount = limit ?? 12;
 
+    // ── Story 6.3: Extract authenticated user for personalization ──
+    let authUserId: string | null = null;
+    let personalizationEnabled = true;
+
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      try {
+        const userClient = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: authHeader } } },
+        );
+        const {
+          data: { user },
+        } = await userClient.auth.getUser();
+
+        if (user && !user.is_anonymous) {
+          authUserId = user.id;
+
+          // Check opt-out preference
+          const { data: profile } = await userClient
+            .from("user_profiles")
+            .select("preferences")
+            .eq("user_id", user.id)
+            .single();
+
+          if (profile?.preferences?.personalized_search === false) {
+            personalizationEnabled = false;
+          }
+        }
+      } catch (err) {
+        // Auth extraction failure is non-fatal — proceed without personalization
+        console.error(
+          "[search-products] Auth extraction failed, proceeding without personalization:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
     // 1. Generate query embedding
     const queryEmbedding = await generateEmbedding(query);
 
@@ -187,27 +313,40 @@ Deno.serve(async (req: Request) => {
     if (!matches || matches.length === 0) {
       return new Response(
         JSON.stringify({
-          data: { query, products: [], total: 0, explanations: {} },
+          data: {
+            query,
+            products: [],
+            total: 0,
+            explanations: {},
+            personalized: false,
+          },
           error: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // 3. Fetch live product data from Violet API
-    const productIds = matches.map((m: { product_id: string }) => m.product_id);
-    const violetProducts = await fetchVioletProducts(productIds);
+    // 3. Fetch Violet data + user search profile in parallel (Story 6.3)
+    const productIds = matches.map((m: PgvectorMatch) => m.product_id);
+
+    const [violetProducts, profileResult] = await Promise.all([
+      fetchVioletProducts(productIds),
+      authUserId && personalizationEnabled
+        ? supabase.rpc("get_user_search_profile", { p_user_id: authUserId })
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    // Build text_content lookup for personalization
+    const textContentMap = new Map<string, string>();
+    for (const match of matches as PgvectorMatch[]) {
+      textContentMap.set(match.product_id, match.text_content);
+    }
 
     // 4. Build enriched results with post-search filtering
     const explanations: Record<string, string> = {};
-    const products: Array<Record<string, unknown>> = [];
+    let products: Array<Record<string, unknown>> = [];
 
-    for (const match of matches as Array<{
-      product_id: string;
-      product_name: string;
-      text_content: string;
-      similarity: number;
-    }>) {
+    for (const match of matches as PgvectorMatch[]) {
       const violet = violetProducts.get(match.product_id);
 
       // Apply post-search filters on enriched data
@@ -261,9 +400,39 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // 5. Apply personalization boosting (Story 6.3)
+    let personalized = false;
+    let personalizationHint: string | undefined;
+
+    if (profileResult?.error) {
+      console.error(
+        "[search-products] User profile RPC failed, skipping personalization:",
+        profileResult.error.message,
+      );
+    }
+    const searchProfile = profileResult?.data as UserSearchProfile | null;
+    if (
+      authUserId &&
+      personalizationEnabled &&
+      searchProfile &&
+      searchProfile.total_events > 0 &&
+      products.length > 0
+    ) {
+      products = applyPersonalizationBoost(products, searchProfile, textContentMap);
+      personalized = true;
+      personalizationHint = "Results tailored to your preferences";
+    }
+
     return new Response(
       JSON.stringify({
-        data: { query, products, total: products.length, explanations },
+        data: {
+          query,
+          products,
+          total: products.length,
+          explanations,
+          personalized,
+          personalizationHint,
+        },
         error: null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
