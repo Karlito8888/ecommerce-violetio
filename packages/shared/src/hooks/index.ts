@@ -47,3 +47,4 @@ export {
   useAddToWishlist,
   useRemoveFromWishlist,
 } from "./useWishlist.js";
+export { recommendationQueryOptions, useRecommendations } from "./useRecommendations.js";

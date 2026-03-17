@@ -42,4 +42,7 @@ export const queryKeys = {
   user: {
     current: () => ["user", "current"] as const,
   },
+  recommendations: {
+    forProduct: (productId: string) => ["recommendations", productId] as const,
+  },
 } as const;

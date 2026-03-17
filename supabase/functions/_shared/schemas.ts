@@ -258,3 +258,19 @@ export type VioletOfferPayload = z.infer<typeof violetOfferWebhookPayloadSchema>
 export type VioletSyncPayload = z.infer<typeof violetSyncWebhookPayloadSchema>;
 export type VioletOrderPayload = z.infer<typeof violetOrderWebhookPayloadSchema>;
 export type VioletBagPayload = z.infer<typeof violetBagWebhookPayloadSchema>;
+
+// ─── Recommendation Schemas (Story 6.5) ────────────────────────────
+//
+// Validates get-recommendations Edge Function input.
+// This is a server-only request schema — no Node-side mirror needed.
+// The Node-side recommendation.schema.ts only contains response schemas
+// (used by the client to validate Edge Function output).
+
+/** Schema for get-recommendations request body (Deno-only, no Node mirror). */
+export const recommendationRequestSchema = z.object({
+  product_id: z.string().min(1, "product_id is required"),
+  user_id: z.string().optional(),
+  limit: z.number().int().min(1).max(20).optional(),
+});
+
+export type RecommendationRequestInput = z.infer<typeof recommendationRequestSchema>;

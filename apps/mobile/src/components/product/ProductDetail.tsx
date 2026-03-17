@@ -1,8 +1,24 @@
 import React from "react";
-import { Dimensions, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { useRouter } from "expo-router";
 
-import type { Product } from "@ecommerce/shared";
-import { formatPrice, stripHtml } from "@ecommerce/shared";
+import type { Product, RecommendationItem } from "@ecommerce/shared";
+import {
+  createSupabaseClient,
+  formatPrice,
+  stripHtml,
+  useRecommendations,
+  useUser,
+} from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
@@ -105,7 +121,72 @@ export default function MobileProductDetail({ product }: { product: Product }) {
           </ThemedText>
         </Pressable>
       </View>
+
+      {/* Recommendations */}
+      <RecommendationsSection productId={product.id} />
     </ScrollView>
+  );
+}
+
+const CARD_WIDTH = 180;
+
+function RecommendationsSection({ productId }: { productId: string }) {
+  const router = useRouter();
+  const supabase = createSupabaseClient();
+  const { data: user } = useUser();
+  const userId = user && !user.is_anonymous ? user.id : undefined;
+
+  const { data, isLoading, isError } = useRecommendations(productId, supabase, userId);
+
+  if (isError) return null;
+
+  if (isLoading) {
+    return (
+      <View style={styles.recSection}>
+        <ThemedText type="subtitle" style={styles.recHeading}>
+          You might also like
+        </ThemedText>
+        <ActivityIndicator size="small" style={styles.recLoader} />
+      </View>
+    );
+  }
+
+  if (!data || data.products.length === 0) return null;
+
+  const renderItem = ({ item }: { item: RecommendationItem }) => (
+    <Pressable
+      style={styles.recCard}
+      onPress={() => router.push(`/products/${item.id}` as never)}
+      accessibilityLabel={`${item.name}, ${formatPrice(item.minPrice, item.currency)}`}
+    >
+      {item.thumbnailUrl ? (
+        <Image source={{ uri: item.thumbnailUrl }} style={styles.recImage} />
+      ) : (
+        <ThemedView type="backgroundElement" style={styles.recImagePlaceholder}>
+          <ThemedText themeColor="textSecondary">No image</ThemedText>
+        </ThemedView>
+      )}
+      <ThemedText numberOfLines={2} style={styles.recName}>
+        {item.name}
+      </ThemedText>
+      <ThemedText type="smallBold">{formatPrice(item.minPrice, item.currency)}</ThemedText>
+    </Pressable>
+  );
+
+  return (
+    <View style={styles.recSection}>
+      <ThemedText type="subtitle" style={styles.recHeading}>
+        You might also like
+      </ThemedText>
+      <FlatList
+        horizontal
+        data={data.products}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.recList}
+      />
+    </View>
   );
 }
 
@@ -160,5 +241,43 @@ const styles = StyleSheet.create({
     color: "#2c2c2c",
     fontWeight: "600",
     fontSize: 16,
+  },
+  recSection: {
+    paddingTop: Spacing.five,
+    borderTopWidth: 1,
+    borderTopColor: "#e8e4df",
+    marginTop: Spacing.four,
+    marginHorizontal: Spacing.four,
+  },
+  recHeading: {
+    fontFamily: "serif",
+    marginBottom: Spacing.three,
+  },
+  recLoader: {
+    paddingVertical: Spacing.six,
+  },
+  recList: {
+    gap: Spacing.three,
+  },
+  recCard: {
+    width: CARD_WIDTH,
+    gap: Spacing.one,
+  },
+  recImage: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.33,
+    borderRadius: 8,
+    resizeMode: "cover",
+  },
+  recImagePlaceholder: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.33,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recName: {
+    fontSize: 13,
+    marginTop: Spacing.one,
   },
 });

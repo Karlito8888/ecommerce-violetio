@@ -113,3 +113,8 @@ export type {
   AddToWishlistFn,
   RemoveFromWishlistFn,
 } from "./wishlist.types.js";
+export type {
+  RecommendationItem,
+  RecommendationResponse,
+  RecommendationFetchFn,
+} from "./recommendation.types.js";

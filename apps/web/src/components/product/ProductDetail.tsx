@@ -6,6 +6,7 @@ import ImageGallery from "./ImageGallery";
 import VariantSelector from "./VariantSelector";
 import PriceBreakdown from "./PriceBreakdown";
 import WishlistButton from "./WishlistButton";
+import RecommendationRow from "./RecommendationRow";
 import { useCartContext } from "../../contexts/CartContext";
 import { createCartFn, addToCartFn } from "../../server/cartActions";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
@@ -259,8 +260,7 @@ export default function ProductDetail({ product }: { product: Product }) {
       </div>
 
       <div className="product-detail__similar">
-        <h3>Similar Products</h3>
-        <p>Recommendations coming soon</p>
+        <RecommendationRow productId={product.id} />
       </div>
     </div>
   );
