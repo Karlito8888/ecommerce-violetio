@@ -46,6 +46,7 @@ export function usePushRegistration(userId: string | undefined) {
         await upsertPushToken(userId!, token, deviceId, Platform.OS as "ios" | "android");
         registeredForRef.current = userId!;
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.warn("[usePushRegistration] Registration failed:", err);
       }
     }
@@ -104,6 +105,7 @@ export function setupNotificationHandler(): void {
 /** Requests permission and returns the Expo push token, or undefined on failure. */
 async function registerForPushNotificationsAsync(): Promise<string | undefined> {
   if (!Device.isDevice) {
+    // eslint-disable-next-line no-console
     console.warn("[usePushRegistration] Push notifications require a physical device");
     return undefined;
   }
@@ -131,6 +133,7 @@ async function registerForPushNotificationsAsync(): Promise<string | undefined> 
   // Get Expo push token (requires EAS projectId)
   const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
   if (!projectId) {
+    // eslint-disable-next-line no-console
     console.warn("[usePushRegistration] EAS projectId not configured — cannot get push token");
     return undefined;
   }
