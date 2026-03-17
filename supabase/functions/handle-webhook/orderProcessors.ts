@@ -157,6 +157,47 @@ async function deriveAndUpdateOrderStatus(
   }
 }
 
+/**
+ * Looks up the authenticated user_id for an order (by Violet order ID).
+ * Returns null for guest orders or if the order is not found.
+ * Used to conditionally fire push notifications (guests get email only).
+ */
+async function getOrderUserId(
+  supabase: SupabaseClient,
+  violetOrderId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("orders")
+    .select("user_id")
+    .eq("violet_order_id", violetOrderId)
+    .single();
+  return data?.user_id ?? null;
+}
+
+/**
+ * Fire-and-forget push notification for order events (Story 6.7).
+ * Skips silently if user_id is null (guest order) or on any error.
+ */
+function firePushNotification(
+  supabase: SupabaseClient,
+  userId: string | null,
+  type: string,
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): void {
+  if (!userId) return;
+  supabase.functions
+    .invoke("send-push", {
+      body: { user_id: userId, type, title, body, data },
+    })
+    .catch((err: unknown) => {
+      console.warn(
+        `[orderProcessors] send-push invoke failed (non-critical): ${err instanceof Error ? err.message : "Unknown"}`,
+      );
+    });
+}
+
 // ─── ORDER event processors ──────────────────────────────────────────
 
 /**
@@ -277,6 +318,16 @@ export async function processBagUpdated(
             `[processBagUpdated] send-notification invoke failed (non-critical): ${err instanceof Error ? err.message : "Unknown"}`,
           );
         });
+      // Fire-and-forget: push notification (Story 6.7)
+      const deliveredUserId = await getOrderUserId(supabase, String(payload.order_id));
+      firePushNotification(
+        supabase,
+        deliveredUserId,
+        "order_delivered",
+        "Your order has been delivered!",
+        `Order #${payload.order_id} has arrived`,
+        { order_id: String(payload.order_id) },
+      );
     }
     await updateEventStatus(supabase, eventId, "processed");
   } catch (err) {
@@ -354,6 +405,16 @@ export async function processBagShipped(
           `[processBagShipped] send-notification invoke failed (non-critical): ${err instanceof Error ? err.message : "Unknown"}`,
         );
       });
+    // Fire-and-forget: push notification (Story 6.7)
+    const shippedUserId = await getOrderUserId(supabase, String(payload.order_id));
+    firePushNotification(
+      supabase,
+      shippedUserId,
+      "order_shipped",
+      "Your order has shipped!",
+      `Order #${payload.order_id} is on its way`,
+      { order_id: String(payload.order_id) },
+    );
     await updateEventStatus(supabase, eventId, "processed");
   } catch (err) {
     await updateEventStatus(
@@ -501,6 +562,16 @@ async function fetchRefundDetailsAndNotify(
       order_id: orderId,
     },
   });
+  // Fire-and-forget: push notification (Story 6.7)
+  const refundUserId = await getOrderUserId(supabase, orderId);
+  firePushNotification(
+    supabase,
+    refundUserId,
+    "refund_processed",
+    "Refund processed",
+    `A refund for order #${orderId} has been processed`,
+    { order_id: orderId },
+  );
 }
 
 /**

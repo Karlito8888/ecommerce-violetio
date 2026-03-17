@@ -199,6 +199,20 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {/* ── Notifications ── */}
+          <ThemedText type="default" style={styles.sectionHeader}>
+            Notifications
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push("/settings/notifications" as never)}
+            style={styles.trackingLink}
+          >
+            <ThemedText type="default">Notification Preferences</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Manage push notification settings
+            </ThemedText>
+          </Pressable>
+
           {/* ── Security ── */}
           <ThemedText type="default" style={styles.sectionHeader}>
             Security

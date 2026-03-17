@@ -55,3 +55,9 @@ export {
   addToRecentlyViewedStorage,
 } from "./useRecentlyViewed.js";
 export type { UseRecentlyViewedOptions } from "./useRecentlyViewed.js";
+export {
+  mergeWithDefaults,
+  notificationPreferencesQueryOptions,
+  useNotificationPreferences,
+  useUpdateNotificationPreference,
+} from "./useNotificationPreferences.js";

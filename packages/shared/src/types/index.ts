@@ -119,3 +119,12 @@ export type {
   RecommendationFetchFn,
 } from "./recommendation.types.js";
 export type { RecentlyViewedEntry, RecentlyViewedItem } from "./recentlyViewed.types.js";
+export type {
+  NotificationType,
+  PushNotificationType,
+  PushToken,
+  NotificationPreference,
+  NotificationPreferencesMap,
+  SendPushPayload,
+} from "./notification.types.js";
+export { DEFAULT_NOTIFICATION_PREFERENCES, PUSH_TYPE_TO_PREFERENCE } from "./notification.types.js";

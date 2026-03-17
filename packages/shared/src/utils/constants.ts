@@ -49,4 +49,7 @@ export const queryKeys = {
     forUser: (userId: string) => ["recentlyViewed", userId] as const,
     anonymous: () => ["recentlyViewed", "anonymous"] as const,
   },
+  notifications: {
+    preferences: (userId: string) => ["notifications", "preferences", userId] as const,
+  },
 } as const;

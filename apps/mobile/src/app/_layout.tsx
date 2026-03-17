@@ -5,7 +5,13 @@ import { useColorScheme } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StripeProvider } from "@stripe/stripe-react-native";
 
+import { router } from "expo-router";
 import { configureEnv, createSupabaseClient, useCartSync } from "@ecommerce/shared";
+import {
+  setupNotificationHandler,
+  usePushRegistration,
+  useNotificationListeners,
+} from "@/hooks/usePushRegistration";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import AppTabs from "@/components/app-tabs";
 import { BiometricPrompt } from "@/components/BiometricPrompt";
@@ -32,6 +38,10 @@ try {
   console.warn("[Auth] Supabase init failed:", msg);
 }
 
+// Initialize notification handler at module level (before any component renders).
+// Controls how foreground notifications are displayed.
+setupNotificationHandler();
+
 const VIOLET_CART_KEY = "violet_cart_id";
 
 // Supabase client singleton — created once outside the render cycle to maintain
@@ -43,6 +53,15 @@ function AppContent() {
   const { isLoading, user, isAnonymous, biometricEnabled } = useAuth();
   const [biometricDismissed, setBiometricDismissed] = useState(false);
   const [_cartSyncTrigger, setCartSyncTrigger] = useState(0);
+
+  // Push notification registration for authenticated users (Story 6.7)
+  const pushUserId = user && !isAnonymous ? user.id : undefined;
+  usePushRegistration(pushUserId);
+  useNotificationListeners((data) => {
+    if (data.screen === "order" && data.order_id) {
+      router.push(`/order/${data.order_id}` as never);
+    }
+  });
 
   // Cross-device cart sync via Supabase Realtime (Story 4.6)
   const syncUserId = user && !isAnonymous ? user.id : null;
