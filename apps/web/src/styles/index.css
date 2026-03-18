@@ -36,6 +36,7 @@
 @import "./components/recently-viewed-row.css";
 @import "./components/affiliate-disclosure.css";
 @import "./components/content-product-card.css";
+@import "./components/content-list-card.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";
@@ -51,3 +52,4 @@
 @import "./pages/profile.css";
 @import "./pages/wishlist.css";
 @import "./pages/content.css";
+@import "./pages/content-list.css";

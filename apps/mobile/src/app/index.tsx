@@ -15,9 +15,10 @@ import { useAuth } from "@/context/AuthContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import ProductList from "@/components/product/ProductList";
+import ContentCard from "@/components/ContentCard";
 import { Colors, Spacing, BottomTabInset, MaxContentWidth } from "@/constants/theme";
-import { useRecentlyViewed } from "@ecommerce/shared";
-import type { Product } from "@ecommerce/shared";
+import { useRecentlyViewed, createSupabaseClient, getContentPages } from "@ecommerce/shared";
+import type { Product, ContentPage } from "@ecommerce/shared";
 
 /**
  * Fallback categories matching the web CategoryChips component.
@@ -95,6 +96,8 @@ export default function HomeScreen() {
         </ScrollView>
 
         <RecentlyViewedSection />
+
+        <GuidesSection />
 
         <ProductList
           products={products}
@@ -179,6 +182,63 @@ function RecentlyViewedSection() {
   );
 }
 
+/**
+ * Guides section for the mobile home screen (Story 7.2).
+ *
+ * Shows a horizontal FlatList of the 6 most recent published content items.
+ * "See All" navigates to the full content listing screen.
+ */
+function GuidesSection() {
+  const [guides, setGuides] = useState<ContentPage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchGuides() {
+      try {
+        const client = createSupabaseClient();
+        const result = await getContentPages(client, { limit: 6 });
+        if (!cancelled) setGuides(result.items);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    fetchGuides();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (isLoading) return null;
+  if (guides.length === 0) return null;
+
+  return (
+    <View style={styles.guidesSection}>
+      <View style={styles.guidesSectionHeader}>
+        <ThemedText type="subtitle" style={styles.guidesHeading}>
+          Guides
+        </ThemedText>
+        <TouchableOpacity
+          onPress={() => router.push("/content/" as never)}
+          accessibilityRole="link"
+          accessibilityLabel="See all guides"
+        >
+          <ThemedText style={styles.guidesSeeAll}>See All</ThemedText>
+        </TouchableOpacity>
+      </View>
+      <FlatList
+        data={guides}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.guidesList}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <ContentCard content={item} compact />}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -249,5 +309,26 @@ const styles = StyleSheet.create({
   recentPlaceholderText: {
     color: Colors.light.textSecondary,
     fontSize: 12,
+  },
+  guidesSection: {
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.two,
+  },
+  guidesSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.four,
+    marginBottom: Spacing.two,
+  },
+  guidesHeading: {},
+  guidesSeeAll: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.light.tint,
+  },
+  guidesList: {
+    paddingHorizontal: Spacing.three,
+    gap: Spacing.two,
   },
 });

@@ -106,7 +106,7 @@ development_status:
   # Epic 7: Content, SEO & Editorial
   epic-7: in-progress
   7-1-editorial-content-pages: done
-  7-2-content-listing-navigation: backlog
+  7-2-content-listing-navigation: done
   7-3-advanced-seo-implementation: backlog
   7-4-sitemap-indexing: backlog
   7-5-social-sharing-rich-previews: backlog
