@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { contentDetailQueryOptions, buildPageMeta, formatDate } from "@ecommerce/shared";
+import {
+  contentDetailQueryOptions,
+  buildPageMeta,
+  formatDate,
+  buildBreadcrumbJsonLd,
+  wordCount,
+} from "@ecommerce/shared";
 import type { ContentDetailFetchFn, ContentPage } from "@ecommerce/shared";
 import { getContentBySlugFn } from "../../server/getContent";
 import MarkdownRenderer from "../../components/content/MarkdownRenderer";
@@ -18,6 +24,13 @@ const TYPE_LABELS: Record<string, string> = {
   guide: "Guide",
   comparison: "Comparison",
   review: "Review",
+};
+
+/** Content type to schema.org articleSection mapping for JSON-LD. */
+const ARTICLE_SECTIONS: Record<string, string> = {
+  guide: "Buying Guide",
+  comparison: "Product Comparison",
+  review: "Product Review",
 };
 
 /**
@@ -67,6 +80,16 @@ export const Route = createFileRoute("/content/$slug")({
           type: "application/ld+json",
           children: JSON.stringify(buildArticleJsonLd(content, SITE_URL)),
         },
+        {
+          type: "application/ld+json",
+          children: JSON.stringify(
+            buildBreadcrumbJsonLd([
+              { name: "Home", url: SITE_URL },
+              { name: "Guides & Reviews", url: `${SITE_URL}/content` },
+              { name: content.title, url: contentUrl },
+            ]),
+          ),
+        },
       ],
     };
   },
@@ -86,6 +109,8 @@ function buildArticleJsonLd(content: ContentPage, siteUrl: string): object {
     dateModified: content.updatedAt,
     image: content.featuredImageUrl ?? undefined,
     url: `${siteUrl}/content/${content.slug}`,
+    wordCount: wordCount(content.bodyMarkdown),
+    articleSection: ARTICLE_SECTIONS[content.type] ?? content.type,
     publisher: {
       "@type": "Organization",
       name: "Maison Émile",

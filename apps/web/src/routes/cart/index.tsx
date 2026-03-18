@@ -7,6 +7,7 @@ import {
   useUpdateCartItem,
   useRemoveFromCart,
   formatPrice,
+  buildPageMeta,
 } from "@ecommerce/shared";
 import { getCartFn, updateCartItemFn, removeFromCartFn } from "../../server/cartActions";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
@@ -22,8 +23,19 @@ const removeFromCart: RemoveFromCartFn = (input) => removeFromCartFn({ data: inp
  * Two-column layout: items grouped by merchant bag (left) + pricing summary sidebar (right).
  * Uses .cart BEM block (distinct from .cart-drawer used by the drawer panel).
  */
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
 export const Route = createFileRoute("/cart/")({
   component: CartPage,
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Shopping Cart | Maison Émile",
+      description: "Review your shopping cart items before checkout.",
+      url: "/cart",
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
 });
 
 function CartPage() {

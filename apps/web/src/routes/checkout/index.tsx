@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useCartContext } from "../../contexts/CartContext";
-import { useCartQuery, queryKeys, formatPrice } from "@ecommerce/shared";
+import { useCartQuery, queryKeys, formatPrice, buildPageMeta } from "@ecommerce/shared";
 import type {
   CartFetchFn,
   ShippingMethodsAvailable,
@@ -57,8 +57,19 @@ function CheckoutPageWithBoundary() {
   );
 }
 
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
 export const Route = createFileRoute("/checkout/")({
   component: CheckoutPageWithBoundary,
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Checkout | Maison Émile",
+      description: "Complete your purchase securely.",
+      url: "/checkout",
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
 });
 
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });

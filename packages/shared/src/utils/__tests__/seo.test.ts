@@ -4,6 +4,9 @@ import {
   buildProductJsonLd,
   buildItemListJsonLd,
   buildWebSiteJsonLd,
+  buildBreadcrumbJsonLd,
+  buildOrganizationJsonLd,
+  wordCount,
 } from "../seo.js";
 import type { Product } from "../../types/product.types.js";
 
@@ -151,5 +154,78 @@ describe("buildWebSiteJsonLd", () => {
     const action = ld.potentialAction as Record<string, unknown>;
     expect(action["@type"]).toBe("SearchAction");
     expect(action.target).toContain("/search?q=");
+  });
+});
+
+/* ─── buildBreadcrumbJsonLd ────────────────────────────────────────── */
+
+describe("buildBreadcrumbJsonLd", () => {
+  it("creates BreadcrumbList with correct positions (1-indexed)", () => {
+    const ld = buildBreadcrumbJsonLd([
+      { name: "Home", url: SITE_URL },
+      { name: "Products", url: `${SITE_URL}/products` },
+      { name: "Widget", url: `${SITE_URL}/products/123` },
+    ]) as Record<string, unknown>;
+
+    expect(ld["@context"]).toBe("https://schema.org");
+    expect(ld["@type"]).toBe("BreadcrumbList");
+
+    const items = ld.itemListElement as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(3);
+    expect(items[0]).toEqual({
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: SITE_URL,
+    });
+    expect(items[1].position).toBe(2);
+    expect(items[1].name).toBe("Products");
+    expect(items[2].position).toBe(3);
+    expect(items[2].name).toBe("Widget");
+  });
+
+  it("handles single item breadcrumb", () => {
+    const ld = buildBreadcrumbJsonLd([{ name: "Home", url: SITE_URL }]) as Record<string, unknown>;
+
+    const items = ld.itemListElement as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].position).toBe(1);
+  });
+});
+
+/* ─── buildOrganizationJsonLd ──────────────────────────────────────── */
+
+describe("buildOrganizationJsonLd", () => {
+  it("creates Organization schema with name, url, and logo", () => {
+    const ld = buildOrganizationJsonLd(SITE_URL) as Record<string, unknown>;
+    expect(ld["@context"]).toBe("https://schema.org");
+    expect(ld["@type"]).toBe("Organization");
+    expect(ld.name).toBe("Maison Émile");
+    expect(ld.url).toBe(SITE_URL);
+    expect(ld.logo).toBe(`${SITE_URL}/logo.png`);
+  });
+});
+
+/* ─── wordCount ────────────────────────────────────────────────────── */
+
+describe("wordCount", () => {
+  it("counts words in plain text", () => {
+    expect(wordCount("hello world foo bar")).toBe(4);
+  });
+
+  it("counts words after stripping Markdown syntax", () => {
+    expect(wordCount("## Heading\n\n**bold text** and *italic text*")).toBe(6);
+  });
+
+  it("removes product embeds before counting", () => {
+    expect(wordCount("Buy this {{product:abc123}} now")).toBe(3);
+  });
+
+  it("returns 0 for empty string", () => {
+    expect(wordCount("")).toBe(0);
+  });
+
+  it("returns 0 for whitespace-only string", () => {
+    expect(wordCount("   \n\t  ")).toBe(0);
   });
 });

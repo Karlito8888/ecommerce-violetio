@@ -50,6 +50,7 @@ import {
   formatPrice,
   formatDate,
   queryKeys,
+  buildPageMeta,
 } from "@ecommerce/shared";
 import { getOrdersFn } from "#/server/orders";
 import type { OrderWithBagCount } from "@ecommerce/shared";
@@ -57,11 +58,22 @@ import type { OrderWithBagCount } from "@ecommerce/shared";
 // Platform adapter: wrap TanStack Start Server Function as OrdersFetchFn
 const fetchOrders = () => getOrdersFn();
 
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
 export const Route = createFileRoute("/account/orders/")({
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(ordersQueryOptions(fetchOrders));
   },
   component: OrdersPage,
+  head: () => ({
+    meta: buildPageMeta({
+      title: "My Orders | Maison Émile",
+      description: "View your order history and track deliveries.",
+      url: "/account/orders",
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
 });
 
 // ─── Formatters ───────────────────────────────────────────────────────────────

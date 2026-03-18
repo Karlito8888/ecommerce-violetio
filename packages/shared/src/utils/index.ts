@@ -7,8 +7,11 @@ export {
   buildProductJsonLd,
   buildItemListJsonLd,
   buildWebSiteJsonLd,
+  buildBreadcrumbJsonLd,
+  buildOrganizationJsonLd,
+  wordCount,
 } from "./seo.js";
-export type { MetaTag, PageMetaOptions } from "./seo.js";
+export type { MetaTag, PageMetaOptions, BreadcrumbItem } from "./seo.js";
 export { logError } from "./errorLogger.js";
 export {
   deriveOrderStatusFromBags,

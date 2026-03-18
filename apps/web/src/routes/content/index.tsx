@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { contentListQueryOptions, buildPageMeta } from "@ecommerce/shared";
+import { contentListQueryOptions, buildPageMeta, buildBreadcrumbJsonLd } from "@ecommerce/shared";
 import type { ContentType, ContentListFetchFn } from "@ecommerce/shared";
 import { getContentListFn } from "../../server/getContent";
 import ContentListCard from "../../components/content/ContentListCard";
@@ -77,6 +77,15 @@ export const Route = createFileRoute("/content/")({
             url: SITE_URL,
           },
         }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify(
+          buildBreadcrumbJsonLd([
+            { name: "Home", url: SITE_URL },
+            { name: "Guides & Reviews", url: `${SITE_URL}/content` },
+          ]),
+        ),
       },
     ],
   }),

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { buildPageMeta, buildWebSiteJsonLd } from "@ecommerce/shared";
+import { buildPageMeta, buildWebSiteJsonLd, buildOrganizationJsonLd } from "@ecommerce/shared";
 import SearchBar from "../components/search/SearchBar";
 import RecentlyViewedRow from "../components/product/RecentlyViewedRow";
 
@@ -31,6 +31,10 @@ export const Route = createFileRoute("/")({
       {
         type: "application/ld+json",
         children: JSON.stringify(buildWebSiteJsonLd(SITE_URL)),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify(buildOrganizationJsonLd(SITE_URL)),
       },
     ],
   }),

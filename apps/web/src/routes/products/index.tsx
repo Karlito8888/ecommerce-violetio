@@ -4,6 +4,7 @@ import {
   productsInfiniteQueryOptions,
   buildPageMeta,
   buildItemListJsonLd,
+  buildBreadcrumbJsonLd,
 } from "@ecommerce/shared";
 import type { ProductsFetchFn } from "@ecommerce/shared";
 import { getProductsFn, getCategoriesFn } from "../../server/getProducts";
@@ -219,15 +220,25 @@ export const Route = createFileRoute("/products/")({
       siteUrl: SITE_URL,
     }),
     links: [{ rel: "canonical", href: `${SITE_URL}/products` }],
-    scripts:
-      loaderData?.products && loaderData.products.length > 0
+    scripts: [
+      ...(loaderData?.products && loaderData.products.length > 0
         ? [
             {
               type: "application/ld+json",
               children: JSON.stringify(buildItemListJsonLd(loaderData.products, SITE_URL)),
             },
           ]
-        : [],
+        : []),
+      {
+        type: "application/ld+json",
+        children: JSON.stringify(
+          buildBreadcrumbJsonLd([
+            { name: "Home", url: SITE_URL },
+            { name: "Products", url: `${SITE_URL}/products` },
+          ]),
+        ),
+      },
+    ],
   }),
 });
 

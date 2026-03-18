@@ -39,6 +39,12 @@ import { stripHtml } from "./stripHtml.js";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 
+/** A single breadcrumb item for BreadcrumbList JSON-LD. */
+export interface BreadcrumbItem {
+  name: string;
+  url: string;
+}
+
 /**
  * Meta tag entry for TanStack Start `head()`.
  *
@@ -216,4 +222,72 @@ export function buildWebSiteJsonLd(siteUrl: string): object {
       "query-input": "required name=search_term_string",
     },
   };
+}
+
+/**
+ * Build JSON-LD BreadcrumbList schema for navigation breadcrumbs.
+ *
+ * Each item becomes a ListItem with position (1-indexed) and URL.
+ * Used on product, content, and listing pages to help search engines
+ * understand the site hierarchy.
+ *
+ * @param items - Ordered breadcrumb items from root (Home) to current page
+ * @see https://schema.org/BreadcrumbList
+ * @see https://developers.google.com/search/docs/appearance/structured-data/breadcrumb
+ */
+export function buildBreadcrumbJsonLd(items: BreadcrumbItem[]): object {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
+/**
+ * Build JSON-LD Organization schema for the homepage.
+ *
+ * Provides search engines with business identity information.
+ * Typically placed on the homepage alongside WebSite schema.
+ *
+ * @param siteUrl - Base URL for the organization
+ * @see https://schema.org/Organization
+ * @see https://developers.google.com/search/docs/appearance/structured-data/organization
+ */
+export function buildOrganizationJsonLd(siteUrl: string): object {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Maison Émile",
+    url: siteUrl,
+    logo: `${siteUrl}/logo.png`,
+  };
+}
+
+/**
+ * Count words in a text string, stripping Markdown syntax first.
+ *
+ * Used to populate the `wordCount` property in Article JSON-LD.
+ *
+ * @param text - Raw text or Markdown content
+ * @returns Number of words
+ */
+export function wordCount(text: string): number {
+  const stripped = text
+    .replace(/\{\{product:[^}]+\}\}/g, "") // Remove product embeds
+    .replace(/```[\s\S]*?```/g, "") // Remove code blocks (before inline code)
+    .replace(/#{1,6}\s/g, "") // Remove heading markers
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // Bold to plain
+    .replace(/\*([^*]+)\*/g, "$1") // Italic to plain
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Links to text
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "") // Remove images
+    .replace(/`([^`]+)`/g, "$1") // Inline code to plain
+    .trim();
+
+  if (stripped.length === 0) return 0;
+  return stripped.split(/\s+/).length;
 }

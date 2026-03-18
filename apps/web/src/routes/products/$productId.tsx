@@ -5,6 +5,7 @@ import {
   stripHtml,
   buildPageMeta,
   buildProductJsonLd,
+  buildBreadcrumbJsonLd,
 } from "@ecommerce/shared";
 import type { ProductDetailFetchFn } from "@ecommerce/shared";
 import { getProductFn } from "../../server/getProduct";
@@ -95,6 +96,16 @@ export const Route = createFileRoute("/products/$productId")({
         {
           type: "application/ld+json",
           children: JSON.stringify(buildProductJsonLd(product, SITE_URL)),
+        },
+        {
+          type: "application/ld+json",
+          children: JSON.stringify(
+            buildBreadcrumbJsonLd([
+              { name: "Home", url: SITE_URL },
+              { name: "Products", url: `${SITE_URL}/products` },
+              { name: product.name, url: productUrl },
+            ]),
+          ),
         },
       ],
     };

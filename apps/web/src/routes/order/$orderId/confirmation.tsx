@@ -48,9 +48,11 @@
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { formatPrice } from "@ecommerce/shared";
+import { formatPrice, buildPageMeta } from "@ecommerce/shared";
 import { getOrderDetailsFn } from "#/server/checkout";
 import type { OrderDetail, OrderBag } from "@ecommerce/shared";
+
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
 export const Route = createFileRoute("/order/$orderId/confirmation")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -61,9 +63,19 @@ export const Route = createFileRoute("/order/$orderId/confirmation")({
    * The orderId is the Violet order ID returned by POST /submit (Story 4.4).
    */
   loader: async ({ params }) => {
-    return getOrderDetailsFn({ data: { orderId: params.orderId } });
+    const result = await getOrderDetailsFn({ data: { orderId: params.orderId } });
+    return { ...result, orderId: params.orderId };
   },
   component: OrderConfirmation,
+  head: ({ loaderData }) => ({
+    meta: buildPageMeta({
+      title: "Order Confirmed | Maison Émile",
+      description: "Your order has been placed successfully.",
+      url: `/order/${loaderData?.orderId ?? ""}/confirmation`,
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
 });
 
 /**

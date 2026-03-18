@@ -51,6 +51,7 @@ import {
   getBagStatusSummary,
   formatPrice,
   formatDate,
+  buildPageMeta,
 } from "@ecommerce/shared";
 import { getOrderDetailFn } from "#/server/orders";
 import type { OrderBagWithItems, OrderItemRow, OrderRefundRow } from "@ecommerce/shared";
@@ -58,13 +59,25 @@ import type { OrderBagWithItems, OrderItemRow, OrderRefundRow } from "@ecommerce
 // Platform adapter: wrap TanStack Start Server Function as OrderDetailFetchFn
 const fetchOrderDetail = (orderId: string) => getOrderDetailFn({ data: { orderId } });
 
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
 export const Route = createFileRoute("/account/orders/$orderId")({
   loader: async ({ context, params }) => {
     await context.queryClient.ensureQueryData(
       orderDetailQueryOptions(params.orderId, fetchOrderDetail),
     );
+    return { orderId: params.orderId };
   },
   component: OrderDetailPage,
+  head: ({ loaderData }) => ({
+    meta: buildPageMeta({
+      title: "Order Details | Maison Émile",
+      description: "View order details and tracking information.",
+      url: `/account/orders/${loaderData?.orderId ?? ""}`,
+      siteUrl: SITE_URL,
+      noindex: true,
+    }),
+  }),
 });
 
 // ─── Formatters ───────────────────────────────────────────────────────────────

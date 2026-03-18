@@ -67,6 +67,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       },
       { property: "og:site_name", content: "Maison Émile" },
       { property: "og:locale", content: "en_US" },
+      { name: "twitter:site", content: "@MaisonEmile" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
