@@ -14,6 +14,7 @@ import { Route as AccountRouteRouteImport } from './routes/account/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
+import { Route as HelpIndexRouteImport } from './routes/help/index'
 import { Route as ContentIndexRouteImport } from './routes/content/index'
 import { Route as CheckoutIndexRouteImport } from './routes/checkout/index'
 import { Route as CartIndexRouteImport } from './routes/cart/index'
@@ -52,6 +53,11 @@ const SearchIndexRoute = SearchIndexRouteImport.update({
 const ProductsIndexRoute = ProductsIndexRouteImport.update({
   id: '/products/',
   path: '/products/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpIndexRoute = HelpIndexRouteImport.update({
+  id: '/help/',
+  path: '/help/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContentIndexRoute = ContentIndexRouteImport.update({
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/cart/': typeof CartIndexRoute
   '/checkout/': typeof CheckoutIndexRoute
   '/content/': typeof ContentIndexRoute
+  '/help/': typeof HelpIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/cart': typeof CartIndexRoute
   '/checkout': typeof CheckoutIndexRoute
   '/content': typeof ContentIndexRoute
+  '/help': typeof HelpIndexRoute
   '/products': typeof ProductsIndexRoute
   '/search': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/cart/': typeof CartIndexRoute
   '/checkout/': typeof CheckoutIndexRoute
   '/content/': typeof ContentIndexRoute
+  '/help/': typeof HelpIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
@@ -207,6 +216,7 @@ export interface FileRouteTypes {
     | '/cart/'
     | '/checkout/'
     | '/content/'
+    | '/help/'
     | '/products/'
     | '/search/'
     | '/account/orders/$orderId'
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/content'
+    | '/help'
     | '/products'
     | '/search'
     | '/account/orders/$orderId'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/cart/'
     | '/checkout/'
     | '/content/'
+    | '/help/'
     | '/products/'
     | '/search/'
     | '/account/orders/$orderId'
@@ -269,6 +281,7 @@ export interface RootRouteChildren {
   CartIndexRoute: typeof CartIndexRoute
   CheckoutIndexRoute: typeof CheckoutIndexRoute
   ContentIndexRoute: typeof ContentIndexRoute
+  HelpIndexRoute: typeof HelpIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
   OrderOrderIdConfirmationRoute: typeof OrderOrderIdConfirmationRoute
@@ -309,6 +322,13 @@ declare module '@tanstack/react-router' {
       path: '/products'
       fullPath: '/products/'
       preLoaderRoute: typeof ProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help/': {
+      id: '/help/'
+      path: '/help'
+      fullPath: '/help/'
+      preLoaderRoute: typeof HelpIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/content/': {
@@ -443,6 +463,7 @@ const rootRouteChildren: RootRouteChildren = {
   CartIndexRoute: CartIndexRoute,
   CheckoutIndexRoute: CheckoutIndexRoute,
   ContentIndexRoute: ContentIndexRoute,
+  HelpIndexRoute: HelpIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
   OrderOrderIdConfirmationRoute: OrderOrderIdConfirmationRoute,

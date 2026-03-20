@@ -39,6 +39,7 @@
 @import "./components/content-product-card.css";
 @import "./components/content-list-card.css";
 @import "./components/related-content.css";
+@import "./components/faq-accordion.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";
@@ -55,3 +56,4 @@
 @import "./pages/wishlist.css";
 @import "./pages/content.css";
 @import "./pages/content-list.css";
+@import "./pages/faq.css";

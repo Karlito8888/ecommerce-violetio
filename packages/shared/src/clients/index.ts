@@ -30,3 +30,4 @@ export {
 } from "./notifications.js";
 export { getContentPageBySlug, getContentPages, getRelatedContent } from "./content.js";
 export type { RelatedContentItem } from "./content.js";
+export { getFaqItems } from "./faq.js";

@@ -136,3 +136,4 @@ export type {
   ContentListParams,
   ContentListResult,
 } from "./content.types.js";
+export type { FaqItem, FaqCategory } from "./faq.types.js";
