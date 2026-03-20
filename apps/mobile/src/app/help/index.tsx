@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { createSupabaseClient, getFaqItems } from "@ecommerce/shared";
 import type { FaqCategory, FaqItem } from "@ecommerce/shared";
 import { stripMarkdownSyntax } from "@ecommerce/shared";
@@ -23,6 +24,7 @@ import { Colors, Spacing, MaxContentWidth } from "@/constants/theme";
  * Search filters questions and answers client-side.
  */
 export default function HelpScreen() {
+  const router = useRouter();
   const [categories, setCategories] = useState<FaqCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +128,21 @@ export default function HelpScreen() {
             <ThemedText style={styles.emptyText}>
               {searchQuery ? `No results for "${searchQuery}"` : "No FAQ items available."}
             </ThemedText>
+          </View>
+        }
+        ListFooterComponent={
+          <View style={styles.contactCta}>
+            <ThemedText style={styles.contactCtaText}>
+              Can&apos;t find what you&apos;re looking for?
+            </ThemedText>
+            <TouchableOpacity
+              style={styles.contactCtaButton}
+              onPress={() => router.push("/help/contact" as never)}
+              accessibilityRole="button"
+              accessibilityLabel="Contact our support team"
+            >
+              <ThemedText style={styles.contactCtaButtonText}>Contact Us</ThemedText>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -254,5 +271,26 @@ const styles = StyleSheet.create({
     color: "red",
     textAlign: "center",
     padding: Spacing.four,
+  },
+  contactCta: {
+    alignItems: "center",
+    paddingVertical: Spacing.five,
+    marginTop: Spacing.four,
+  },
+  contactCtaText: {
+    fontSize: 16,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.three,
+  },
+  contactCtaButton: {
+    backgroundColor: Colors.light.tint,
+    paddingHorizontal: Spacing.five,
+    paddingVertical: Spacing.two,
+    borderRadius: 8,
+  },
+  contactCtaButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
   },
 });

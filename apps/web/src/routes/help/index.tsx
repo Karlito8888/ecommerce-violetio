@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildPageMeta, buildBreadcrumbJsonLd, stripMarkdownSyntax } from "@ecommerce/shared";
 import type { FaqItem } from "@ecommerce/shared";
 import { getFaqItemsFn } from "../../server/getFaq";
@@ -122,7 +122,7 @@ function HelpPage() {
 
       <div className="faq-page__contact-cta">
         <p>Can&apos;t find what you&apos;re looking for?</p>
-        <a href="/help/contact">Contact our support team</a>
+        <Link to="/help/contact">Contact our support team</Link>
       </div>
     </div>
   );

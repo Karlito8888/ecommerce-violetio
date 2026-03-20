@@ -31,3 +31,4 @@ export {
 export { getContentPageBySlug, getContentPages, getRelatedContent } from "./content.js";
 export type { RelatedContentItem } from "./content.js";
 export { getFaqItems } from "./faq.js";
+export { insertSupportInquiry, countRecentInquiries } from "./support.js";

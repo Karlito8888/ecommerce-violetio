@@ -9,6 +9,7 @@ export default function HelpLayout() {
   return (
     <Stack>
       <Stack.Screen name="index" options={{ title: "Help Center" }} />
+      <Stack.Screen name="contact" options={{ title: "Contact Us" }} />
     </Stack>
   );
 }

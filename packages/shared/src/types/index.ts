@@ -137,3 +137,5 @@ export type {
   ContentListResult,
 } from "./content.types.js";
 export type { FaqItem, FaqCategory } from "./faq.types.js";
+export { SUPPORT_SUBJECTS } from "./support.types.js";
+export type { SupportSubject, SupportInquiryInput, SupportInquiryResult } from "./support.types.js";

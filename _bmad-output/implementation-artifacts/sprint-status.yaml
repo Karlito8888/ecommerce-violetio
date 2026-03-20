@@ -116,7 +116,7 @@ development_status:
   # Epic 8: Administration, Operations & Customer Support
   epic-8: in-progress
   8-1-faq-help-center: done
-  8-2-contact-support-form: backlog
+  8-2-contact-support-form: done
   8-3-analytics-commission-dashboard: backlog
   8-4-support-inquiry-management: backlog
   8-5-platform-health-monitoring-error-tracking: backlog
