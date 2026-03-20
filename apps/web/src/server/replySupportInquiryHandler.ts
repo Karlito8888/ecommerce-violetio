@@ -1,7 +1,7 @@
 import type { SupportReplyInput } from "@ecommerce/shared";
 import { getSupportInquiry, updateInquiryStatus } from "@ecommerce/shared";
 
-import { requireAdminOrThrow } from "#/server/adminAuth";
+import { requireAdminOrThrow } from "#/server/adminAuthGuard";
 import { getSupabaseServer } from "#/server/supabaseServer";
 
 /** Send a reply email to the customer and auto-advance inquiry status. */

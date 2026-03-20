@@ -1,7 +1,7 @@
 import type { SupportInquiryStatus } from "@ecommerce/shared";
 import { SUPPORT_STATUSES, updateInquiryStatus, updateInternalNotes } from "@ecommerce/shared";
 
-import { requireAdminOrThrow } from "#/server/adminAuth";
+import { requireAdminOrThrow } from "#/server/adminAuthGuard";
 import { getSupabaseServer } from "#/server/supabaseServer";
 
 /** Update inquiry status. */

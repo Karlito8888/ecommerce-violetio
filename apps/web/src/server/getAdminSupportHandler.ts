@@ -5,7 +5,7 @@ import type {
 } from "@ecommerce/shared";
 import { getSupportInquiries, getSupportInquiry, getLinkedOrder } from "@ecommerce/shared";
 
-import { requireAdminOrThrow } from "#/server/adminAuth";
+import { requireAdminOrThrow } from "#/server/adminAuthGuard";
 import { getSupabaseServer } from "#/server/supabaseServer";
 
 /** Fetch support inquiries list with optional filters. */
