@@ -32,3 +32,9 @@ export { getContentPageBySlug, getContentPages, getRelatedContent } from "./cont
 export type { RelatedContentItem } from "./content.js";
 export { getFaqItems } from "./faq.js";
 export { insertSupportInquiry, countRecentInquiries } from "./support.js";
+export {
+  resolveTimeRange,
+  getDashboardMetrics,
+  getCommissionSummary,
+  refreshDashboardViews,
+} from "./admin.js";

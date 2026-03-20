@@ -139,3 +139,10 @@ export type {
 export type { FaqItem, FaqCategory } from "./faq.types.js";
 export { SUPPORT_SUBJECTS } from "./support.types.js";
 export type { SupportSubject, SupportInquiryInput, SupportInquiryResult } from "./support.types.js";
+export type {
+  DashboardMetrics,
+  CommissionSummary,
+  TimeRange,
+  TimeRangeParams,
+  AdminDashboardData,
+} from "./admin.types.js";

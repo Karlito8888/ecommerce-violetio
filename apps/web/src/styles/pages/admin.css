@@ -1,0 +1,312 @@
+/* ── Admin Dashboard ────────────────────────────────────────────────────── */
+
+.admin-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+.admin-dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.admin-dashboard__title {
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin: 0;
+}
+
+.admin-dashboard__section-title {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin: 0 0 var(--space-4);
+}
+
+.admin-dashboard__error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: 0.9rem;
+}
+
+.admin-dashboard__metrics {
+  transition: opacity 0.2s ease;
+}
+
+.admin-dashboard__metrics--loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.admin-dashboard__commission {
+  margin-top: var(--space-8);
+}
+
+.admin-dashboard__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-dashboard__refresh-info {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.admin-dashboard__refresh-button {
+  background: var(--color-gold);
+  color: var(--color-ivory);
+  border: none;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.admin-dashboard__refresh-button:hover {
+  background: var(--color-gold-dark);
+}
+
+.admin-dashboard__refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Dashboard Metrics (KPI Cards) ─────────────────────────────────────── */
+
+.dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+.dashboard-metrics__card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dashboard-metrics__label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.dashboard-metrics__value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-charcoal);
+  line-height: 1.2;
+}
+
+.dashboard-metrics__value--highlight {
+  color: var(--color-gold);
+}
+
+/* ── Commission Table ──────────────────────────────────────────────────── */
+
+.commission-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.commission-table--empty {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--color-text-secondary);
+}
+
+.commission-table__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.commission-table__header th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid var(--border-subtle);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.commission-table__row td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.commission-table__row:hover {
+  background: var(--surface-muted);
+}
+
+.commission-table__total td {
+  padding: var(--space-3) var(--space-4);
+  border-top: 2px solid var(--border-subtle);
+  font-weight: 700;
+}
+
+.commission-table__commission {
+  color: var(--color-gold);
+  font-weight: 600;
+}
+
+/* ── Time Range Selector ───────────────────────────────────────────────── */
+
+.time-range__buttons {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.time-range__button {
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.time-range__button:last-child {
+  border-right: none;
+}
+
+.time-range__button:hover {
+  background: var(--surface-muted);
+}
+
+.time-range__button--active {
+  background: var(--color-gold);
+  color: var(--color-ivory);
+}
+
+.time-range__button--active:hover {
+  background: var(--color-gold-dark);
+}
+
+.time-range__custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.time-range__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.time-range__date-input {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--color-charcoal);
+  background: var(--surface-elevated);
+}
+
+.time-range__apply {
+  background: var(--color-gold);
+  color: var(--color-ivory);
+  border: none;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.time-range__apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .dashboard-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-dashboard__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-dashboard__footer {
+    flex-direction: column;
+    gap: var(--space-3);
+    text-align: center;
+  }
+
+  .time-range__custom {
+    flex-wrap: wrap;
+  }
+}
+
+/* ── Dark Theme ────────────────────────────────────────────────────────── */
+
+[data-theme="dark"] .admin-dashboard__title,
+[data-theme="dark"] .admin-dashboard__section-title {
+  color: var(--color-ivory);
+}
+
+[data-theme="dark"] .dashboard-metrics__value {
+  color: var(--color-ivory);
+}
+
+[data-theme="dark"] .commission-table__header th {
+  color: var(--color-ivory);
+}
+
+[data-theme="dark"] .time-range__date-input {
+  color: var(--color-ivory);
+}
+
+[data-theme="dark"] .admin-dashboard__error {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
