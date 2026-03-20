@@ -1,0 +1,192 @@
+/**
+ * Pure utility functions for sitemap XML generation.
+ *
+ * Extracted from generate-sitemap.ts for testability — these functions
+ * have no external dependencies (no Supabase, no Node fs).
+ */
+
+/* ─── Types ───────────────────────────────────────────────────────────── */
+
+export interface ProductRow {
+  product_id: string;
+  updated_at: string | null;
+}
+
+export interface ContentRow {
+  slug: string;
+  updated_at: string | null;
+}
+
+export interface StaticPage {
+  path: string;
+  changefreq: string;
+  priority: string;
+}
+
+/* ─── Configuration ───────────────────────────────────────────────────── */
+
+/** Maximum URLs per sitemap file (sitemaps.org protocol limit). */
+export const MAX_URLS_PER_SITEMAP = 50_000;
+
+/**
+ * Static pages with their SEO configuration.
+ *
+ * These pages always exist regardless of product catalog state.
+ * Search, auth, checkout, cart, account, and order pages are excluded
+ * (noindex or transactional).
+ */
+export const STATIC_PAGES: StaticPage[] = [
+  { path: "/", changefreq: "daily", priority: "1.0" },
+  { path: "/products", changefreq: "daily", priority: "0.9" },
+  { path: "/content", changefreq: "daily", priority: "0.8" },
+  { path: "/about", changefreq: "monthly", priority: "0.5" },
+];
+
+/* ─── XML helpers ─────────────────────────────────────────────────────── */
+
+/** Escape XML special characters in URLs. */
+export function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/'/g, "&apos;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Format a date string to YYYY-MM-DD for sitemap `<lastmod>`.
+ *
+ * Returns `null` when the date is unknown or invalid, rather than falling back
+ * to today's date. This is intentional per the sitemaps.org specification:
+ * `<lastmod>` must reflect the **actual** last modification date. Fabricating
+ * "today" for entries with no date misleads crawlers — Google deprioritizes
+ * sitemaps with inaccurate lastmod values. Omitting `<lastmod>` is preferable;
+ * crawlers will estimate crawl frequency on their own.
+ *
+ * @see https://www.sitemaps.org/protocol.html — `<lastmod>` definition
+ * @see Code Review 2026-03-20 — Issues #1 and #4
+ */
+export function formatDate(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().split("T")[0];
+}
+
+/** Build a single `<url>` entry for the sitemap. Omits `<lastmod>` when null. */
+function buildUrlEntry(
+  loc: string,
+  opts: { lastmod?: string | null; changefreq: string; priority: string },
+): string {
+  const lastmodTag = opts.lastmod ? `\n    <lastmod>${opts.lastmod}</lastmod>` : "";
+  return `  <url>
+    <loc>${escapeXml(loc)}</loc>${lastmodTag}
+    <changefreq>${opts.changefreq}</changefreq>
+    <priority>${opts.priority}</priority>
+  </url>`;
+}
+
+/**
+ * Collect all URL entries as an array of XML strings.
+ *
+ * Combines static pages, product URLs, and content page URLs.
+ *
+ * Static pages receive the sitemap generation date as `<lastmod>` to satisfy
+ * AC#1 ("each entry has `<loc>`, `<lastmod>`, `<changefreq>`, `<priority>`").
+ * This is the best approximation: static pages don't have database timestamps,
+ * but re-generating the sitemap implies the site content is current as of that date.
+ *
+ * @param today - ISO date string (YYYY-MM-DD) for static pages' lastmod.
+ *   Optional to keep tests deterministic; defaults to today's date at runtime.
+ *
+ * @see Code Review 2026-03-20 — Issue #2
+ */
+export function collectUrlEntries(
+  siteUrl: string,
+  products: ProductRow[],
+  contentPages: ContentRow[],
+  today?: string,
+): string[] {
+  const staticLastmod = today ?? new Date().toISOString().split("T")[0];
+  const entries: string[] = [];
+
+  for (const page of STATIC_PAGES) {
+    entries.push(
+      buildUrlEntry(`${siteUrl}${page.path}`, {
+        lastmod: staticLastmod,
+        changefreq: page.changefreq,
+        priority: page.priority,
+      }),
+    );
+  }
+
+  for (const p of products) {
+    entries.push(
+      buildUrlEntry(`${siteUrl}/products/${p.product_id}`, {
+        lastmod: formatDate(p.updated_at),
+        changefreq: "daily",
+        priority: "0.8",
+      }),
+    );
+  }
+
+  for (const c of contentPages) {
+    entries.push(
+      buildUrlEntry(`${siteUrl}/content/${c.slug}`, {
+        lastmod: formatDate(c.updated_at),
+        changefreq: "weekly",
+        priority: "0.7",
+      }),
+    );
+  }
+
+  return entries;
+}
+
+/**
+ * Generate a sitemap XML string from an array of <url> entry strings.
+ */
+export function generateUrlsetXml(
+  entries: string[],
+  meta: { products: number; contentPages: number; generatedAt?: string },
+): string {
+  const timestamp = meta.generatedAt ?? new Date().toISOString();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Auto-generated by scripts/generate-sitemap.ts
+  Generated: ${timestamp}
+  Products: ${meta.products}, Content pages: ${meta.contentPages}
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries.join("\n")}
+</urlset>
+`;
+}
+
+/**
+ * Generate a sitemap index XML string pointing to sub-sitemaps.
+ *
+ * @see https://www.sitemaps.org/protocol.html#index
+ */
+export function generateSitemapIndex(
+  siteUrl: string,
+  sitemapFiles: string[],
+  today?: string,
+): string {
+  const lastmod = today ?? new Date().toISOString().split("T")[0];
+  const entries = sitemapFiles
+    .map(
+      (file) => `  <sitemap>
+    <loc>${escapeXml(`${siteUrl}/${file}`)}</loc>
+    <lastmod>${lastmod}</lastmod>
+  </sitemap>`,
+    )
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries}
+</sitemapindex>
+`;
+}
