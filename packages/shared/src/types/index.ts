@@ -146,3 +146,13 @@ export type {
   TimeRangeParams,
   AdminDashboardData,
 } from "./admin.types.js";
+export { SUPPORT_STATUSES } from "./admin-support.types.js";
+export type {
+  SupportInquiry,
+  SupportInquiryStatus,
+  SupportInquiryFilters,
+  SupportReplyInput,
+  AdminSupportListData,
+  AdminSupportDetailData,
+  LinkedOrderInfo,
+} from "./admin-support.types.js";

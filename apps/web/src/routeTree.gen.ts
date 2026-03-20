@@ -28,8 +28,10 @@ import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AccountWishlistRouteImport } from './routes/account/wishlist'
 import { Route as AccountProfileRouteImport } from './routes/account/profile'
+import { Route as AdminSupportIndexRouteImport } from './routes/admin/support/index'
 import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
 import { Route as OrderOrderIdConfirmationRouteImport } from './routes/order/$orderId/confirmation'
+import { Route as AdminSupportInquiryIdRouteImport } from './routes/admin/support/$inquiryId'
 import { Route as AccountOrdersOrderIdRouteImport } from './routes/account/orders/$orderId'
 
 const AboutRoute = AboutRouteImport.update({
@@ -127,6 +129,11 @@ const AccountProfileRoute = AccountProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AccountRouteRoute,
 } as any)
+const AdminSupportIndexRoute = AdminSupportIndexRouteImport.update({
+  id: '/admin/support/',
+  path: '/admin/support/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountOrdersIndexRoute = AccountOrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
@@ -138,6 +145,11 @@ const OrderOrderIdConfirmationRoute =
     path: '/order/$orderId/confirmation',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminSupportInquiryIdRoute = AdminSupportInquiryIdRouteImport.update({
+  id: '/admin/support/$inquiryId',
+  path: '/admin/support/$inquiryId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountOrdersOrderIdRoute = AccountOrdersOrderIdRouteImport.update({
   id: '/orders/$orderId',
   path: '/orders/$orderId',
@@ -165,8 +177,10 @@ export interface FileRoutesByFullPath {
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
+  '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
   '/account/orders/': typeof AccountOrdersIndexRoute
+  '/admin/support/': typeof AdminSupportIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -189,8 +203,10 @@ export interface FileRoutesByTo {
   '/products': typeof ProductsIndexRoute
   '/search': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
+  '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
   '/account/orders': typeof AccountOrdersIndexRoute
+  '/admin/support': typeof AdminSupportIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -214,8 +230,10 @@ export interface FileRoutesById {
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
+  '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
   '/account/orders/': typeof AccountOrdersIndexRoute
+  '/admin/support/': typeof AdminSupportIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -240,8 +258,10 @@ export interface FileRouteTypes {
     | '/products/'
     | '/search/'
     | '/account/orders/$orderId'
+    | '/admin/support/$inquiryId'
     | '/order/$orderId/confirmation'
     | '/account/orders/'
+    | '/admin/support/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -264,8 +284,10 @@ export interface FileRouteTypes {
     | '/products'
     | '/search'
     | '/account/orders/$orderId'
+    | '/admin/support/$inquiryId'
     | '/order/$orderId/confirmation'
     | '/account/orders'
+    | '/admin/support'
   id:
     | '__root__'
     | '/'
@@ -288,8 +310,10 @@ export interface FileRouteTypes {
     | '/products/'
     | '/search/'
     | '/account/orders/$orderId'
+    | '/admin/support/$inquiryId'
     | '/order/$orderId/confirmation'
     | '/account/orders/'
+    | '/admin/support/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -310,7 +334,9 @@ export interface RootRouteChildren {
   HelpIndexRoute: typeof HelpIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
+  AdminSupportInquiryIdRoute: typeof AdminSupportInquiryIdRoute
   OrderOrderIdConfirmationRoute: typeof OrderOrderIdConfirmationRoute
+  AdminSupportIndexRoute: typeof AdminSupportIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -448,6 +474,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountProfileRouteImport
       parentRoute: typeof AccountRouteRoute
     }
+    '/admin/support/': {
+      id: '/admin/support/'
+      path: '/admin/support'
+      fullPath: '/admin/support/'
+      preLoaderRoute: typeof AdminSupportIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account/orders/': {
       id: '/account/orders/'
       path: '/orders'
@@ -460,6 +493,13 @@ declare module '@tanstack/react-router' {
       path: '/order/$orderId/confirmation'
       fullPath: '/order/$orderId/confirmation'
       preLoaderRoute: typeof OrderOrderIdConfirmationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/support/$inquiryId': {
+      id: '/admin/support/$inquiryId'
+      path: '/admin/support/$inquiryId'
+      fullPath: '/admin/support/$inquiryId'
+      preLoaderRoute: typeof AdminSupportInquiryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account/orders/$orderId': {
@@ -508,7 +548,9 @@ const rootRouteChildren: RootRouteChildren = {
   HelpIndexRoute: HelpIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
+  AdminSupportInquiryIdRoute: AdminSupportInquiryIdRoute,
   OrderOrderIdConfirmationRoute: OrderOrderIdConfirmationRoute,
+  AdminSupportIndexRoute: AdminSupportIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

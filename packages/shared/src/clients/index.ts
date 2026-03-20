@@ -38,3 +38,10 @@ export {
   getCommissionSummary,
   refreshDashboardViews,
 } from "./admin.js";
+export {
+  getSupportInquiries,
+  getSupportInquiry,
+  updateInquiryStatus,
+  updateInternalNotes,
+  getLinkedOrder,
+} from "./admin-support.js";
