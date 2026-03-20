@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { ScrollView, Text, View, StyleSheet, ActivityIndicator, Pressable } from "react-native";
+import {
+  ScrollView,
+  Text,
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Pressable,
+  Share,
+} from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { createSupabaseClient } from "@ecommerce/shared";
 import type { ContentPage } from "@ecommerce/shared";
@@ -101,11 +109,36 @@ export default function ContentDetailScreen() {
       {/* Title */}
       <Text style={styles.title}>{content.title}</Text>
 
-      {/* Meta */}
-      <Text style={styles.meta}>
-        {content.author}
-        {content.publishedAt && ` · ${new Date(content.publishedAt).toLocaleDateString()}`}
-      </Text>
+      {/* Meta + Share */}
+      <View style={styles.metaRow}>
+        <Text style={styles.meta}>
+          {content.author}
+          {content.publishedAt && ` · ${new Date(content.publishedAt).toLocaleDateString()}`}
+        </Text>
+        {/*
+          Uses RN Share.share() directly — see useShare.ts JSDoc for why the
+          shared hook is web-only. Error handling added during code review to
+          prevent unhandled promise rejections on share cancel/failure.
+        */}
+        <Pressable
+          style={styles.shareBtn}
+          onPress={async () => {
+            try {
+              await Share.share({
+                title: content.title,
+                message: `${content.seoDescription ?? content.title}\nhttps://www.maisonemile.com/content/${content.slug}`,
+                url: `https://www.maisonemile.com/content/${content.slug}`,
+              });
+            } catch {
+              // User cancelled or share failed — no action needed
+            }
+          }}
+          accessibilityLabel={`Share "${content.title}"`}
+          accessibilityRole="button"
+        >
+          <Text style={styles.shareBtnText}>↗</Text>
+        </Pressable>
+      </View>
 
       {/* Affiliate disclosure */}
       <View style={styles.disclosure}>
@@ -159,10 +192,27 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     marginBottom: 8,
   },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
   meta: {
     fontSize: 14,
     color: "#5a5a5a",
-    marginBottom: 16,
+  },
+  shareBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareBtnText: {
+    fontSize: 16,
+    color: "#5a5a5a",
   },
   disclosure: {
     backgroundColor: "#f0eeeb",

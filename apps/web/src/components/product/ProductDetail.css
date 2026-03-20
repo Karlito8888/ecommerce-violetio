@@ -91,17 +91,12 @@
   cursor: not-allowed;
 }
 
-/* ── Wishlist row ── */
-.product-detail__wishlist-row {
+/* ── Actions row (wishlist + share) ── */
+.product-detail__actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin-bottom: var(--space-4);
-}
-
-.product-detail__wishlist-label {
-  font-size: 0.875rem;
-  color: var(--color-steel);
 }
 
 /* ── Affiliate disclosure ── */

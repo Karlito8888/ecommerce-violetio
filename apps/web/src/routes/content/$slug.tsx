@@ -11,6 +11,7 @@ import type { ContentDetailFetchFn, ContentPage } from "@ecommerce/shared";
 import { getContentBySlugFn } from "../../server/getContent";
 import MarkdownRenderer from "../../components/content/MarkdownRenderer";
 import AffiliateDisclosure from "../../components/content/AffiliateDisclosure";
+import ShareButton from "../../components/ui/ShareButton";
 
 /**
  * Adapts the TanStack Start server function to the shared ContentDetailFetchFn signature.
@@ -159,6 +160,21 @@ function ContentPageView() {
                 </time>
               </>
             )}
+            {/*
+              Share button URL must be absolute — Web Share API and clipboard
+              copy the string verbatim; relative paths like "/content/x" are
+              NOT resolved by the browser. Fixed during Story 7.5 code review.
+            */}
+            <ShareButton
+              url={`${SITE_URL}/content/${content.slug}`}
+              title={content.seoTitle ?? content.title}
+              text={
+                content.seoDescription ??
+                `${content.title} — ${TYPE_LABELS[content.type] || content.type}`
+              }
+              label={`Share "${content.title}"`}
+              size="sm"
+            />
           </div>
         </header>
 

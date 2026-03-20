@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
 import type { Product, SKU } from "@ecommerce/shared";
-import { stripHtml, useAddToCart } from "@ecommerce/shared";
+import { stripHtml, useAddToCart, formatPrice } from "@ecommerce/shared";
 import type { AddToCartFn } from "@ecommerce/shared";
 import ImageGallery from "./ImageGallery";
 import VariantSelector from "./VariantSelector";
 import PriceBreakdown from "./PriceBreakdown";
 import WishlistButton from "./WishlistButton";
+import ShareButton from "../ui/ShareButton";
 import RecommendationRow from "./RecommendationRow";
 import { useCartContext } from "../../contexts/CartContext";
 import { createCartFn, addToCartFn } from "../../server/cartActions";
@@ -236,9 +237,15 @@ export default function ProductDetail({ product }: { product: Product }) {
                 : "Notify When Available"}
         </button>
 
-        <div className="product-detail__wishlist-row">
+        <div className="product-detail__actions">
           <WishlistButton productId={product.id} productName={product.name} size="md" />
-          <span className="product-detail__wishlist-label">Wishlist</span>
+          <ShareButton
+            url={`${typeof window !== "undefined" ? window.location.origin : "https://www.maisonemile.com"}/products/${product.id}`}
+            title={product.name}
+            text={`${product.name} — ${formatPrice(selectedSku?.salePrice ?? product.minPrice, product.currency)}`}
+            label={`Share ${product.name}`}
+            size="md"
+          />
         </div>
 
         <p className="product-detail__affiliate">

@@ -28,6 +28,13 @@ vi.mock("@ecommerce/shared", async (importOriginal) => {
   };
 });
 
+vi.mock("../../ui/Toast", () => ({
+  useToast: vi.fn().mockReturnValue({
+    success: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
 vi.mock("../../../contexts/CartContext", () => ({
   useCartContext: vi.fn().mockReturnValue({
     cartId: null,

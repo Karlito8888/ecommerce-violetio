@@ -1,0 +1,55 @@
+/* ─── Share Button ───
+ * Share icon button for product detail and content pages.
+ * BEM: .share-button / .share-button--sm / .share-button--md
+ * Follows same pattern as wishlist-button.css.
+ *
+ * Accessibility (Story 7.5 code review):
+ * - :focus-visible for keyboard navigation (not present on wishlist-button — TODO)
+ * - Button has aria-label set in the React component (ShareButton.tsx)
+ *
+ * Dark theme: inherits from design tokens (--color-steel, --color-gold).
+ * The semi-transparent white background works in both themes because it
+ * overlays the card/page background — identical approach to wishlist-button.
+ */
+
+.share-button {
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition:
+    transform var(--transition-fast),
+    color var(--transition-fast);
+  color: var(--color-steel);
+  line-height: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-button:hover {
+  transform: scale(1.15);
+  color: var(--color-gold);
+}
+
+.share-button:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.share-button:active {
+  transform: scale(0.95);
+}
+
+.share-button--sm {
+  width: 32px;
+  height: 32px;
+  font-size: 1.125rem;
+}
+
+.share-button--md {
+  width: 40px;
+  height: 40px;
+  font-size: 1.375rem;
+}

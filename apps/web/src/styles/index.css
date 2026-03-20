@@ -32,6 +32,7 @@
 
 @import "./components/toast.css";
 @import "./components/wishlist-button.css";
+@import "./components/share-button.css";
 @import "./components/recommendation-row.css";
 @import "./components/recently-viewed-row.css";
 @import "./components/affiliate-disclosure.css";

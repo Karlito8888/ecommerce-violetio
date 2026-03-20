@@ -6,6 +6,7 @@ import {
   Image,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   View,
 } from "react-native";
@@ -97,9 +98,39 @@ export default function MobileProductDetail({ product }: { product: Product }) {
         <ThemedText type="subtitle" style={styles.name}>
           {product.name}
         </ThemedText>
-        <ThemedText type="smallBold" style={styles.price}>
-          {priceDisplay}
-        </ThemedText>
+        <View style={styles.priceRow}>
+          <ThemedText type="smallBold" style={styles.price}>
+            {priceDisplay}
+          </ThemedText>
+          {/*
+            Uses RN Share.share() directly instead of the shared useShare hook.
+            Reason: useShare is web-only — importing react-native in packages/shared
+            would break the web build (Vite can't resolve RN modules).
+            See packages/shared/src/hooks/useShare.ts JSDoc for full rationale.
+
+            Error handling: try/catch prevents unhandled promise rejections
+            when the user denies share permissions or no share provider exists.
+            Fixed during Story 7.5 code review.
+          */}
+          <Pressable
+            style={styles.shareBtn}
+            onPress={async () => {
+              try {
+                await Share.share({
+                  title: product.name,
+                  message: `${product.name} — ${priceDisplay}\nhttps://www.maisonemile.com/products/${product.id}`,
+                  url: `https://www.maisonemile.com/products/${product.id}`,
+                });
+              } catch {
+                // User cancelled or share failed — no action needed
+              }
+            }}
+            accessibilityLabel={`Share ${product.name}`}
+            accessibilityRole="button"
+          >
+            <ThemedText style={styles.shareBtnText}>↗</ThemedText>
+          </Pressable>
+        </View>
       </View>
 
       {/* Description */}
@@ -217,8 +248,24 @@ const styles = StyleSheet.create({
   name: {
     fontFamily: "serif",
   },
-  price: {
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: Spacing.one,
+  },
+  price: {},
+  shareBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareBtnText: {
+    fontSize: 18,
+    lineHeight: 22,
   },
   description: {
     paddingHorizontal: Spacing.four,
