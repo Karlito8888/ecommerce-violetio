@@ -9,21 +9,45 @@ import {
   Share,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { createSupabaseClient } from "@ecommerce/shared";
-import type { ContentPage } from "@ecommerce/shared";
+import {
+  createSupabaseClient,
+  getContentPageBySlug,
+  getRelatedContent,
+  CONTENT_TYPE_LABELS,
+  stripMarkdownSyntax,
+} from "@ecommerce/shared";
+import type { ContentPage, RelatedContentItem } from "@ecommerce/shared";
 
 /**
  * Mobile content detail screen.
- * Fetches content from Supabase and renders a simple text-based layout.
  *
- * Markdown rendering is kept simple (no external library) for MVP —
- * basic formatting via text styling. A full markdown renderer can be
- * added in a future iteration if content complexity requires it.
+ * **Data fetching (M3 — documented decision):**
+ * Uses manual `useEffect`/`useState` instead of TanStack Query because
+ * `@tanstack/react-query` is not installed in the mobile app (it's only a
+ * peerDependency of `@ecommerce/shared`, consumed by the web app).
+ * Tradeoffs vs the web approach:
+ * - No caching — re-fetches on every mount
+ * - No deduplication — concurrent navigations can cause redundant fetches
+ * - No automatic error retry or refetch-on-focus
+ * Migration plan: install `@tanstack/react-query` + `QueryClientProvider` in
+ * the mobile `_layout.tsx`, then reuse `contentDetailQueryOptions` from shared.
+ *
+ * **Markdown rendering (M4 — documented decision):**
+ * Uses `stripMarkdownSyntax()` to show clean plain text instead of raw markdown.
+ * This is an MVP approach — a proper React Native markdown renderer (e.g.
+ * `react-native-markdown-display`) should replace this in a future iteration
+ * for formatted headings, lists, links, and interactive product embeds.
+ *
+ * **Shared functions (M2/M3 from Story 7.6 review):**
+ * Uses `getContentPageBySlug` and `getRelatedContent` from `@ecommerce/shared`
+ * instead of inline Supabase queries. This eliminates code duplication and
+ * ensures consistent column selection, mapping, and filtering across platforms.
  */
 export default function ContentDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const [content, setContent] = useState<ContentPage | null>(null);
+  const [relatedItems, setRelatedItems] = useState<RelatedContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -32,38 +56,26 @@ export default function ContentDetailScreen() {
 
     async function fetchContent() {
       const client = createSupabaseClient();
-      const { data, error: err } = await client
-        .from("content_pages")
-        .select("*")
-        .eq("slug", slug)
-        .eq("status", "published")
-        .lte("published_at", new Date().toISOString())
-        .single();
+      const page = await getContentPageBySlug(client, slug);
 
       if (cancelled) return;
 
-      if (err || !data) {
+      if (!page) {
         setError(true);
         setLoading(false);
         return;
       }
 
-      // Map snake_case to camelCase
-      setContent({
-        id: data.id,
-        slug: data.slug,
-        title: data.title,
-        type: data.type,
-        bodyMarkdown: data.body_markdown,
-        author: data.author,
-        publishedAt: data.published_at,
-        seoTitle: data.seo_title,
-        seoDescription: data.seo_description,
-        featuredImageUrl: data.featured_image_url,
-        status: data.status,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      });
+      setContent(page);
+
+      // Fetch related content if slugs are present
+      if (page.relatedSlugs.length > 0) {
+        const related = await getRelatedContent(client, page.relatedSlugs);
+        if (!cancelled) {
+          setRelatedItems(related);
+        }
+      }
+
       setLoading(false);
     }
 
@@ -94,16 +106,13 @@ export default function ContentDetailScreen() {
     );
   }
 
-  const typeLabel =
-    content.type === "guide" ? "Guide" : content.type === "comparison" ? "Comparison" : "Review";
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Stack.Screen options={{ title: content.title }} />
 
       {/* Type badge */}
       <View style={styles.badgeContainer}>
-        <Text style={styles.badge}>{typeLabel}</Text>
+        <Text style={styles.badge}>{CONTENT_TYPE_LABELS[content.type] || content.type}</Text>
       </View>
 
       {/* Title */}
@@ -115,11 +124,6 @@ export default function ContentDetailScreen() {
           {content.author}
           {content.publishedAt && ` · ${new Date(content.publishedAt).toLocaleDateString()}`}
         </Text>
-        {/*
-          Uses RN Share.share() directly — see useShare.ts JSDoc for why the
-          shared hook is web-only. Error handling added during code review to
-          prevent unhandled promise rejections on share cancel/failure.
-        */}
         <Pressable
           style={styles.shareBtn}
           onPress={async () => {
@@ -148,31 +152,36 @@ export default function ContentDetailScreen() {
         </Text>
       </View>
 
-      {/* Body — simple text rendering for MVP */}
-      <Text style={styles.body}>{content.bodyMarkdown}</Text>
+      {/* Body — stripped markdown for readable plain text (MVP, see JSDoc above) */}
+      <Text style={styles.body}>{stripMarkdownSyntax(content.bodyMarkdown)}</Text>
+
+      {/* Related content */}
+      {relatedItems.length > 0 && (
+        <View style={styles.relatedSection}>
+          <Text style={styles.relatedTitle}>Related Articles</Text>
+          {relatedItems.map((item) => (
+            <Pressable
+              key={item.slug}
+              style={styles.relatedItem}
+              onPress={() => router.push(`/content/${item.slug}` as never)}
+            >
+              <Text style={styles.relatedItemTitle}>{item.title}</Text>
+              <Text style={styles.relatedItemType}>
+                {CONTENT_TYPE_LABELS[item.type] || item.type}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fafaf8",
-  },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fafaf8",
-  },
-  badgeContainer: {
-    flexDirection: "row",
-    marginBottom: 12,
-  },
+  container: { flex: 1, backgroundColor: "#fafaf8" },
+  contentContainer: { padding: 16, paddingBottom: 40 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fafaf8" },
+  badgeContainer: { flexDirection: "row", marginBottom: 12 },
   badge: {
     fontSize: 11,
     fontWeight: "600",
@@ -185,23 +194,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "500",
-    color: "#1a1a1a",
-    lineHeight: 34,
-    marginBottom: 8,
-  },
+  title: { fontSize: 28, fontWeight: "500", color: "#1a1a1a", lineHeight: 34, marginBottom: 8 },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  meta: {
-    fontSize: 14,
-    color: "#5a5a5a",
-  },
+  meta: { fontSize: 14, color: "#5a5a5a" },
   shareBtn: {
     width: 32,
     height: 32,
@@ -210,35 +210,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  shareBtnText: {
-    fontSize: 16,
-    color: "#5a5a5a",
+  shareBtnText: { fontSize: 16, color: "#5a5a5a" },
+  disclosure: { backgroundColor: "#f0eeeb", borderRadius: 4, padding: 12, marginBottom: 24 },
+  disclosureText: { fontSize: 12, fontStyle: "italic", color: "#5a5a5a", lineHeight: 18 },
+  body: { fontSize: 16, lineHeight: 26, color: "#3d3d3d" },
+  errorText: { fontSize: 16, color: "#5a5a5a", marginBottom: 12 },
+  backLink: { fontSize: 16, color: "#a68b4b", textDecorationLine: "underline" },
+  relatedSection: { marginTop: 32, paddingTop: 24, borderTopWidth: 1, borderTopColor: "#e8e5e0" },
+  relatedTitle: { fontSize: 18, fontWeight: "500", color: "#1a1a1a", marginBottom: 12 },
+  relatedItem: {
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e8e5e0",
   },
-  disclosure: {
-    backgroundColor: "#f0eeeb",
-    borderRadius: 4,
-    padding: 12,
-    marginBottom: 24,
-  },
-  disclosureText: {
+  relatedItemTitle: { fontSize: 15, fontWeight: "500", color: "#1a1a1a", marginBottom: 4 },
+  relatedItemType: {
     fontSize: 12,
-    fontStyle: "italic",
-    color: "#5a5a5a",
-    lineHeight: 18,
-  },
-  body: {
-    fontSize: 16,
-    lineHeight: 26,
-    color: "#3d3d3d",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#5a5a5a",
-    marginBottom: 12,
-  },
-  backLink: {
-    fontSize: 16,
     color: "#a68b4b",
-    textDecorationLine: "underline",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });

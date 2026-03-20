@@ -1,18 +1,13 @@
 import { StyleSheet, TouchableOpacity, View, Image } from "react-native";
 import { useRouter } from "expo-router";
-import type { ContentPage } from "@ecommerce/shared";
+import type { ContentListItem } from "@ecommerce/shared";
+import { CONTENT_TYPE_LABELS } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { Colors, Spacing } from "@/constants/theme";
 
-/** Content type label mapping. */
-const TYPE_LABELS: Record<string, string> = {
-  guide: "Guide",
-  comparison: "Comparison",
-  review: "Review",
-};
-
 interface ContentCardProps {
-  content: ContentPage;
+  /** Uses ContentListItem since the listing query excludes body_markdown for performance. */
+  content: ContentListItem;
   /** Compact mode for horizontal scroll lists (smaller card). */
   compact?: boolean;
 }
@@ -48,13 +43,13 @@ export default function ContentCard({ content, compact = false }: ContentCardPro
         ) : (
           <View style={[styles.compactImage, styles.compactPlaceholder]}>
             <ThemedText type="small" style={styles.placeholderText}>
-              {TYPE_LABELS[content.type] || content.type}
+              {CONTENT_TYPE_LABELS[content.type] || content.type}
             </ThemedText>
           </View>
         )}
         <View style={styles.compactBody}>
           <ThemedText type="small" style={styles.badge}>
-            {TYPE_LABELS[content.type] || content.type}
+            {CONTENT_TYPE_LABELS[content.type] || content.type}
           </ThemedText>
           <ThemedText style={styles.compactTitle} numberOfLines={2}>
             {content.title}
@@ -80,13 +75,13 @@ export default function ContentCard({ content, compact = false }: ContentCardPro
       ) : (
         <View style={[styles.fullImage, styles.fullPlaceholder]}>
           <ThemedText style={styles.placeholderText}>
-            {TYPE_LABELS[content.type] || content.type}
+            {CONTENT_TYPE_LABELS[content.type] || content.type}
           </ThemedText>
         </View>
       )}
       <View style={styles.fullBody}>
         <ThemedText type="small" style={styles.badge}>
-          {TYPE_LABELS[content.type] || content.type}
+          {CONTENT_TYPE_LABELS[content.type] || content.type}
         </ThemedText>
         <ThemedText style={styles.fullTitle} numberOfLines={2}>
           {content.title}

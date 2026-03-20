@@ -5,7 +5,8 @@ import type {
   ContentListParams,
   ContentListResult,
 } from "@ecommerce/shared";
-import { getContentPageBySlug, getContentPages } from "@ecommerce/shared";
+import { getContentPageBySlug, getContentPages, getRelatedContent } from "@ecommerce/shared";
+import type { RelatedContentItem } from "@ecommerce/shared";
 import { createSupabaseClient } from "@ecommerce/shared";
 
 /* ─── Server Functions ─────────────────────────────────────────────────── */
@@ -34,5 +35,17 @@ export const getContentListFn = createServerFn({ method: "GET" })
   .handler(async ({ data: params }): Promise<ApiResponse<ContentListResult>> => {
     const client = createSupabaseClient();
     const result = await getContentPages(client, params);
+    return { data: result, error: null };
+  });
+
+/**
+ * Server Function for fetching related content pages by slugs.
+ * Used by Story 7.6 (Content Administration — related content links).
+ */
+export const getRelatedContentFn = createServerFn({ method: "GET" })
+  .inputValidator((input: string[]) => input)
+  .handler(async ({ data: slugs }): Promise<ApiResponse<RelatedContentItem[]>> => {
+    const client = createSupabaseClient();
+    const result = await getRelatedContent(client, slugs);
     return { data: result, error: null };
   });

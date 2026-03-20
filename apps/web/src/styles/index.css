@@ -38,6 +38,7 @@
 @import "./components/affiliate-disclosure.css";
 @import "./components/content-product-card.css";
 @import "./components/content-list-card.css";
+@import "./components/related-content.css";
 
 /* 5. Page-specific styles */
 @import "./pages/home.css";

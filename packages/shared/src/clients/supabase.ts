@@ -17,6 +17,16 @@ export function configureEnv(vars: Record<string, string>): void {
 
 export function getEnvVar(name: string): string | undefined {
   if (_envOverrides[name] !== undefined) return _envOverrides[name];
+  // In Vite-based apps, import.meta.env contains env vars (VITE_-prefixed on client).
+  // Cast to `any` because import.meta.env is a Vite extension not in base TS types,
+  // and this shared package is consumed by both Vite (web) and Metro (mobile).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const meta = typeof import.meta !== "undefined" ? (import.meta as any) : null;
+  if (meta?.env) {
+    const env = meta.env as Record<string, string | undefined>;
+    const metaVal = env[name] || env[`VITE_${name}`];
+    if (metaVal) return metaVal;
+  }
   if (typeof process !== "undefined" && process.env) {
     return process.env[name];
   }

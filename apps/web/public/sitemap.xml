@@ -1,19 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Sitemap for Maison Émile (Story 3.8 — SEO Foundation).
+  Sitemap for Maison Émile
 
-  STATIC PAGES ONLY — Product URLs require dynamic generation.
-
-  Why static?
-  TanStack Start v1.166.2 does not expose `createServerFileRoute` for custom
-  API routes (XML responses). Product URLs must be generated via the build
-  script: `bun run generate:sitemap` (see scripts/generate-sitemap.ts).
-
-  Run `bun run generate:sitemap` to regenerate this file with product URLs
-  from the Supabase `product_embeddings` table (available=true).
-
-  Story 7.4 (Sitemap & Indexing) will implement a fully dynamic server-side
-  sitemap once TanStack Start supports API routes.
+  IMPORTANT: This is a static fallback. Run `bun run generate:sitemap` to
+  regenerate with dynamic product and content URLs from Supabase.
+  The generate script queries product_embeddings and content_pages tables
+  and produces a complete sitemap. Run it:
+  - After product sync (webhook processing)
+  - After content publish/update
+  - Before deployment (add to CI/CD pipeline)
 
   @see scripts/generate-sitemap.ts — dynamic generation script
   @see robots.txt — Sitemap directive points here
@@ -30,9 +25,14 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://www.maisonemile.com/content</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://www.maisonemile.com/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
-  <!-- Product URLs are added by scripts/generate-sitemap.ts -->
+  <!-- Product and content page URLs are added by scripts/generate-sitemap.ts -->
 </urlset>

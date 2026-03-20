@@ -18,7 +18,7 @@ import ProductList from "@/components/product/ProductList";
 import ContentCard from "@/components/ContentCard";
 import { Colors, Spacing, BottomTabInset, MaxContentWidth } from "@/constants/theme";
 import { useRecentlyViewed, createSupabaseClient, getContentPages } from "@ecommerce/shared";
-import type { Product, ContentPage } from "@ecommerce/shared";
+import type { Product, ContentListItem } from "@ecommerce/shared";
 
 /**
  * Fallback categories matching the web CategoryChips component.
@@ -189,7 +189,7 @@ function RecentlyViewedSection() {
  * "See All" navigates to the full content listing screen.
  */
 function GuidesSection() {
-  const [guides, setGuides] = useState<ContentPage[]>([]);
+  const [guides, setGuides] = useState<ContentListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 

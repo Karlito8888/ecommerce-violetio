@@ -110,7 +110,7 @@ development_status:
   7-3-advanced-seo-implementation: done
   7-4-sitemap-indexing: done
   7-5-social-sharing-rich-previews: done
-  7-6-content-administration-via-supabase-studio: backlog
+  7-6-content-administration-via-supabase-studio: done
   epic-7-retrospective: optional
 
   # Epic 8: Administration, Operations & Customer Support

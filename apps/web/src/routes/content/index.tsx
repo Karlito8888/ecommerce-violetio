@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { contentListQueryOptions, buildPageMeta, buildBreadcrumbJsonLd } from "@ecommerce/shared";
 import type { ContentType, ContentListFetchFn } from "@ecommerce/shared";
 import { getContentListFn } from "../../server/getContent";
@@ -121,10 +121,17 @@ function ContentListPending() {
  *
  * Uses manual page accumulation: tracks `pages` state array, each "Load more"
  * click fetches the next page and appends to the array.
+ *
+ * **Caching (M2 fix):** "Load more" uses `queryClient.fetchQuery()` instead of
+ * calling `fetchContentList()` directly. This ensures pages 2+ enter the
+ * TanStack Query cache and survive component remounts (e.g. navigating to a
+ * detail page and pressing back). Without this, accumulated pages were stored
+ * only in React state and lost on remount.
  */
 function ContentListPage() {
   const { type } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const queryClient = useQueryClient();
 
   // Fetch current page (page 1 is SSR-prefetched)
   const { data: firstPageResult } = useSuspenseQuery(
@@ -161,7 +168,11 @@ function ContentListPage() {
     setLoadMoreError(false);
     try {
       const nextPage = currentPage + 1;
-      const result = await fetchContentList({ type, page: nextPage, limit: 12 });
+      // Use queryClient.fetchQuery so the result enters the TanStack Query cache.
+      // This means page 2+ data survives component remounts (e.g. back navigation).
+      const result = await queryClient.fetchQuery(
+        contentListQueryOptions({ type, page: nextPage, limit: 12 }, fetchContentList),
+      );
       if (result.data) {
         setAdditionalPages((prev) => [...prev, result.data]);
       }

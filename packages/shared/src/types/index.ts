@@ -132,6 +132,7 @@ export type {
   ContentType,
   ContentStatus,
   ContentPage,
+  ContentListItem,
   ContentListParams,
   ContentListResult,
 } from "./content.types.js";

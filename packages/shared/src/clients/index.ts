@@ -28,4 +28,5 @@ export {
   getNotificationPreferences,
   upsertNotificationPreference,
 } from "./notifications.js";
-export { getContentPageBySlug, getContentPages } from "./content.js";
+export { getContentPageBySlug, getContentPages, getRelatedContent } from "./content.js";
+export type { RelatedContentItem } from "./content.js";

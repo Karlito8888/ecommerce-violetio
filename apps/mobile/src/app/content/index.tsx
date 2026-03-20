@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { FlatList, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { createSupabaseClient, getContentPages } from "@ecommerce/shared";
-import type { ContentType, ContentPage } from "@ecommerce/shared";
+import type { ContentType, ContentListItem } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import ContentCard from "@/components/ContentCard";
@@ -24,7 +24,7 @@ const TYPE_OPTIONS: Array<{ value: ContentType | undefined; label: string }> = [
  */
 export default function ContentListScreen() {
   const [activeType, setActiveType] = useState<ContentType | undefined>(undefined);
-  const [items, setItems] = useState<ContentPage[]>([]);
+  const [items, setItems] = useState<ContentListItem[]>([]);
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

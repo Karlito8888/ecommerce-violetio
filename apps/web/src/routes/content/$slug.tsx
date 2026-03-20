@@ -6,11 +6,13 @@ import {
   formatDate,
   buildBreadcrumbJsonLd,
   wordCount,
+  CONTENT_TYPE_LABELS,
 } from "@ecommerce/shared";
 import type { ContentDetailFetchFn, ContentPage } from "@ecommerce/shared";
 import { getContentBySlugFn } from "../../server/getContent";
 import MarkdownRenderer from "../../components/content/MarkdownRenderer";
 import AffiliateDisclosure from "../../components/content/AffiliateDisclosure";
+import RelatedContent from "../../components/content/RelatedContent";
 import ShareButton from "../../components/ui/ShareButton";
 
 /**
@@ -19,13 +21,6 @@ import ShareButton from "../../components/ui/ShareButton";
 const fetchContent: ContentDetailFetchFn = (slug) => getContentBySlugFn({ data: slug });
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
-
-/** Content type label mapping for display badges. */
-const TYPE_LABELS: Record<string, string> = {
-  guide: "Guide",
-  comparison: "Comparison",
-  review: "Review",
-};
 
 /** Content type to schema.org articleSection mapping for JSON-LD. */
 const ARTICLE_SECTIONS: Record<string, string> = {
@@ -145,7 +140,7 @@ function ContentPageView() {
       <article className="content-page">
         <header className="content-page__header">
           <span className="content-page__type-badge">
-            {TYPE_LABELS[content.type] || content.type}
+            {CONTENT_TYPE_LABELS[content.type] || content.type}
           </span>
           <h1 className="content-page__title">{content.title}</h1>
           <div className="content-page__meta">
@@ -170,7 +165,7 @@ function ContentPageView() {
               title={content.seoTitle ?? content.title}
               text={
                 content.seoDescription ??
-                `${content.title} — ${TYPE_LABELS[content.type] || content.type}`
+                `${content.title} — ${CONTENT_TYPE_LABELS[content.type] || content.type}`
               }
               label={`Share "${content.title}"`}
               size="sm"
@@ -194,6 +189,8 @@ function ContentPageView() {
         <div className="content-page__body">
           <MarkdownRenderer content={content.bodyMarkdown} />
         </div>
+
+        <RelatedContent slugs={content.relatedSlugs} />
       </article>
     </div>
   );

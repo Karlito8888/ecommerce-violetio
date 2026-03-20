@@ -169,6 +169,9 @@ describe("content page SEO meta tags", () => {
     seoDescription: "Custom SEO description for search engines.",
     featuredImageUrl: "https://img.example.com/hero.jpg",
     status: "published",
+    tags: ["running", "shoes"],
+    relatedSlugs: ["shoe-care-guide"],
+    sortOrder: 0,
     createdAt: "2026-03-14T00:00:00Z",
     updatedAt: "2026-03-15T00:00:00Z",
   };
