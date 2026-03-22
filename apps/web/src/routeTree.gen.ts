@@ -26,6 +26,7 @@ import { Route as ContentSlugRouteImport } from './routes/content/$slug'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AccountWishlistRouteImport } from './routes/account/wishlist'
 import { Route as AccountProfileRouteImport } from './routes/account/profile'
 import { Route as AdminSupportIndexRouteImport } from './routes/admin/support/index'
@@ -119,6 +120,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminHealthRoute = AdminHealthRouteImport.update({
+  id: '/admin/health',
+  path: '/admin/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountWishlistRoute = AccountWishlistRouteImport.update({
   id: '/wishlist',
   path: '/wishlist',
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
+  '/admin/health': typeof AdminHealthRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -188,6 +195,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
+  '/admin/health': typeof AdminHealthRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -215,6 +223,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
+  '/admin/health': typeof AdminHealthRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -243,6 +252,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account/profile'
     | '/account/wishlist'
+    | '/admin/health'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account/profile'
     | '/account/wishlist'
+    | '/admin/health'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account/profile'
     | '/account/wishlist'
+    | '/admin/health'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -320,6 +332,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRouteRoute: typeof AccountRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
+  AdminHealthRoute: typeof AdminHealthRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
@@ -460,6 +473,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/health': {
+      id: '/admin/health'
+      path: '/admin/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AdminHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account/wishlist': {
       id: '/account/wishlist'
       path: '/wishlist'
@@ -534,6 +554,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRouteRoute: AccountRouteRouteWithChildren,
   AboutRoute: AboutRoute,
+  AdminHealthRoute: AdminHealthRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,
   AuthVerifyRoute: AuthVerifyRoute,

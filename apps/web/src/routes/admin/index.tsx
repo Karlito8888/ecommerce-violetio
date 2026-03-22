@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { buildPageMeta } from "@ecommerce/shared";
 import type { TimeRange, TimeRangeParams, AdminDashboardData } from "@ecommerce/shared";
 import { getAdminUserFn } from "#/server/adminAuth";
@@ -92,6 +92,15 @@ function AdminDashboardPage() {
         <h2 className="admin-dashboard__section-title">Commission Breakdown</h2>
         <CommissionTable data={dashboardData.commission} />
       </section>
+
+      <nav className="admin-dashboard__nav">
+        <Link to="/admin/health" className="admin-dashboard__nav-link">
+          Platform Health
+        </Link>
+        <Link to="/admin/support" className="admin-dashboard__nav-link">
+          Support Inquiries
+        </Link>
+      </nav>
 
       <footer className="admin-dashboard__footer">
         <p className="admin-dashboard__refresh-info">

@@ -45,3 +45,4 @@ export {
   updateInternalNotes,
   getLinkedOrder,
 } from "./admin-support.js";
+export { getHealthMetrics, getRecentErrors, getAlertRules } from "./health.js";

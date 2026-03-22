@@ -156,3 +156,12 @@ export type {
   AdminSupportDetailData,
   LinkedOrderInfo,
 } from "./admin-support.types.js";
+export type {
+  HealthCheckResult,
+  ServiceStatus,
+  HealthMetrics,
+  ErrorTypeCount,
+  AlertRule,
+  PlatformHealthData,
+  RecentError,
+} from "./health.types.js";
