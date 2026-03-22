@@ -1,3 +1,17 @@
+/**
+ * @module LegalPageRoute
+ *
+ * Server-side rendered legal page (privacy, terms, cookies).
+ *
+ * Separate from /content/$slug because legal pages have different UX:
+ * - No author byline, share button, or related content
+ * - `noindex` meta tag (legal pages shouldn't appear in search results)
+ * - Simpler, more formal visual treatment
+ *
+ * Content is stored as markdown in Supabase and rendered via MarkdownRenderer.
+ * Breadcrumb JSON-LD structured data for search engine navigation display.
+ */
+
 import { createFileRoute } from "@tanstack/react-router";
 import { buildPageMeta, formatDate, buildBreadcrumbJsonLd } from "@ecommerce/shared";
 import { getLegalContentFn } from "../../server/getLegalContent";

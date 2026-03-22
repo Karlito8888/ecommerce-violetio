@@ -1,3 +1,18 @@
+/**
+ * @module useCookieConsent
+ *
+ * React hook for managing GDPR cookie consent state via localStorage.
+ *
+ * Design decisions:
+ * - Initializes to `null` on both server and client to prevent hydration mismatch.
+ *   localStorage is read in a `useEffect` after mount.
+ * - Since the platform only uses functional cookies (Supabase auth session),
+ *   the consent banner is informational for GDPR compliance — auth cookies are
+ *   exempt as strictly necessary. No behavior changes based on accept/decline.
+ * - Returns a stable `accept`/`decline` callback pair via `useCallback` to avoid
+ *   unnecessary re-renders in consuming components.
+ */
+
 import { useState, useCallback, useEffect } from "react";
 
 const STORAGE_KEY = "cookie-consent";

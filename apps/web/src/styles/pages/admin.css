@@ -1,3 +1,14 @@
+/**
+ * Admin Dashboard, Support & Health — Admin panel pages
+ *
+ * Tokens used: --color-gold, --color-gold-dark, --color-ivory, --color-charcoal,
+ *   --color-text-secondary, --color-success, --color-warning, --color-error,
+ *   --font-heading, --surface-elevated, --surface-muted, --border-subtle,
+ *   --space-*, --radius-*, --shadow-*
+ * Responsive: 900px (2-col grid), 600px (single-col stack)
+ * Dark theme: yes, via [data-theme="dark"] overrides at bottom
+ */
+
 /* ── Admin Dashboard ────────────────────────────────────────────────────── */
 
 .admin-dashboard {
@@ -845,13 +856,14 @@
   flex-shrink: 0;
 }
 
+/* Health dots use semantic tokens so dark theme overrides propagate automatically */
 .admin-health__dot--up {
-  background: #16a34a;
+  background: var(--color-success);
   box-shadow: 0 0 4px rgba(22, 163, 74, 0.4);
 }
 
 .admin-health__dot--down {
-  background: #dc2626;
+  background: var(--color-error);
   box-shadow: 0 0 4px rgba(220, 38, 38, 0.4);
 }
 
@@ -876,9 +888,10 @@
   color: var(--color-text-secondary);
 }
 
+/* Service error text uses semantic --color-error for dark theme compatibility */
 .admin-health__service-error {
   font-size: 0.8rem;
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .admin-health__checked-at {
@@ -907,16 +920,17 @@
   text-align: center;
 }
 
+/* Metric severity borders use semantic color tokens for theme-awareness */
 .admin-health__metric--ok {
-  border-left: 3px solid #16a34a;
+  border-left: 3px solid var(--color-success);
 }
 
 .admin-health__metric--warning {
-  border-left: 3px solid #d97706;
+  border-left: 3px solid var(--color-warning);
 }
 
 .admin-health__metric--critical {
-  border-left: 3px solid #dc2626;
+  border-left: 3px solid var(--color-error);
 }
 
 .admin-health__metric-value {
@@ -1111,4 +1125,14 @@
   background: #450a0a;
   color: #fca5a5;
   border-color: #7f1d1d;
+}
+
+/* Health dots glow adjusts for dark backgrounds — semantic tokens handle
+   the fill color, but the box-shadow needs brighter opacity in dark mode. */
+[data-theme="dark"] .admin-health__dot--up {
+  box-shadow: 0 0 6px rgba(122, 173, 90, 0.5);
+}
+
+[data-theme="dark"] .admin-health__dot--down {
+  box-shadow: 0 0 6px rgba(212, 106, 106, 0.5);
 }

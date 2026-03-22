@@ -1,4 +1,11 @@
-/* ─── Legal Pages ───
+/**
+ * Legal Pages — Privacy, Terms, Cookie Policy, etc.
+ *
+ * Tokens used: --color-ink, --color-charcoal, --color-steel, --color-gold,
+ *   --font-display, --font-body, --border-subtle, --space-*, --radius-*
+ * Responsive: 600px (fluid table overflow)
+ * Dark theme: yes, inherits via semantic token overrides in tokens.css
+ *
  * BEM block: .legal-page
  * Simpler layout than editorial content — no featured image, no author, no share.
  */

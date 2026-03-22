@@ -325,3 +325,191 @@ describe("Alert threshold evaluation logic", () => {
     ).toBe(false);
   });
 });
+
+// ── getRecentErrors error path tests ────────────────────────
+
+describe("getRecentErrors error handling", () => {
+  it("throws on database error", async () => {
+    const client = buildSelectChainMock([], { message: "Connection refused" });
+    await expect(getRecentErrors(client)).rejects.toEqual({ message: "Connection refused" });
+  });
+});
+
+// ── getAlertRules error path tests ──────────────────────────
+
+describe("getAlertRules error handling", () => {
+  it("throws on database error", async () => {
+    const client = buildAlertSelectMock([], { message: "Permission denied" });
+    await expect(getAlertRules(client)).rejects.toEqual({ message: "Permission denied" });
+  });
+
+  it("returns empty array when no rules", async () => {
+    const client = buildAlertSelectMock([]);
+    const result = await getAlertRules(client);
+    expect(result).toEqual([]);
+  });
+});
+
+// ── Server handler tests ────────────────────────────────────
+
+vi.mock("#/server/supabaseServer", () => ({
+  getSupabaseSessionClient: vi.fn(),
+  getSupabaseServer: vi.fn(),
+}));
+
+vi.mock("#/server/adminAuthGuard", () => ({
+  requireAdminOrThrow: vi.fn(),
+}));
+
+/**
+ * Server handler tests for getAdminHealthHandler — fetches cached health
+ * metrics, recent errors, and alert rules for the admin health dashboard.
+ * The handler orchestrates three parallel shared client calls and evaluates
+ * alert thresholds in the background. Auth is enforced via requireAdminOrThrow.
+ */
+describe("getAdminHealthHandler", () => {
+  it("rejects non-admin (throws 403 Response)", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockRejectedValue(new Response("Forbidden", { status: 403 }));
+
+    const { getAdminHealthHandler } = await import("#/server/getAdminHealthHandler");
+    await expect(getAdminHealthHandler()).rejects.toBeInstanceOf(Response);
+  });
+
+  it("returns health metrics for admin", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const metricsData = [
+      {
+        error_count: 5,
+        error_rate_per_hour: 0.5,
+        webhook_total: 100,
+        webhook_success: 98,
+        webhook_failed: 2,
+        webhook_success_rate: 98.0,
+        top_error_types: [],
+        consecutive_webhook_failures: 0,
+      },
+    ];
+    const errorRows = [
+      {
+        id: "err-1",
+        created_at: "2026-03-22T10:00:00Z",
+        source: "web",
+        error_type: "CART.ADD_FAILED",
+        message: "SKU not found",
+      },
+    ];
+    const alertRows = [
+      {
+        id: "rule-1",
+        rule_name: "webhook_consecutive_failures",
+        threshold_value: 3,
+        time_window_minutes: 0,
+        enabled: true,
+        last_triggered_at: null,
+      },
+    ];
+
+    const rpcMock = vi.fn().mockResolvedValue({ data: metricsData, error: null });
+    const errorChain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: errorRows, error: null }),
+    };
+    const alertChain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: alertRows, error: null }),
+    };
+    let fromCallCount = 0;
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      rpc: rpcMock,
+      from: vi.fn(() => {
+        fromCallCount++;
+        if (fromCallCount === 1) return errorChain;
+        return alertChain;
+      }),
+    } as unknown as SupabaseClient);
+
+    const { getAdminHealthHandler } = await import("#/server/getAdminHealthHandler");
+    const result = await getAdminHealthHandler();
+
+    expect(result.metrics.errorCount).toBe(5);
+    expect(result.metrics.webhookSuccessRate).toBe(98.0);
+    expect(result.recentErrors).toHaveLength(1);
+    expect(result.alertRules).toHaveLength(1);
+    expect(result.healthCheck).toBeNull();
+  });
+});
+
+/**
+ * Server handler tests for triggerHealthCheckHandler — invokes the health-check
+ * Supabase Edge Function on demand and returns the result. Handles Edge Function
+ * failures by throwing a 500 Response with structured error JSON.
+ */
+describe("triggerHealthCheckHandler", () => {
+  it("rejects non-admin", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockRejectedValue(new Response("Forbidden", { status: 403 }));
+
+    const { triggerHealthCheckHandler } = await import("#/server/getAdminHealthHandler");
+    await expect(triggerHealthCheckHandler()).rejects.toBeInstanceOf(Response);
+  });
+
+  it("calls health-check Edge Function and returns result", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const healthResult = {
+      overall_status: "healthy",
+      services: {
+        supabase: { status: "up", latency_ms: 12 },
+        violet: { status: "up", latency_ms: 250 },
+        stripe: { status: "up", latency_ms: 180 },
+      },
+      checked_at: "2026-03-22T10:00:00Z",
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      functions: {
+        invoke: vi.fn().mockResolvedValue({
+          data: { data: healthResult },
+          error: null,
+        }),
+      },
+    } as unknown as SupabaseClient);
+
+    const { triggerHealthCheckHandler } = await import("#/server/getAdminHealthHandler");
+    const result = await triggerHealthCheckHandler();
+    expect(result.overall_status).toBe("healthy");
+    expect(result.services.supabase.status).toBe("up");
+  });
+
+  it("handles Edge Function failure with 500 Response", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      functions: {
+        invoke: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: "Edge Function timeout" },
+        }),
+      },
+    } as unknown as SupabaseClient);
+
+    const { triggerHealthCheckHandler } = await import("#/server/getAdminHealthHandler");
+    try {
+      await triggerHealthCheckHandler();
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(Response);
+      expect((e as Response).status).toBe(500);
+      const body = await (e as Response).json();
+      expect(body.error.code).toBe("HEALTH.CHECK_FAILED");
+    }
+  });
+});

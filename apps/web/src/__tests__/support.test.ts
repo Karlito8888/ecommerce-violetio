@@ -125,40 +125,159 @@ describe("SUPPORT_SUBJECTS", () => {
   });
 });
 
-// ── Validation logic tests (extracted for unit testing) ──────
+// NOTE: Validation logic (email regex, message length) is tested via
+// submitSupportHandler tests below, which exercise the actual handler code.
+// Previously, tests duplicated the regex locally — this created false coverage.
 
-describe("support form validation", () => {
-  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// ── submitSupportHandler tests ──────────────────────────────
 
-  it("accepts valid email addresses", () => {
-    expect(EMAIL_REGEX.test("user@example.com")).toBe(true);
-    expect(EMAIL_REGEX.test("test@sub.domain.com")).toBe(true);
+vi.mock("#/server/supabaseServer", () => ({
+  getSupabaseServer: vi.fn(),
+}));
+
+/**
+ * Server handler tests for submitSupportHandler — the public support inquiry
+ * submission endpoint. The handler is responsible for:
+ * - Honeypot bot detection (silent fake success)
+ * - Server-side input validation (name, email, subject, message length)
+ * - Rate limiting (max 3 per email per hour)
+ * - Database insert via service-role client
+ * - Fire-and-forget confirmation emails
+ */
+describe("submitSupportHandler", () => {
+  it("returns fake success when honeypot field is filled", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler(validInput, "bot-value");
+    expect(result).toEqual({ success: true });
   });
 
-  it("rejects invalid email addresses", () => {
-    expect(EMAIL_REGEX.test("")).toBe(false);
-    expect(EMAIL_REGEX.test("notanemail")).toBe(false);
-    expect(EMAIL_REGEX.test("@example.com")).toBe(false);
-    expect(EMAIL_REGEX.test("user@")).toBe(false);
-    expect(EMAIL_REGEX.test("user@.com")).toBe(false);
+  it("rejects when name is empty", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler({ ...validInput, name: "" });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Name is required");
   });
 
-  it("rejects messages shorter than 20 characters", () => {
-    expect("Short msg".length < 20).toBe(true);
+  it("rejects when name is only whitespace", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler({ ...validInput, name: "   " });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Name is required");
   });
 
-  it("accepts messages of exactly 20 characters", () => {
-    const msg = "12345678901234567890"; // exactly 20
-    expect(msg.length >= 20).toBe(true);
+  it("rejects when email is invalid", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler({ ...validInput, email: "notanemail" });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("A valid email address is required");
   });
 
-  it("rejects messages longer than 2000 characters", () => {
-    const msg = "a".repeat(2001);
-    expect(msg.length > 2000).toBe(true);
+  it("rejects when email is empty", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler({ ...validInput, email: "" });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("A valid email address is required");
   });
 
-  it("validates subject is in allowed list", () => {
-    expect(SUPPORT_SUBJECTS.includes("Order Issue" as never)).toBe(true);
-    expect(SUPPORT_SUBJECTS.includes("Invalid Subject" as never)).toBe(false);
+  it("rejects when subject is not in allowed list", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler({
+      ...validInput,
+      subject: "Invalid Subject" as never,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Please select a valid subject");
+  });
+
+  it("rejects when message is too short (<20 chars)", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler({ ...validInput, message: "Short msg" });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Message must be at least 20 characters");
+  });
+
+  it("rejects when message is too long (>2000 chars)", async () => {
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler({
+      ...validInput,
+      message: "a".repeat(2001),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Message must be no more than 2000 characters");
+  });
+
+  it("rejects when rate limit exceeded (>=3 per hour)", async () => {
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const countChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockResolvedValue({ count: 3, error: null }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(countChain),
+    } as unknown as SupabaseClient);
+
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler(validInput);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("too many requests");
+  });
+
+  it("returns success with inquiryId on valid submission", async () => {
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    let callCount = 0;
+    const countChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+    };
+    const insertChain = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: "new-id-123" }, error: null }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn(() => {
+        callCount++;
+        // First call is countRecentInquiries, second is insertSupportInquiry
+        if (callCount === 1) return countChain;
+        return insertChain;
+      }),
+      functions: {
+        invoke: vi.fn().mockResolvedValue({ data: null, error: null }),
+      },
+    } as unknown as SupabaseClient);
+
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler(validInput);
+    expect(result.success).toBe(true);
+    expect(result.inquiryId).toBe("new-id-123");
+  });
+
+  it("returns error when database insert fails", async () => {
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    let callCount = 0;
+    const countChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+    };
+    const insertChain = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn(() => {
+        callCount++;
+        if (callCount === 1) return countChain;
+        return insertChain;
+      }),
+    } as unknown as SupabaseClient);
+
+    const { submitSupportHandler } = await import("#/server/submitSupportHandler");
+    const result = await submitSupportHandler(validInput);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Something went wrong. Please try again.");
   });
 });

@@ -1,6 +1,10 @@
+/**
+ * Admin support types — shapes for the back-office support inquiry management UI.
+ * Maps to the `support_inquiries` Supabase table and related order lookup.
+ */
 import type { SupportSubject } from "./support.types.js";
 
-/** A support inquiry row as returned from the database. */
+/** A support inquiry row as returned from the database (camelCase mapped). */
 export interface SupportInquiry {
   id: string;
   name: string;
@@ -14,9 +18,14 @@ export interface SupportInquiry {
   updatedAt: string;
 }
 
-export type SupportInquiryStatus = "new" | "in-progress" | "resolved";
-
-export const SUPPORT_STATUSES: SupportInquiryStatus[] = ["new", "in-progress", "resolved"];
+/**
+ * Immutable tuple of valid support inquiry statuses.
+ * Uses `as const` for type narrowing — the same pattern as SUPPORT_SUBJECTS
+ * in support.types.ts. Derived union type ensures the constant and the type
+ * stay in sync automatically.
+ */
+export const SUPPORT_STATUSES = ["new", "in-progress", "resolved"] as const;
+export type SupportInquiryStatus = (typeof SUPPORT_STATUSES)[number];
 
 /** Filter parameters for the inquiry list. */
 export interface SupportInquiryFilters {

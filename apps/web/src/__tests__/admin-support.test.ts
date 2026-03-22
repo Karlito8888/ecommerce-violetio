@@ -332,16 +332,386 @@ describe("SUPPORT_STATUSES", () => {
     const { SUPPORT_STATUSES } = await import("@ecommerce/shared");
     expect(SUPPORT_STATUSES).toEqual(["new", "in-progress", "resolved"]);
   });
-});
 
-// ── Status validation in updateSupportStatusHandler ─────────
-
-describe("SUPPORT_STATUSES validation", () => {
   it("includes exactly the expected status workflow values", async () => {
     const { SUPPORT_STATUSES } = await import("@ecommerce/shared");
     expect(SUPPORT_STATUSES).toContain("new");
     expect(SUPPORT_STATUSES).toContain("in-progress");
     expect(SUPPORT_STATUSES).toContain("resolved");
     expect(SUPPORT_STATUSES).toHaveLength(3);
+  });
+});
+
+// ── Server handler tests ────────────────────────────────────
+
+vi.mock("#/server/supabaseServer", () => ({
+  getSupabaseSessionClient: vi.fn(),
+  getSupabaseServer: vi.fn(),
+}));
+
+vi.mock("#/server/adminAuthGuard", () => ({
+  requireAdminOrThrow: vi.fn(),
+}));
+
+/**
+ * Server handler tests for admin support management handlers.
+ * These test the business logic layer that sits between the TanStack Start
+ * server function (thin wrapper) and the shared client functions (DB queries).
+ * Each handler is responsible for: admin auth verification, input validation,
+ * orchestration of shared client calls, and error mapping.
+ */
+describe("getAdminSupportListHandler", () => {
+  it("rejects non-admin (throws 403 Response)", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockRejectedValue(new Response("Forbidden", { status: 403 }));
+
+    const { getAdminSupportListHandler } = await import("#/server/getAdminSupportHandler");
+    await expect(getAdminSupportListHandler()).rejects.toBeInstanceOf(Response);
+  });
+
+  it("returns inquiry list for admin", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const result = { data: [SAMPLE_ROW, SAMPLE_ROW_2], error: null };
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      then: vi.fn((resolve: (v: unknown) => void) => resolve(result)),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { getAdminSupportListHandler } = await import("#/server/getAdminSupportHandler");
+    const data = await getAdminSupportListHandler();
+    expect(data.inquiries).toHaveLength(2);
+    expect(data.inquiries[0].id).toBe("uuid-1");
+  });
+
+  it("applies status filter correctly", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const result = { data: [SAMPLE_ROW], error: null };
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      then: vi.fn((resolve: (v: unknown) => void) => resolve(result)),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { getAdminSupportListHandler } = await import("#/server/getAdminSupportHandler");
+    await getAdminSupportListHandler({ status: "new" });
+    expect(chain.eq).toHaveBeenCalledWith("status", "new");
+  });
+
+  it("applies subject filter correctly", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const result = { data: [SAMPLE_ROW], error: null };
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      then: vi.fn((resolve: (v: unknown) => void) => resolve(result)),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { getAdminSupportListHandler } = await import("#/server/getAdminSupportHandler");
+    await getAdminSupportListHandler({ subject: "Order Issue" });
+    expect(chain.eq).toHaveBeenCalledWith("subject", "Order Issue");
+  });
+});
+
+describe("getAdminSupportDetailHandler", () => {
+  it("rejects non-admin", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockRejectedValue(new Response("Forbidden", { status: 403 }));
+
+    const { getAdminSupportDetailHandler } = await import("#/server/getAdminSupportHandler");
+    await expect(getAdminSupportDetailHandler("uuid-1")).rejects.toBeInstanceOf(Response);
+  });
+
+  it("returns inquiry with linked order when orderId present", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const orderRow = {
+      id: "order-uuid",
+      violet_order_id: "violet-123",
+      status: "COMPLETED",
+      total: 5999,
+      created_at: "2026-03-18T12:00:00Z",
+    };
+    let callCount = 0;
+    const inquiryChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: SAMPLE_ROW, error: null }),
+    };
+    const orderChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: orderRow, error: null }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn(() => {
+        callCount++;
+        return callCount === 1 ? inquiryChain : orderChain;
+      }),
+    } as unknown as SupabaseClient);
+
+    const { getAdminSupportDetailHandler } = await import("#/server/getAdminSupportHandler");
+    const data = await getAdminSupportDetailHandler("uuid-1");
+    expect(data.inquiry.id).toBe("uuid-1");
+    expect(data.linkedOrder).not.toBeNull();
+    expect(data.linkedOrder!.violetOrderId).toBe("violet-123");
+  });
+
+  it("returns inquiry without order when no orderId", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: SAMPLE_ROW_2, error: null }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { getAdminSupportDetailHandler } = await import("#/server/getAdminSupportHandler");
+    const data = await getAdminSupportDetailHandler("uuid-2");
+    expect(data.inquiry.id).toBe("uuid-2");
+    expect(data.linkedOrder).toBeNull();
+  });
+
+  it("throws 404 when inquiry not found", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "PGRST116", message: "Not found" },
+      }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { getAdminSupportDetailHandler } = await import("#/server/getAdminSupportHandler");
+    try {
+      await getAdminSupportDetailHandler("nonexistent");
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(Response);
+      expect((e as Response).status).toBe(404);
+    }
+  });
+});
+
+/**
+ * Server handler tests for updateSupportStatusHandler — validates status
+ * against the SUPPORT_STATUSES allowlist and delegates to the shared
+ * updateInquiryStatus client function.
+ */
+describe("updateSupportStatusHandler", () => {
+  it("rejects non-admin", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockRejectedValue(new Response("Forbidden", { status: 403 }));
+
+    const { updateSupportStatusHandler } = await import("#/server/updateSupportInquiryHandler");
+    await expect(updateSupportStatusHandler("uuid-1", "resolved")).rejects.toBeInstanceOf(Response);
+  });
+
+  it("rejects invalid status value", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { updateSupportStatusHandler } = await import("#/server/updateSupportInquiryHandler");
+    const result = await updateSupportStatusHandler("uuid-1", "invalid" as never);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid status");
+  });
+
+  it("updates status successfully", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const chain = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { updateSupportStatusHandler } = await import("#/server/updateSupportInquiryHandler");
+    const result = await updateSupportStatusHandler("uuid-1", "in-progress");
+    expect(result.success).toBe(true);
+  });
+
+  it("returns error when DB update fails", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const chain = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: { message: "Update failed" } }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { updateSupportStatusHandler } = await import("#/server/updateSupportInquiryHandler");
+    const result = await updateSupportStatusHandler("uuid-1", "resolved");
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Failed to update status");
+  });
+});
+
+/**
+ * Server handler tests for replySupportHandler — sends a reply email
+ * to the customer via Edge Function and auto-advances status from
+ * "new" to "in-progress" when the admin first responds.
+ */
+describe("replySupportHandler", () => {
+  it("rejects non-admin", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockRejectedValue(new Response("Forbidden", { status: 403 }));
+
+    const { replySupportHandler } = await import("#/server/replySupportInquiryHandler");
+    await expect(
+      replySupportHandler({ inquiryId: "uuid-1", replyMessage: "Hello customer!" }),
+    ).rejects.toBeInstanceOf(Response);
+  });
+
+  it("rejects reply shorter than 10 chars", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { replySupportHandler } = await import("#/server/replySupportInquiryHandler");
+    const result = await replySupportHandler({ inquiryId: "uuid-1", replyMessage: "Short" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("at least 10 characters");
+  });
+
+  it("rejects empty reply message", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { replySupportHandler } = await import("#/server/replySupportInquiryHandler");
+    const result = await replySupportHandler({ inquiryId: "uuid-1", replyMessage: "" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("at least 10 characters");
+  });
+
+  it("auto-advances status from 'new' to 'in-progress'", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const inquiryChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { ...SAMPLE_ROW, status: "new" }, error: null }),
+    };
+    const updateChain = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
+    let callCount = 0;
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn(() => {
+        callCount++;
+        return callCount === 1 ? inquiryChain : updateChain;
+      }),
+      functions: {
+        invoke: vi.fn().mockResolvedValue({ data: null, error: null }),
+      },
+    } as unknown as SupabaseClient);
+
+    const { replySupportHandler } = await import("#/server/replySupportInquiryHandler");
+    const result = await replySupportHandler({
+      inquiryId: "uuid-1",
+      replyMessage: "Thank you for reaching out, we are looking into this.",
+    });
+    expect(result.success).toBe(true);
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "in-progress" }),
+    );
+  });
+
+  it("sends reply email via Edge Function", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const inquiryChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { ...SAMPLE_ROW, status: "in-progress" },
+        error: null,
+      }),
+    };
+    const invokeMock = vi.fn().mockResolvedValue({ data: null, error: null });
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(inquiryChain),
+      functions: { invoke: invokeMock },
+    } as unknown as SupabaseClient);
+
+    const { replySupportHandler } = await import("#/server/replySupportInquiryHandler");
+    await replySupportHandler({
+      inquiryId: "uuid-1",
+      replyMessage: "We have resolved your issue, please check.",
+    });
+    expect(invokeMock).toHaveBeenCalledWith("send-support-reply", expect.any(Object));
+  });
+
+  it("returns error when inquiry not found", async () => {
+    const { requireAdminOrThrow } = await import("#/server/adminAuthGuard");
+    vi.mocked(requireAdminOrThrow).mockResolvedValue({ id: "admin1", email: "admin@test.com" });
+
+    const { getSupabaseServer } = await import("#/server/supabaseServer");
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "PGRST116", message: "Not found" },
+      }),
+    };
+    vi.mocked(getSupabaseServer).mockReturnValue({
+      from: vi.fn().mockReturnValue(chain),
+    } as unknown as SupabaseClient);
+
+    const { replySupportHandler } = await import("#/server/replySupportInquiryHandler");
+    const result = await replySupportHandler({
+      inquiryId: "nonexistent",
+      replyMessage: "This is a reply message that is long enough.",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Inquiry not found");
   });
 });

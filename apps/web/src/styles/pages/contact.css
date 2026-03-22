@@ -1,7 +1,17 @@
-/* ─── Contact Page ───
+/**
+ * Contact Page & Form — Support form with info sidebar
+ *
+ * Tokens used: --text-3xl, --text-xl, --text-lg, --text-base, --text-sm,
+ *   --color-text-secondary, --color-accent, --color-surface, --color-gold,
+ *   --color-amber, --color-ink, --color-ivory, --color-charcoal, --color-steel,
+ *   --color-stone, --color-sand, --color-error, --color-success,
+ *   --font-body, --surface-elevated, --border-subtle, --shadow-md,
+ *   --space-*, --radius-*, --transition-fast
+ * Responsive: 768px (single-column layout)
+ * Dark theme: yes, inherits via semantic token overrides in tokens.css
+ *
  * BEM block for the contact/support form page.
  * Form input styles mirror auth.css patterns for visual consistency.
- * Uses design tokens from tokens.css.
  */
 
 .contact-page {

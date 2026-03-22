@@ -8,7 +8,9 @@
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 900;
+  /* z-index from token scale (tokens.css) — above content (--z-toast: 600)
+     but below system modals. Using a token keeps the layering system maintainable. */
+  z-index: var(--z-cookie-banner);
   background-color: var(--surface-card);
   border-top: 1px solid var(--border-subtle);
   box-shadow: 0 -2px 12px rgb(0 0 0 / 0.08);

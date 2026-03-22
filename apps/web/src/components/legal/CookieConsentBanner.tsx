@@ -1,26 +1,57 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
 import { useCookieConsent } from "../../hooks/useCookieConsent";
 
 /**
- * GDPR cookie consent banner — shown once on first visit until user accepts or declines.
+ * CookieConsentBanner — GDPR-compliant cookie consent dialog.
  *
- * Anti-dark-pattern design (per UX spec):
- * - Accept and Decline buttons have identical visual weight (same size, same style)
- * - No pre-checked boxes
- * - Banner is minimal and non-intrusive
- * - Declining is just as easy as accepting
+ * Design decisions:
+ * - Equal-weight Accept/Decline buttons (no dark patterns, GDPR compliance)
+ * - Focus trap prevents keyboard users from interacting with page behind banner
+ * - `role="dialog"` + `aria-label` for screen reader identification
+ * - `aria-modal="true"` signals modal behavior to assistive tech
+ * - Auto-focuses on mount to ensure keyboard users encounter the banner
+ * - Consent stored in localStorage (no third-party cookies)
  */
 export default function CookieConsentBanner() {
   const { hasChosen, accept, decline } = useCookieConsent();
   const bannerRef = useRef<HTMLDivElement>(null);
 
-  // Focus the banner when it first appears for accessibility
+  /**
+   * Focus trap handler — keeps Tab/Shift+Tab cycling within the banner.
+   * This prevents keyboard users from accidentally interacting with the page
+   * behind the consent dialog, matching the `aria-modal="true"` semantic.
+   */
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const banner = bannerRef.current;
+    if (!banner) return;
+
+    const focusable = banner.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
+
+  // Focus the banner when it first appears and attach focus trap
   useEffect(() => {
     if (!hasChosen && bannerRef.current) {
       bannerRef.current.focus();
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
     }
-  }, [hasChosen]);
+  }, [hasChosen, handleKeyDown]);
 
   if (hasChosen) return null;
 
@@ -30,6 +61,7 @@ export default function CookieConsentBanner() {
       className="cookie-consent"
       role="dialog"
       aria-label="Cookie consent"
+      aria-modal="true"
       tabIndex={-1}
     >
       <div className="cookie-consent__inner">

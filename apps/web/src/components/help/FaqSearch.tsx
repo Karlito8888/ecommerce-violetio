@@ -1,3 +1,15 @@
+/**
+ * @module FaqSearch
+ *
+ * Client-side search input for filtering FAQ items.
+ *
+ * Accessibility features:
+ * - `aria-label` on the input for screen reader identification (no visible label)
+ * - `type="search"` enables native browser clear button and semantics
+ * - Search icon marked `aria-hidden` to avoid redundant announcements
+ * - Results are announced via an `aria-live` region in the parent HelpPage
+ */
+
 interface FaqSearchProps {
   value: string;
   onChange: (value: string) => void;

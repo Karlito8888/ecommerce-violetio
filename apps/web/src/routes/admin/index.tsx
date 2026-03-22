@@ -1,3 +1,19 @@
+/**
+ * @module AdminDashboardPage
+ *
+ * Admin dashboard — analytics overview with commission breakdown.
+ *
+ * Auth: requires admin role (redirects to "/" if not authenticated).
+ * SSR: initial dashboard data (30-day default) loaded server-side.
+ *
+ * Features:
+ * - KPI cards (orders, revenue, commission, users, conversion, AI search usage)
+ * - Per-merchant commission table with totals
+ * - Time range selector (today, 7d, 30d, custom dates)
+ * - Client-side data refresh without full page reload
+ * - Error feedback via `role="alert"` banner
+ */
+
 import { useState } from "react";
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { buildPageMeta } from "@ecommerce/shared";

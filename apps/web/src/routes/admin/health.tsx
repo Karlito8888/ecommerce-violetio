@@ -1,3 +1,20 @@
+/**
+ * @module AdminHealthPage
+ *
+ * Admin route for platform health monitoring and error tracking.
+ *
+ * Auth: requires admin role (redirects to "/" if not authenticated).
+ * SSR: initial health data loaded server-side.
+ *
+ * Displays service status (Supabase, Violet, Stripe), error metrics,
+ * top error types bar chart, recent error log, and alert rule configuration.
+ *
+ * Accessibility features:
+ * - `scope="col"` on table headers for screen reader cell-header association (WCAG 1.3.1)
+ * - `aria-label` on status dots for color-blind accessibility
+ * - `page-wrap` for consistent layout
+ */
+
 import { useState } from "react";
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { buildPageMeta } from "@ecommerce/shared";
@@ -115,18 +132,20 @@ function TopErrorTypes({ errors }: { errors: ErrorTypeCount[] }) {
   );
 }
 
+/** Displays recent platform errors in a table with timestamp, source, type, and message. */
 function RecentErrorsTable({ errors }: { errors: RecentError[] }) {
   if (errors.length === 0) {
     return <p className="admin-health__empty">No recent errors.</p>;
   }
   return (
     <table className="admin-health__table">
+      {/* Table uses scope="col" on headers for screen reader cell-header association (WCAG 1.3.1) */}
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Source</th>
-          <th>Type</th>
-          <th>Message</th>
+          <th scope="col">Time</th>
+          <th scope="col">Source</th>
+          <th scope="col">Type</th>
+          <th scope="col">Message</th>
         </tr>
       </thead>
       <tbody>
@@ -143,16 +162,18 @@ function RecentErrorsTable({ errors }: { errors: RecentError[] }) {
   );
 }
 
+/** Displays configured alert rules with their thresholds, windows, and trigger history. */
 function AlertRulesTable({ rules }: { rules: AlertRule[] }) {
   return (
     <table className="admin-health__table">
+      {/* Table uses scope="col" on headers for screen reader cell-header association (WCAG 1.3.1) */}
       <thead>
         <tr>
-          <th>Rule</th>
-          <th>Threshold</th>
-          <th>Window</th>
-          <th>Enabled</th>
-          <th>Last Triggered</th>
+          <th scope="col">Rule</th>
+          <th scope="col">Threshold</th>
+          <th scope="col">Window</th>
+          <th scope="col">Enabled</th>
+          <th scope="col">Last Triggered</th>
         </tr>
       </thead>
       <tbody>
@@ -211,7 +232,8 @@ function AdminHealthPage() {
   const { metrics, alertRules, recentErrors } = healthData;
 
   return (
-    <div className="admin-health">
+    // {/* page-wrap ensures consistent max-width and horizontal padding across all pages */}
+    <div className="page-wrap admin-health">
       <Link to="/admin" className="admin-health__back">
         &larr; Back to Dashboard
       </Link>

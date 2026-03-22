@@ -1,3 +1,13 @@
+/**
+ * FAQ / Help Center Page — Search, categories, and contact CTA
+ *
+ * Tokens used: --text-3xl, --text-xl, --text-lg, --text-base,
+ *   --color-text, --color-text-secondary, --color-accent, --color-surface,
+ *   --color-sand, --space-*, --radius-*
+ * Responsive: none (max-width constrained by layout)
+ * Dark theme: yes, inherits via semantic token overrides in tokens.css
+ */
+
 /* ─── FAQ / Help Center Page ─── */
 
 .faq-page {
@@ -59,10 +69,13 @@
   color: var(--color-text-secondary);
 }
 
-.faq-search__input:focus {
+/* Focus ring uses :focus-visible to only show for keyboard navigation.
+   Gold-tinted ring matches the brand accent color with sufficient contrast
+   for WCAG 2.1 Focus Appearance (SC 2.4.11). */
+.faq-search__input:focus-visible {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 3px rgba(201, 169, 110, 0.25);
 }
 
 /* ─── Categories ─── */

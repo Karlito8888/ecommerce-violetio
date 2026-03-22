@@ -35,9 +35,48 @@
   --color-error: #b54a4a;
   --color-info: #4a6a8a;
 
+  /* ── Semantic Text Colors ──
+   * Decouple text color usage from specific palette values so dark theme
+   * overrides only need to change these aliases, not every rule. */
+  --color-text: var(--color-charcoal);
+  --color-text-secondary: var(--color-steel);
+  --color-text-muted: var(--color-silver);
+
+  /* ── Accent Color ──
+   * Primary brand gold alias — used across interactive elements, links,
+   * and highlights. Single point of change if the brand accent evolves. */
+  --color-accent: var(--color-gold);
+
+  /* ── Gold Dark Variant ──
+   * Darker gold for hover/active states on gold elements.
+   * Maps to amber which provides sufficient contrast shift on hover. */
+  --color-gold-dark: var(--color-amber);
+
+  /* ── Surface Colors ──
+   * Surface hierarchy for layered UI: base < card < elevated.
+   * Critical for cookie consent banner, modals, and dropdowns. */
+  --color-surface: var(--color-ivory);
+  --surface-card: var(--surface-elevated);
+
   /* ── Typography ── */
   --font-display: "Cormorant Garamond", "Georgia", "Times New Roman", serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Heading font alias — some components reference --font-heading
+     instead of --font-display. Both resolve to the same display face. */
+  --font-heading: var(--font-display);
+
+  /* ── Typography Scale ──
+   * Text size scale for consistent typography across components.
+   * Uses rem units for accessibility (respects user font-size preferences). */
+  --text-xs: 0.75rem; /* 12px - Fine print, badges */
+  --text-sm: 0.875rem; /* 14px - Labels, captions */
+  --text-base: 1rem; /* 16px - Body text */
+  --text-lg: 1.125rem; /* 18px - Emphasized body */
+  --text-xl: 1.25rem; /* 20px - Section headers */
+  --text-2xl: 1.5rem; /* 24px - Page subtitles */
+  --text-3xl: 1.875rem; /* 30px - Page titles */
+  --text-4xl: 2.25rem; /* 36px - Hero titles */
 
   /* ── Spacing (4px base scale) ── */
   --space-1: 0.25rem;
@@ -86,6 +125,9 @@
   --z-modal: 500;
   --z-toast: 600;
 
+  /* Cookie consent banner sits above all content but below system dialogs */
+  --z-cookie-banner: 900;
+
   /* ── Composite Surfaces (themeable transparency layers) ── */
   --surface-frosted: rgba(250, 250, 248, 0.84);
   --surface-elevated: rgba(250, 250, 248, 0.9);
@@ -119,6 +161,17 @@
   --color-steel: #d5cec6;
   --color-silver: #b8a28f;
   --color-midnight: #fafaf8;
+
+  /* Semantic text colors resolve through the base palette overrides above,
+     but we re-declare them here for clarity and to guarantee correct values. */
+  --color-text: var(--color-charcoal);
+  --color-text-secondary: var(--color-steel);
+  --color-text-muted: var(--color-silver);
+
+  /* Surface aliases follow the inverted base */
+  --color-surface: var(--color-ivory);
+  --surface-card: var(--surface-elevated);
+
   --surface-frosted: rgba(44, 44, 44, 0.84);
   --surface-elevated: rgba(44, 44, 44, 0.9);
   --surface-glass: rgba(44, 44, 44, 0.74);

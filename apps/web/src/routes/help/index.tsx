@@ -1,3 +1,18 @@
+/**
+ * @module HelpPage
+ *
+ * Public FAQ & Help Center page with client-side search.
+ *
+ * SSR for SEO: FAQ items fetched server-side (Supabase RLS filters unpublished items).
+ * Client-side debounced search filters questions and answers without server round-trips.
+ * FAQPage JSON-LD structured data enables Google rich results.
+ *
+ * Accessibility features:
+ * - `aria-live="polite"` region announces search result count to screen readers
+ * - `aria-labelledby` on category sections for navigation
+ * - Search input has `aria-label` for screen readers
+ */
+
 import { useState, useMemo, useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildPageMeta, buildBreadcrumbJsonLd, stripMarkdownSyntax } from "@ecommerce/shared";
@@ -83,6 +98,8 @@ function HelpPage() {
     [categories, debouncedQuery],
   );
 
+  const filteredItems = useMemo(() => filtered.flatMap((c) => c.items), [filtered]);
+
   return (
     <div className="page-wrap faq-page">
       <header className="faq-page__header">
@@ -93,6 +110,12 @@ function HelpPage() {
       </header>
 
       <FaqSearch value={searchQuery} onChange={setSearchQuery} />
+
+      {/* aria-live region announces search result count to screen readers after debounced filtering */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {debouncedQuery &&
+          `${filteredItems.length} résultat${filteredItems.length !== 1 ? "s" : ""} trouvé${filteredItems.length !== 1 ? "s" : ""}`}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="faq-page__empty">

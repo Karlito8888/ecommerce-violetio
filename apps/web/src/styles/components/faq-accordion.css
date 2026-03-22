@@ -1,3 +1,12 @@
+/**
+ * FAQ Accordion — Expandable Q&A items using <details>/<summary>
+ *
+ * Tokens used: --color-text, --color-text-secondary, --color-accent,
+ *   --color-sand, --text-base, --text-sm, --space-*, --radius-md
+ * Responsive: none (fluid within parent container)
+ * Dark theme: yes, inherits via semantic token overrides in tokens.css
+ */
+
 /* ─── FAQ Accordion ─── */
 
 .faq-accordion {

@@ -1,3 +1,15 @@
+/**
+ * @module CommissionTable
+ *
+ * Displays per-merchant commission breakdown with totals row.
+ *
+ * Used on the admin dashboard to show revenue attribution across Violet.io merchants.
+ * All monetary values arrive as cents and are formatted via `formatPrice`.
+ *
+ * Accessibility features:
+ * - `scope="col"` on table headers for screen reader cell-header association (WCAG 1.3.1)
+ */
+
 import { formatPrice } from "@ecommerce/shared";
 import type { CommissionSummary } from "@ecommerce/shared";
 
@@ -5,6 +17,7 @@ interface CommissionTableProps {
   data: CommissionSummary[];
 }
 
+/** Renders a commission breakdown table with per-merchant rows and a totals footer. */
 export default function CommissionTable({ data }: CommissionTableProps) {
   const totals = data.reduce(
     (acc, row) => ({
@@ -25,14 +38,15 @@ export default function CommissionTable({ data }: CommissionTableProps) {
 
   return (
     <div className="commission-table">
+      {/* Table uses scope="col" on headers for screen reader cell-header association (WCAG 1.3.1) */}
       <table className="commission-table__table">
         <thead>
           <tr className="commission-table__header">
-            <th>Merchant</th>
-            <th>Orders</th>
-            <th>Gross Subtotal</th>
-            <th>Rate</th>
-            <th>Commission</th>
+            <th scope="col">Merchant</th>
+            <th scope="col">Orders</th>
+            <th scope="col">Gross Subtotal</th>
+            <th scope="col">Rate</th>
+            <th scope="col">Commission</th>
           </tr>
         </thead>
         <tbody>

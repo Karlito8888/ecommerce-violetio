@@ -1,3 +1,8 @@
+/**
+ * Admin support inquiry client — CRUD operations for the back-office
+ * support management UI. All functions require an authenticated admin
+ * Supabase client (RLS policies enforce admin-only access).
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
@@ -7,23 +12,51 @@ import type {
   LinkedOrderInfo,
 } from "../types/admin-support.types.js";
 
-/** Map DB row (snake_case) to SupportInquiry (camelCase). */
-function mapRow(row: Record<string, unknown>): SupportInquiry {
+/**
+ * Raw database row shape for support_inquiries table.
+ * Matches the Supabase PostgREST response before camelCase mapping.
+ * Using a typed interface instead of Record<string, unknown> catches
+ * schema drift at compile time rather than silently casting with `as`.
+ */
+interface SupportInquiryRow {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  order_id: string | null;
+  status: string;
+  internal_notes: string | null;
+}
+
+/**
+ * Map a raw DB row (snake_case) to a SupportInquiry (camelCase).
+ * Centralizes the transformation so callers always get a consistent shape.
+ */
+function mapRow(row: SupportInquiryRow): SupportInquiry {
   return {
-    id: row.id as string,
-    name: row.name as string,
-    email: row.email as string,
+    id: row.id,
+    name: row.name,
+    email: row.email,
     subject: row.subject as SupportInquiry["subject"],
-    message: row.message as string,
-    orderId: (row.order_id as string) ?? null,
+    message: row.message,
+    orderId: row.order_id ?? null,
     status: row.status as SupportInquiryStatus,
-    internalNotes: (row.internal_notes as string) ?? null,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    internalNotes: row.internal_notes ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
-/** Fetch all support inquiries with optional filters, ordered newest first. */
+/**
+ * Fetch all support inquiries with optional filters, ordered newest first.
+ *
+ * @param client - Admin-authenticated Supabase client
+ * @param filters - Optional status/subject filters
+ * @returns Array of mapped SupportInquiry objects
+ */
 export async function getSupportInquiries(
   client: SupabaseClient,
   filters?: SupportInquiryFilters,
@@ -45,7 +78,13 @@ export async function getSupportInquiries(
   return (data ?? []).map(mapRow);
 }
 
-/** Fetch a single inquiry by ID. Returns null if not found. */
+/**
+ * Fetch a single inquiry by ID. Returns null if not found.
+ *
+ * @param client - Admin-authenticated Supabase client
+ * @param inquiryId - UUID of the inquiry
+ * @returns The mapped inquiry, or null if not found
+ */
 export async function getSupportInquiry(
   client: SupabaseClient,
   inquiryId: string,
@@ -64,7 +103,14 @@ export async function getSupportInquiry(
   return mapRow(data);
 }
 
-/** Update inquiry status. */
+/**
+ * Update inquiry status.
+ *
+ * @param client - Admin-authenticated Supabase client
+ * @param inquiryId - UUID of the inquiry to update
+ * @param status - New status value
+ * @returns true if the update succeeded
+ */
 export async function updateInquiryStatus(
   client: SupabaseClient,
   inquiryId: string,
@@ -74,7 +120,14 @@ export async function updateInquiryStatus(
   return !error;
 }
 
-/** Add/replace internal notes on an inquiry. */
+/**
+ * Add/replace internal notes on an inquiry.
+ *
+ * @param client - Admin-authenticated Supabase client
+ * @param inquiryId - UUID of the inquiry
+ * @param notes - New internal notes content
+ * @returns true if the update succeeded
+ */
 export async function updateInternalNotes(
   client: SupabaseClient,
   inquiryId: string,
@@ -87,7 +140,14 @@ export async function updateInternalNotes(
   return !error;
 }
 
-/** Fetch linked order info by order_id (Violet order ID string). */
+/**
+ * Fetch linked order info by order_id (Violet order ID string).
+ * Used to display order context alongside a support inquiry.
+ *
+ * @param client - Admin-authenticated Supabase client
+ * @param orderId - Violet order ID to look up
+ * @returns Linked order summary, or null if not found
+ */
 export async function getLinkedOrder(
   client: SupabaseClient,
   orderId: string,

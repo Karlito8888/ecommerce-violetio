@@ -1,3 +1,15 @@
+/**
+ * @module ContactPage
+ *
+ * Public contact/support form page.
+ *
+ * No SSR data fetching needed — the form is entirely client-side.
+ * Server function handles submission with rate limiting and honeypot spam protection.
+ *
+ * Layout: two-column on desktop (form + info sidebar), single column on mobile.
+ * The sidebar provides quick links to FAQ and return policy guidance.
+ */
+
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { buildPageMeta } from "@ecommerce/shared";
 import ContactForm from "../../components/help/ContactForm";

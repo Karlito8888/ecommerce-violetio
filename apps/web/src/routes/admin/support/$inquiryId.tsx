@@ -1,3 +1,23 @@
+/**
+ * @module AdminSupportDetailPage
+ *
+ * Admin route for viewing and managing a single support inquiry.
+ *
+ * Auth: requires admin role (redirects to "/" if not authenticated).
+ * SSR: inquiry detail and linked order data loaded server-side.
+ *
+ * Features:
+ * - View customer message and metadata (date, email, subject, order ID)
+ * - Update inquiry status (new, in-progress, resolved, closed)
+ * - Add internal notes (not visible to customer)
+ * - Send email reply to customer (auto-advances status from "new" to "in-progress")
+ * - Display linked order details when an order ID is associated
+ *
+ * Accessibility features:
+ * - Feedback messages announced via `role="status"`
+ * - `aria-label` on status select for screen reader context
+ */
+
 import { useState } from "react";
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { buildPageMeta, formatPrice } from "@ecommerce/shared";

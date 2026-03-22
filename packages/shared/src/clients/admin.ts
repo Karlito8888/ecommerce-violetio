@@ -1,8 +1,19 @@
+/**
+ * Admin analytics client — fetches dashboard KPIs and commission data.
+ * Queries the fn_dashboard_metrics_by_range RPC and mv_commission_summary
+ * materialized view in Supabase.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { CommissionSummary, DashboardMetrics, TimeRangeParams } from "../types/admin.types.js";
 
-/** Resolve TimeRangeParams to ISO date strings for SQL function. */
+/**
+ * Resolve a TimeRangeParams union to concrete ISO date strings for SQL functions.
+ *
+ * @param params - The time range selection (preset or custom)
+ * @returns Start and end ISO strings
+ * @throws If custom range is missing customStart/customEnd
+ */
 export function resolveTimeRange(params: TimeRangeParams): {
   start: string;
   end: string;
@@ -35,7 +46,13 @@ export function resolveTimeRange(params: TimeRangeParams): {
   }
 }
 
-/** Fetch dashboard KPIs for a given time range via SQL function. */
+/**
+ * Fetch dashboard KPIs for a given time range via SQL function.
+ *
+ * @param client - Admin-authenticated Supabase client
+ * @param params - Time range to query
+ * @returns Dashboard metrics for the selected period
+ */
 export async function getDashboardMetrics(
   client: SupabaseClient,
   params: TimeRangeParams,
@@ -77,7 +94,12 @@ export async function getDashboardMetrics(
   };
 }
 
-/** Fetch per-merchant commission breakdown from materialized view. */
+/**
+ * Fetch per-merchant commission breakdown from materialized view.
+ *
+ * @param client - Admin-authenticated Supabase client
+ * @returns Array of merchant commission summaries, highest commission first
+ */
 export async function getCommissionSummary(client: SupabaseClient): Promise<CommissionSummary[]> {
   const { data, error } = await client
     .from("mv_commission_summary")
@@ -86,16 +108,32 @@ export async function getCommissionSummary(client: SupabaseClient): Promise<Comm
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
-    merchantName: row.merchant_name,
-    bagCount: Number(row.bag_count) || 0,
-    grossSubtotalCents: Number(row.gross_subtotal_cents) || 0,
-    commissionCents: Number(row.commission_estimate_cents) || 0,
-    commissionRate: Number(row.commission_rate_pct) || 10,
-  }));
+  return (data ?? []).map((row) => {
+    /**
+     * Commission rate fallback. Uses Number.isFinite() instead of || so that
+     * a legitimate 0% rate is not silently replaced with 10%.
+     * - Number(null) = 0 (valid, should be kept)
+     * - Number(undefined) = NaN (missing, should default)
+     * - || would coerce 0 to 10, which is wrong
+     * - ?? would let NaN through, which is also wrong
+     */
+    const rate = Number(row.commission_rate_pct);
+    return {
+      merchantName: row.merchant_name,
+      bagCount: Number(row.bag_count) || 0,
+      grossSubtotalCents: Number(row.gross_subtotal_cents) || 0,
+      commissionCents: Number(row.commission_estimate_cents) || 0,
+      commissionRate: Number.isFinite(rate) ? rate : 10,
+    };
+  });
 }
 
-/** Refresh both materialized views. Requires service role client. */
+/**
+ * Refresh both dashboard materialized views. Requires service role client
+ * since the underlying SQL function uses SECURITY DEFINER.
+ *
+ * @param client - Service-role Supabase client
+ */
 export async function refreshDashboardViews(client: SupabaseClient): Promise<void> {
   const { error } = await client.rpc("refresh_dashboard_views");
   if (error) throw error;

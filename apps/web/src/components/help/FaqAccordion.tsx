@@ -1,3 +1,15 @@
+/**
+ * @module FaqAccordion
+ *
+ * Native HTML `<details>`/`<summary>` accordion for FAQ items.
+ *
+ * Accessibility features:
+ * - Uses semantic `<details>`/`<summary>` elements (keyboard accessible with zero JS)
+ * - `role="region"` + `aria-labelledby` on answer panels for screen reader navigation
+ * - Chevron icon marked `aria-hidden` to avoid redundant announcements
+ * - Markdown answers sanitized with DOMPurify to prevent XSS from CMS content
+ */
+
 import { useMemo } from "react";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";

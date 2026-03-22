@@ -322,3 +322,27 @@ describe("commission calculation", () => {
     expect(commission).toBe(0);
   });
 });
+
+// ── refreshDashboardViews tests ─────────────────────────────
+
+/**
+ * Tests for refreshDashboardViews — calls the refresh_dashboard_views
+ * Postgres RPC to refresh materialized views used by the admin dashboard.
+ * Requires service-role client. Throws on RPC error.
+ */
+describe("refreshDashboardViews", () => {
+  it("calls refresh_dashboard_views RPC", async () => {
+    const { refreshDashboardViews } = await import("@ecommerce/shared");
+    const client = buildRpcMock(null);
+    await refreshDashboardViews(client);
+    expect(client.rpc).toHaveBeenCalledWith("refresh_dashboard_views");
+  });
+
+  it("throws on RPC error", async () => {
+    const { refreshDashboardViews } = await import("@ecommerce/shared");
+    const client = buildRpcMock(null, { message: "Permission denied" });
+    await expect(refreshDashboardViews(client)).rejects.toEqual({
+      message: "Permission denied",
+    });
+  });
+});

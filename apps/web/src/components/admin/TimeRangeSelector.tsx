@@ -1,3 +1,15 @@
+/**
+ * @module TimeRangeSelector
+ *
+ * Time range picker for the admin dashboard. Supports preset ranges
+ * (Today, 7 Days, 30 Days) and a custom date range with date pickers.
+ *
+ * Accessibility features:
+ * - `role="group"` + `aria-label` on button group for screen reader context
+ * - `aria-pressed` on range buttons to indicate active selection
+ * - Custom date inputs wrapped in `<label>` elements for implicit association
+ */
+
 import { useState } from "react";
 import type { TimeRange, TimeRangeParams } from "@ecommerce/shared";
 
@@ -13,6 +25,7 @@ interface TimeRangeSelectorProps {
   onChange: (params: TimeRangeParams) => void;
 }
 
+/** Renders a toggle button group for time range selection with optional custom date pickers. */
 export default function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");

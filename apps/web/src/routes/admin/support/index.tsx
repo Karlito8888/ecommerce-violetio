@@ -1,3 +1,18 @@
+/**
+ * @module AdminSupportPage
+ *
+ * Admin route for managing customer support inquiries.
+ *
+ * Auth: requires admin role (redirects to "/" if not authenticated).
+ * SSR: initial inquiry list fetched server-side, with client-side re-filtering.
+ *
+ * Accessibility features:
+ * - `scope="col"` on table headers for screen reader cell-header association (WCAG 1.3.1)
+ * - `role="link"` + keyboard handlers on table rows for keyboard navigation
+ * - Filter error announced via `role="alert"` with auto-dismiss
+ * - `aria-label` on filter dropdowns
+ */
+
 import { useState } from "react";
 import { createFileRoute, redirect, Link, useNavigate } from "@tanstack/react-router";
 import { buildPageMeta } from "@ecommerce/shared";
@@ -43,12 +58,14 @@ function AdminSupportPage() {
   const [statusFilter, setStatusFilter] = useState<SupportInquiryStatus | "">("");
   const [subjectFilter, setSubjectFilter] = useState<SupportSubject | "">("");
   const [loading, setLoading] = useState(false);
+  const [filterError, setFilterError] = useState<string | null>(null);
 
   async function applyFilters(
     newStatus: SupportInquiryStatus | "",
     newSubject: SupportSubject | "",
   ) {
     setLoading(true);
+    setFilterError(null);
     try {
       const filters: SupportInquiryFilters = {};
       if (newStatus) filters.status = newStatus;
@@ -56,7 +73,8 @@ function AdminSupportPage() {
       const result = await getAdminSupportListFn({ data: { filters } });
       setInquiries(result.inquiries);
     } catch {
-      // Keep existing data on error
+      setFilterError("Erreur lors du filtrage. Les données affichées peuvent être obsolètes.");
+      setTimeout(() => setFilterError(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -115,6 +133,11 @@ function AdminSupportPage() {
             ))}
           </select>
         </div>
+        {filterError && (
+          <div className="admin-support__filter-error" role="alert">
+            {filterError}
+          </div>
+        )}
       </header>
 
       <section className={`admin-support__list${loading ? " admin-support__list--loading" : ""}`}>
@@ -122,15 +145,16 @@ function AdminSupportPage() {
           <p className="inquiry-list__empty">No inquiries found.</p>
         ) : (
           <div className="inquiry-list">
+            {/* Table uses scope="col" on headers for screen reader cell-header association (WCAG 1.3.1) */}
             <table className="inquiry-list__table">
               <thead>
                 <tr className="inquiry-list__header">
-                  <th>Date</th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Subject</th>
-                  <th>Status</th>
-                  <th>Order ID</th>
+                  <th scope="col">Date</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Email</th>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Order ID</th>
                 </tr>
               </thead>
               <tbody>

@@ -1,3 +1,9 @@
+/**
+ * @module ContactForm
+ *
+ * Multi-field support inquiry form with accessibility-first design and bot protection.
+ */
+
 import { useState } from "react";
 import { SUPPORT_SUBJECTS } from "@ecommerce/shared";
 import type { SupportSubject } from "@ecommerce/shared";
@@ -23,6 +29,16 @@ function validateForm(fields: { name: string; email: string; message: string }):
   return errors;
 }
 
+/**
+ * ContactForm — Multi-field support inquiry form with accessibility-first design.
+ *
+ * Accessibility features:
+ * - `aria-invalid` on fields with validation errors (screen readers announce error state)
+ * - `aria-describedby` linking inputs to error messages
+ * - `role="alert"` on error paragraphs for immediate announcement
+ * - Honeypot field hidden from assistive tech via `aria-hidden` + `tabIndex={-1}`
+ * - Success state announced via `role="status"`
+ */
 export default function ContactForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -123,6 +139,7 @@ export default function ContactForm() {
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
+          aria-invalid={!!errors.name}
           aria-describedby={errors.name ? "contact-name-error" : undefined}
         />
         {errors.name && (
@@ -143,6 +160,7 @@ export default function ContactForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          aria-invalid={!!errors.email}
           aria-describedby={errors.email ? "contact-email-error" : undefined}
         />
         {errors.email && (
@@ -196,6 +214,7 @@ export default function ContactForm() {
           maxLength={2000}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          aria-invalid={!!errors.message}
           aria-describedby={
             errors.message ? "contact-message-error contact-message-count" : "contact-message-count"
           }
