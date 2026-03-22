@@ -14,6 +14,7 @@ import { ToastProvider } from "../components/ui/Toast";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useTrackingListener } from "../hooks/useTrackingListener";
 import CartDrawer from "../features/cart/CartDrawer";
+import CookieConsentBanner from "../components/legal/CookieConsentBanner";
 import {
   getCartFn,
   getCartCookieFn,
@@ -118,6 +119,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               <Header />
               <main id="main-content">{children}</main>
               <Footer />
+              <CookieConsentBanner />
             </AppBannerContext.Provider>
             {/* CartDrawer mounted inside CartProvider — always available app-wide */}
             <CartDrawer

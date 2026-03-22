@@ -118,6 +118,20 @@ export default function ProfileScreen() {
         </ThemedText>
       </Pressable>
 
+      {/* ── Legal (visible to all users) ── */}
+      <ThemedText type="default" style={styles.sectionHeader}>
+        Legal
+      </ThemedText>
+      <Pressable onPress={() => router.push("/legal/privacy" as never)} style={styles.trackingLink}>
+        <ThemedText type="default">Privacy Policy</ThemedText>
+      </Pressable>
+      <Pressable onPress={() => router.push("/legal/terms" as never)} style={styles.trackingLink}>
+        <ThemedText type="default">Terms of Service</ThemedText>
+      </Pressable>
+      <Pressable onPress={() => router.push("/legal/cookies" as never)} style={styles.trackingLink}>
+        <ThemedText type="default">Cookie Policy</ThemedText>
+      </Pressable>
+
       {isAnonymous ? (
         <ThemedText themeColor="textSecondary" style={styles.signInHint}>
           Sign in to access account settings.

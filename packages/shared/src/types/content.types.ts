@@ -1,4 +1,4 @@
-export type ContentType = "guide" | "comparison" | "review";
+export type ContentType = "guide" | "comparison" | "review" | "legal";
 export type ContentStatus = "draft" | "published" | "archived";
 
 /**

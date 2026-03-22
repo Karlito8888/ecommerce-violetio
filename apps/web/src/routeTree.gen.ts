@@ -21,6 +21,7 @@ import { Route as CartIndexRouteImport } from './routes/cart/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
 import { Route as OrderLookupRouteImport } from './routes/order/lookup'
+import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
 import { Route as HelpContactRouteImport } from './routes/help/contact'
 import { Route as ContentSlugRouteImport } from './routes/content/$slug'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
@@ -93,6 +94,11 @@ const ProductsProductIdRoute = ProductsProductIdRouteImport.update({
 const OrderLookupRoute = OrderLookupRouteImport.update({
   id: '/order/lookup',
   path: '/order/lookup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalSlugRoute = LegalSlugRouteImport.update({
+  id: '/legal/$slug',
+  path: '/legal/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpContactRoute = HelpContactRouteImport.update({
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/auth/verify': typeof AuthVerifyRoute
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -201,6 +208,7 @@ export interface FileRoutesByTo {
   '/auth/verify': typeof AuthVerifyRoute
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/admin': typeof AdminIndexRoute
@@ -229,6 +237,7 @@ export interface FileRoutesById {
   '/auth/verify': typeof AuthVerifyRoute
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -258,6 +267,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/content/$slug'
     | '/help/contact'
+    | '/legal/$slug'
     | '/order/lookup'
     | '/products/$productId'
     | '/admin/'
@@ -285,6 +295,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/content/$slug'
     | '/help/contact'
+    | '/legal/$slug'
     | '/order/lookup'
     | '/products/$productId'
     | '/admin'
@@ -312,6 +323,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/content/$slug'
     | '/help/contact'
+    | '/legal/$slug'
     | '/order/lookup'
     | '/products/$productId'
     | '/admin/'
@@ -338,6 +350,7 @@ export interface RootRouteChildren {
   AuthVerifyRoute: typeof AuthVerifyRoute
   ContentSlugRoute: typeof ContentSlugRoute
   HelpContactRoute: typeof HelpContactRoute
+  LegalSlugRoute: typeof LegalSlugRoute
   OrderLookupRoute: typeof OrderLookupRoute
   ProductsProductIdRoute: typeof ProductsProductIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -436,6 +449,13 @@ declare module '@tanstack/react-router' {
       path: '/order/lookup'
       fullPath: '/order/lookup'
       preLoaderRoute: typeof OrderLookupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/$slug': {
+      id: '/legal/$slug'
+      path: '/legal/$slug'
+      fullPath: '/legal/$slug'
+      preLoaderRoute: typeof LegalSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help/contact': {
@@ -560,6 +580,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyRoute: AuthVerifyRoute,
   ContentSlugRoute: ContentSlugRoute,
   HelpContactRoute: HelpContactRoute,
+  LegalSlugRoute: LegalSlugRoute,
   OrderLookupRoute: OrderLookupRoute,
   ProductsProductIdRoute: ProductsProductIdRoute,
   AdminIndexRoute: AdminIndexRoute,

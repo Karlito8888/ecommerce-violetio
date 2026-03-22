@@ -97,6 +97,17 @@ describe("CONTENT_FIELD_GUIDE", () => {
 /* ─── getRelatedContent tests ─── */
 
 function buildContentMockClient(rows: Record<string, unknown>[], error: unknown = null) {
+  /** Supabase query builders are thenable AND chainable — mock both behaviors. */
+  function makeThenableResult() {
+    const resolved = { data: error ? null : rows, error, count: rows.length };
+    return {
+      then: (resolve: (v: unknown) => void, reject?: (v: unknown) => void) =>
+        Promise.resolve(resolved).then(resolve, reject),
+      eq: () => makeThenableResult(),
+      neq: () => makeThenableResult(),
+    };
+  }
+
   return {
     from: (_table: string) => ({
       select: (_cols: string, _opts?: Record<string, unknown>) => ({
@@ -110,8 +121,7 @@ function buildContentMockClient(rows: Record<string, unknown>[], error: unknown 
           lte: (_col3: string, _val3: string) => ({
             order: (_col4: string, _opts2?: Record<string, unknown>) => ({
               order: (_col5: string, _opts3?: Record<string, unknown>) => ({
-                range: (_from: number, _to: number) =>
-                  Promise.resolve({ data: error ? null : rows, error, count: rows.length }),
+                range: (_from: number, _to: number) => makeThenableResult(),
               }),
             }),
           }),

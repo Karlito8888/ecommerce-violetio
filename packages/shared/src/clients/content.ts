@@ -147,6 +147,9 @@ export async function getContentPages(
 
   if (type) {
     query = query.eq("type", type);
+  } else {
+    // Exclude system content types (e.g. 'legal') from unfiltered editorial listings
+    query = query.neq("type", "legal");
   }
 
   const { data, error, count } = await query;

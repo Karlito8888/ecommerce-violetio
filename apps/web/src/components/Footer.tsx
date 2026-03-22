@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-const FOOTER_SECTIONS: { heading: string; links: { to: string; label: string }[] }[] = [
+export const FOOTER_SECTIONS: { heading: string; links: { to: string; label: string }[] }[] = [
   {
     heading: "Shop",
     links: [
@@ -20,15 +20,16 @@ const FOOTER_SECTIONS: { heading: string; links: { to: string; label: string }[]
   {
     heading: "Support",
     links: [
-      { to: "/", label: "FAQ" },
-      { to: "/", label: "Returns & Exchanges" },
+      { to: "/help", label: "FAQ" },
+      { to: "/help/contact", label: "Contact" },
     ],
   },
   {
     heading: "Legal",
     links: [
-      { to: "/", label: "Privacy Policy" },
-      { to: "/", label: "Terms of Service" },
+      { to: "/legal/privacy", label: "Privacy Policy" },
+      { to: "/legal/terms", label: "Terms of Service" },
+      { to: "/legal/cookies", label: "Cookie Preferences" },
     ],
   },
 ];

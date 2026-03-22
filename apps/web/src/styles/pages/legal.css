@@ -1,0 +1,135 @@
+/* ─── Legal Pages ───
+ * BEM block: .legal-page
+ * Simpler layout than editorial content — no featured image, no author, no share.
+ */
+
+.legal-page {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: var(--space-8) 0 var(--space-16);
+}
+
+/* ── Header ── */
+
+.legal-page__header {
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.legal-page__title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--color-ink);
+}
+
+.legal-page__updated {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-steel);
+}
+
+/* ── Body ── */
+
+.legal-page__body {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--color-charcoal);
+}
+
+.legal-page__body h2 {
+  margin: var(--space-8) 0 var(--space-4);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.legal-page__body h3 {
+  margin: var(--space-6) 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.legal-page__body p {
+  margin: 0 0 var(--space-4);
+}
+
+.legal-page__body ul,
+.legal-page__body ol {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.legal-page__body li {
+  margin-bottom: var(--space-2);
+}
+
+.legal-page__body a {
+  color: var(--color-gold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.legal-page__body a:hover {
+  color: var(--color-ink);
+}
+
+.legal-page__body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-4) 0 var(--space-6);
+  font-size: 0.875rem;
+}
+
+.legal-page__body th,
+.legal-page__body td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.legal-page__body th {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.legal-page__body strong {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* ── Error / Not Found states ── */
+
+.legal-page--not-found,
+.legal-page--error {
+  text-align: center;
+  padding: var(--space-16) 0;
+}
+
+.legal-page--not-found h2,
+.legal-page--error h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--color-ink);
+  margin-bottom: var(--space-3);
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 600px) {
+  .legal-page {
+    padding: var(--space-6) 0 var(--space-10);
+  }
+
+  .legal-page__body table {
+    display: block;
+    overflow-x: auto;
+  }
+}

@@ -1,0 +1,107 @@
+/* ─── Cookie Consent Banner ───
+ * BEM block: .cookie-consent
+ * GDPR compliant — equal weight buttons (no dark patterns per UX spec).
+ */
+
+.cookie-consent {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  background-color: var(--surface-card);
+  border-top: 1px solid var(--border-subtle);
+  box-shadow: 0 -2px 12px rgb(0 0 0 / 0.08);
+  animation: cookie-consent-slide-up 0.3s ease-out;
+}
+
+@keyframes cookie-consent-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.cookie-consent__inner {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.cookie-consent__text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-charcoal);
+  flex: 1;
+}
+
+.cookie-consent__link {
+  color: var(--color-gold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cookie-consent__link:hover {
+  color: var(--color-ink);
+}
+
+.cookie-consent__actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* Both buttons identical visual weight — anti-dark-pattern requirement */
+.cookie-consent__btn {
+  padding: var(--space-2) var(--space-5);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+  min-width: 5rem;
+  text-align: center;
+}
+
+.cookie-consent__btn:hover {
+  background-color: var(--color-ink);
+  color: var(--color-ivory);
+}
+
+.cookie-consent__btn:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* ── Mobile: stack layout ── */
+
+@media (max-width: 600px) {
+  .cookie-consent__inner {
+    flex-direction: column;
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .cookie-consent__actions {
+    width: 100%;
+  }
+
+  .cookie-consent__btn {
+    flex: 1;
+  }
+}
