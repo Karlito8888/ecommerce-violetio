@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useUser } from "../hooks/useUser";
+import { useCartContext } from "../contexts/CartContext";
+import { useCartQuery, getCartItemCount } from "@ecommerce/shared";
+import type { CartFetchFn } from "@ecommerce/shared";
+import { getCartFn } from "../server/cartActions";
 import ThemeToggle from "./ThemeToggle";
 import SearchBar from "./search/SearchBar";
+
+const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
 
 /**
  * Header category navigation links.
@@ -121,24 +127,7 @@ export default function Header() {
               </svg>
             </Link>
           )}
-          {/* TODO(Epic-4): Change to="/cart" when cart route exists */}
-          <Link to="/" className="site-header__cart" aria-label="Cart">
-            <svg
-              viewBox="0 0 24 24"
-              width="24"
-              height="24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-              <path d="M3 6h18" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-          </Link>
+          <CartButton />
           <ThemeToggle />
         </nav>
 
@@ -196,5 +185,41 @@ export default function Header() {
         ))}
       </nav>
     </header>
+  );
+}
+
+/**
+ * Cart icon button with item count badge.
+ * Opens the cart drawer on click instead of navigating.
+ */
+function CartButton() {
+  const { violetCartId, openDrawer } = useCartContext();
+  const { data: cartResponse } = useCartQuery(violetCartId, fetchCart);
+  const itemCount = getCartItemCount(cartResponse?.data ?? null);
+
+  return (
+    <button
+      type="button"
+      className="site-header__cart"
+      aria-label={itemCount > 0 ? `Cart (${itemCount} items)` : "Cart"}
+      onClick={openDrawer}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="24"
+        height="24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+        <path d="M3 6h18" />
+        <path d="M16 10a4 4 0 0 1-8 0" />
+      </svg>
+      {itemCount > 0 && <span className="site-header__cart-badge">{itemCount}</span>}
+    </button>
   );
 }

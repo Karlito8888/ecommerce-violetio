@@ -379,7 +379,7 @@ Revenue-critical path. Test every scenario meticulously.
 
 - [x] **Web:** Click "Add to Cart" on a product -- cart created via Violet API *(Tested: Unicorn Hoodie, product 59398)*
 - [x] **Web:** Cart drawer/panel slides in from right side *(Shopping Bag drawer opens correctly)*
-- [ ] **Web:** Cart badge in header updates to show item count *(P2 bug: Cart icon is a `<Link to="/">` — no badge, navigates to home instead of opening drawer)*
+- [x] **Web:** Cart badge in header updates to show item count *(Fixed: converted Link to button with badge + openDrawer. Badge shows "2", aria-label "Cart (2 items)")*
 - [x] **Web:** Add same product again -- quantity increases (not duplicate line item) *(Confirmed: qty went from 1 to 3)*
 - [x] **Web:** Click +/- to update quantity -- total updates *(Fixed: was using catalog skuId instead of OrderSku id for Violet API — 5→4→5 confirmed)*
 - [x] **Web:** Click remove (X) -- item removed from cart *(Remove button works, item disappears)*
