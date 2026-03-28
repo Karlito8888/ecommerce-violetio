@@ -29,10 +29,13 @@ import type {
   ShippingAddressInput,
   ShippingMethodsAvailable,
   SetShippingMethodInput,
+  ShippingInfo,
+  CountryOption,
   VioletOfferResponse,
   VioletSkuResponse,
   VioletAlbumResponse,
 } from "../types/index.js";
+import { getDeliveryEstimate, countryFlag } from "../utils/currency.js";
 import type { SupplierAdapter } from "./supplierAdapter.js";
 import { VioletTokenManager } from "../clients/violetAuth.js";
 import { VIOLET_API_BASE } from "../utils/constants.js";
@@ -142,13 +145,17 @@ export class VioletAdapter implements SupplierAdapter {
    * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
    * @see https://docs.violet.io/concepts/pagination
    */
-  async getProducts(params: ProductQuery): Promise<ApiResponse<PaginatedResult<Product>>> {
+  async getProducts(
+    params: ProductQuery,
+    countryCode?: string,
+  ): Promise<ApiResponse<PaginatedResult<Product>>> {
     const page = (params.page ?? 1) - 1; // Internal 1-based → Violet 0-based
     const size = params.pageSize ?? 20;
 
     const queryParams = new URLSearchParams({
       page: String(page),
       size: String(size),
+      include: "shipping",
     });
 
     /**
@@ -225,12 +232,12 @@ export class VioletAdapter implements SupplierAdapter {
      * for each connected merchant and paginate client-side.
      */
     if (violet.content.length === 0 && violet.total_elements === 0) {
-      return this.getProductsFromMerchants(params);
+      return this.getProductsFromMerchants(params, countryCode);
     }
 
     return {
       data: {
-        data: violet.content.map((offer) => this.transformOffer(offer)),
+        data: violet.content.map((offer) => this.transformOffer(offer, countryCode)),
         total: violet.total_elements,
         page: violet.number + 1, // Violet 0-based → internal 1-based
         pageSize: violet.size,
@@ -253,6 +260,7 @@ export class VioletAdapter implements SupplierAdapter {
    */
   private async getProductsFromMerchants(
     params: ProductQuery,
+    countryCode?: string,
   ): Promise<ApiResponse<PaginatedResult<Product>>> {
     const page = params.page ?? 1;
     const size = params.pageSize ?? 20;
@@ -275,7 +283,7 @@ export class VioletAdapter implements SupplierAdapter {
     // Step 2: Fetch offers from all merchants in parallel
     const offerPromises = merchantIds.map(async (merchantId) => {
       const res = await this.fetchWithRetry(
-        `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100`,
+        `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100&include=shipping`,
         { method: "GET" },
       );
       if (res.error || !res.data) return [];
@@ -302,7 +310,7 @@ export class VioletAdapter implements SupplierAdapter {
     for (const raw of filteredRaw) {
       const parsed = violetOfferSchema.safeParse(raw);
       if (parsed.success) {
-        products.push(this.transformOffer(parsed.data));
+        products.push(this.transformOffer(parsed.data, countryCode));
       }
     }
 
@@ -346,10 +354,11 @@ export class VioletAdapter implements SupplierAdapter {
    *
    * @param id - Violet offer ID (numeric, passed as string for our internal convention)
    */
-  async getProduct(id: string): Promise<ApiResponse<Product>> {
-    const result = await this.fetchWithRetry(`${this.apiBase}/catalog/offers/${id}`, {
-      method: "GET",
-    });
+  async getProduct(id: string, countryCode?: string): Promise<ApiResponse<Product>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/catalog/offers/${id}?include=shipping`,
+      { method: "GET" },
+    );
 
     if (result.error) return { data: null, error: result.error };
 
@@ -361,7 +370,78 @@ export class VioletAdapter implements SupplierAdapter {
       };
     }
 
-    return { data: this.transformOffer(parsed.data), error: null };
+    return { data: this.transformOffer(parsed.data, countryCode), error: null };
+  }
+
+  /**
+   * Aggregate all available shipping countries across Shopify offers.
+   * Used by the CountrySelector to show countries with deliverable products.
+   *
+   * NOTE: Fetches up to 200 offers. For catalogs with 200+ offers, country counts
+   * may be undercounted. Consider caching via Supabase edge function if this
+   * becomes a problem.
+   */
+  async getAvailableCountries(): Promise<ApiResponse<CountryOption[]>> {
+    // Fetch a large batch of offers with shipping data
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/catalog/offers/search?page=0&size=200&include=shipping`,
+      { method: "POST", body: JSON.stringify({}) },
+    );
+
+    if (result.error) return { data: null, error: result.error };
+
+    const parsed = violetPaginatedOffersSchema.safeParse(result.data);
+    if (!parsed.success) {
+      return {
+        data: null,
+        error: { code: "VIOLET.VALIDATION_ERROR", message: parsed.error.message },
+      };
+    }
+
+    // If search returned empty, merchant fallback doesn't include shipping data
+    const offers = parsed.data.content;
+    if (offers.length === 0) {
+      return { data: [], error: null };
+    }
+
+    // Aggregate countries from all Shopify shipping zones
+    const countryMap = new Map<string, { name: string; count: number }>();
+    for (const offer of offers) {
+      if (offer.source !== "SHOPIFY" || !offer.shipping) continue;
+      for (const zone of offer.shipping.shipping_zones ?? []) {
+        const existing = countryMap.get(zone.country_code);
+        if (existing) {
+          existing.count++;
+        } else {
+          countryMap.set(zone.country_code, {
+            name: zone.country_name,
+            count: 1,
+          });
+        }
+      }
+    }
+
+    const countries: CountryOption[] = Array.from(countryMap.entries())
+      .map(([code, { name, count }]) => ({
+        code,
+        name,
+        flag: countryFlag(code),
+        productCount: count,
+      }))
+      .sort((a, b) => b.productCount - a.productCount);
+
+    return { data: countries, error: null };
+  }
+
+  /**
+   * Best-effort merchant origin inference.
+   * In the future, Violet may expose merchant country directly.
+   * For now, defaults to "US" which is correct for most Violet sandbox merchants.
+   */
+  private inferMerchantOrigin(_seller: string): string {
+    // Placeholder: when Violet exposes merchant.country, use it here.
+    // For now, all Violet sandbox merchants are US-based.
+    return "US";
   }
 
   // ─── Transformation (snake_case → camelCase) ──────────────────────
@@ -375,7 +455,7 @@ export class VioletAdapter implements SupplierAdapter {
    * After Zod validation with `.optional().default(...)`, all fields are guaranteed
    * present with sensible defaults, so no additional null checks are needed here.
    */
-  private transformOffer(raw: VioletOfferResponse): Product {
+  private transformOffer(raw: VioletOfferResponse, countryCode?: string): Product {
     const albums = (raw.albums ?? []).map((a) => this.transformAlbum(a));
     const skuAlbums = (raw.skus ?? []).flatMap((s) =>
       (s.albums ?? []).map((a) => this.transformAlbum(a)),
@@ -413,6 +493,57 @@ export class VioletAdapter implements SupplierAdapter {
       albums,
       images,
       thumbnailUrl: this.extractThumbnail(allAlbums),
+      shippingInfo: this.buildShippingInfo(raw, countryCode),
+    };
+  }
+
+  /**
+   * Build ShippingInfo from Violet's shipping zone data.
+   *
+   * - Shopify merchants with shipping zones: real data + delivery estimates
+   * - Non-Shopify or missing data: source="OTHER", always shown, no estimate
+   */
+  private buildShippingInfo(raw: VioletOfferResponse, countryCode?: string): ShippingInfo | null {
+    const source = raw.source ?? "";
+    const shippingData = raw.shipping;
+
+    // Non-Shopify merchant or no shipping data: show product with "Shipping TBD"
+    if (source !== "SHOPIFY" || !shippingData) {
+      return {
+        shipsToUserCountry: true,
+        shippingZones: [],
+        deliveryEstimate: null,
+        source: "OTHER",
+      };
+    }
+
+    const zones = (shippingData.shipping_zones ?? []).map((z) => ({
+      countryCode: z.country_code,
+      countryName: z.country_name,
+    }));
+
+    // No country context — return zones but can't determine shipping eligibility
+    if (!countryCode) {
+      return {
+        shipsToUserCountry: true,
+        shippingZones: zones,
+        deliveryEstimate: null,
+        source: "SHOPIFY",
+      };
+    }
+
+    const shipsToUser = zones.length === 0 || zones.some((z) => z.countryCode === countryCode);
+
+    // Infer merchant origin from seller field or default to US.
+    // Violet sandbox merchants are US-based; production may include EU/UK sellers.
+    const merchantOrigin = this.inferMerchantOrigin(raw.seller ?? "");
+    const estimate = shipsToUser ? getDeliveryEstimate(merchantOrigin, countryCode) : null;
+
+    return {
+      shipsToUserCountry: shipsToUser,
+      shippingZones: zones,
+      deliveryEstimate: estimate,
+      source: "SHOPIFY",
     };
   }
 

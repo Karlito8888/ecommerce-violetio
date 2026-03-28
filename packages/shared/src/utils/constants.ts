@@ -57,4 +57,7 @@ export const queryKeys = {
     detail: (slug: string) => ["content", "detail", slug] as const,
     list: (params?: ContentListParams) => ["content", "list", params] as const,
   },
+  location: {
+    countries: () => ["location", "countries"] as const,
+  },
 } as const;

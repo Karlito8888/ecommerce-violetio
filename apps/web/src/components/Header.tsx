@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useUser } from "../hooks/useUser";
 import { useCartContext } from "../contexts/CartContext";
+import { useUserLocation } from "../contexts/UserLocationContext";
 import { useCartQuery, getCartItemCount } from "@ecommerce/shared";
 import type { CartFetchFn } from "@ecommerce/shared";
 import { getCartFn } from "../server/cartActions";
 import ThemeToggle from "./ThemeToggle";
 import SearchBar from "./search/SearchBar";
+import CountrySelector from "./CountrySelector";
 
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
 
@@ -128,6 +130,7 @@ export default function Header() {
             </Link>
           )}
           <CartButton />
+          <CountryButton />
           <ThemeToggle />
         </nav>
 
@@ -185,6 +188,55 @@ export default function Header() {
         ))}
       </nav>
     </header>
+  );
+}
+
+/**
+ * Country selector button — shows current country flag or globe icon.
+ * Opens CountrySelector popover on click.
+ */
+function CountryButton() {
+  const { countryCode, countryFlagEmoji, setCountry } = useUserLocation();
+  const [isOpen, setIsOpen] = useState(false);
+  const handleClose = useCallback(() => setIsOpen(false), []);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="site-header__country"
+        aria-label={countryCode ? `Country: ${countryCode}` : "Select country"}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        {countryFlagEmoji || (
+          <svg
+            viewBox="0 0 24 24"
+            width="24"
+            height="24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M2 12h20" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+        )}
+      </button>
+      {isOpen && (
+        <Suspense fallback={null}>
+          <CountrySelector
+            isOpen={isOpen}
+            onClose={handleClose}
+            onSelect={setCountry}
+            currentCountryCode={countryCode}
+          />
+        </Suspense>
+      )}
+    </div>
   );
 }
 

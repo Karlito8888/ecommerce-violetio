@@ -1,6 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { ApiResponse, PaginatedResult, Product, ProductQuery } from "@ecommerce/shared";
+import type {
+  ApiResponse,
+  CountryOption,
+  PaginatedResult,
+  Product,
+  ProductQuery,
+} from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
+import { getCountryCookieFn } from "./geoip";
 
 /* ─── Types ───────────────────────────────────────────────────────────── */
 
@@ -60,20 +67,55 @@ export const FALLBACK_CATEGORIES: CategoryItem[] = [
  *
  * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
  */
+export interface ProductsResult extends PaginatedResult<Product> {
+  /** Set when filtered results are empty due to shipping restrictions. */
+  emptyReason?: "no-shipping";
+}
+
 export const getProductsFn = createServerFn({ method: "GET" })
   .inputValidator((input: ProductQuery) => input)
-  .handler(async ({ data }): Promise<ApiResponse<PaginatedResult<Product>>> => {
+  .handler(async ({ data }): Promise<ApiResponse<ProductsResult>> => {
+    const { countryCode } = await getCountryCookieFn();
     const adapter = getAdapter();
-    return adapter.getProducts({
-      category: data.category,
-      page: data.page ?? 1,
-      pageSize: data.pageSize ?? 12,
-      minPrice: data.minPrice,
-      maxPrice: data.maxPrice,
-      inStock: data.inStock,
-      sortBy: data.sortBy,
-      sortDirection: data.sortDirection,
-    });
+    const result = await adapter.getProducts(
+      {
+        category: data.category,
+        page: data.page ?? 1,
+        pageSize: data.pageSize ?? 12,
+        minPrice: data.minPrice,
+        maxPrice: data.maxPrice,
+        inStock: data.inStock,
+        sortBy: data.sortBy,
+        sortDirection: data.sortDirection,
+      },
+      countryCode ?? undefined,
+    );
+
+    if (result.error || !result.data) return result as ApiResponse<ProductsResult>;
+
+    // Filter out Shopify products that don't ship to the user's country.
+    // Preserve original pagination metadata (total, hasNext) from Violet so
+    // infinite scroll continues to fetch subsequent pages.
+    if (countryCode) {
+      const original = result.data.data;
+      const filtered = original.filter((p) => !p.shippingInfo || p.shippingInfo.shipsToUserCountry);
+
+      const emptyReason =
+        filtered.length === 0 && original.length > 0 && !result.data.hasNext
+          ? "no-shipping"
+          : undefined;
+
+      return {
+        data: {
+          ...result.data,
+          data: filtered,
+          emptyReason,
+        },
+        error: null,
+      };
+    }
+
+    return result as ApiResponse<ProductsResult>;
   });
 
 /**
@@ -146,5 +188,17 @@ export const getCategoriesFn = createServerFn({ method: "GET" }).handler(
       /** Timeout, network error, or unexpected response — fall back silently */
       return FALLBACK_CATEGORIES;
     }
+  },
+);
+
+/**
+ * Server Function for fetching available shipping countries.
+ * Used by CountrySelector to populate the country list.
+ */
+export const getAvailableCountriesFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<CountryOption[]> => {
+    const adapter = getAdapter();
+    const result = await adapter.getAvailableCountries();
+    return result.data ?? [];
   },
 );

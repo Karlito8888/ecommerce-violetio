@@ -165,3 +165,9 @@ export type {
   PlatformHealthData,
   RecentError,
 } from "./health.types.js";
+export type {
+  ShippingZone,
+  DeliveryEstimate,
+  ShippingInfo,
+  CountryOption,
+} from "./shipping.types.js";

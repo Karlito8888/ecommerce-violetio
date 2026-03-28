@@ -48,14 +48,14 @@ function CartPage() {
   const removeMutation = useRemoveFromCart(removeFromCart);
   const isUpdating = updateMutation.isPending || removeMutation.isPending;
 
-  const handleUpdateQty = (skuId: string, quantity: number) => {
+  const handleUpdateQty = (orderSkuId: string, skuId: string, quantity: number) => {
     if (!violetCartId) return;
-    updateMutation.mutate({ violetCartId, skuId, quantity });
+    updateMutation.mutate({ violetCartId, orderSkuId, skuId, quantity });
   };
 
-  const handleRemove = (skuId: string) => {
+  const handleRemove = (orderSkuId: string, skuId: string) => {
     if (!violetCartId) return;
-    removeMutation.mutate({ violetCartId, skuId });
+    removeMutation.mutate({ violetCartId, orderSkuId, skuId });
   };
 
   // Aggregate totals across all bags for the sidebar summary
@@ -107,7 +107,7 @@ function CartPage() {
                         <button
                           type="button"
                           disabled={item.quantity <= 1 || isUpdating}
-                          onClick={() => handleUpdateQty(item.skuId, item.quantity - 1)}
+                          onClick={() => handleUpdateQty(item.id, item.skuId, item.quantity - 1)}
                           aria-label="Decrease quantity"
                         >
                           −
@@ -116,14 +116,14 @@ function CartPage() {
                         <button
                           type="button"
                           disabled={isUpdating}
-                          onClick={() => handleUpdateQty(item.skuId, item.quantity + 1)}
+                          onClick={() => handleUpdateQty(item.id, item.skuId, item.quantity + 1)}
                           aria-label="Increase quantity"
                         >
                           +
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleRemove(item.skuId)}
+                          onClick={() => handleRemove(item.id, item.skuId)}
                           aria-label={`Remove ${item.name ?? item.skuId} from cart`}
                         >
                           Remove

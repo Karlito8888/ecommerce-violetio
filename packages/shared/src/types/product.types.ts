@@ -9,6 +9,8 @@
  * All field names are camelCase (Violet sends snake_case, transformed at adapter boundary).
  */
 
+import type { ShippingInfo } from "./shipping.types.js";
+
 /**
  * Offer status from Violet API.
  *
@@ -156,6 +158,8 @@ export interface Product {
    * image when this is `null`.
    */
   thumbnailUrl: string | null;
+  /** Geo-filtered shipping info. `null` when no country context is available. */
+  shippingInfo: ShippingInfo | null;
 }
 
 /**

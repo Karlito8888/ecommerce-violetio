@@ -1,5 +1,11 @@
-import { formatPrice } from "@ecommerce/shared";
-import type { SKU } from "@ecommerce/shared";
+import {
+  formatPrice,
+  convertPrice,
+  formatLocalPrice,
+  getCurrencyForCountry,
+} from "@ecommerce/shared";
+import type { SKU, ShippingInfo } from "@ecommerce/shared";
+import { useUserLocationSafe } from "../../contexts/UserLocationContext";
 
 import "./PriceBreakdown.css";
 
@@ -26,14 +32,22 @@ export default function PriceBreakdown({
   minPrice,
   maxPrice,
   currency,
+  shippingInfo,
 }: {
   selectedSku: SKU | null;
   minPrice: number;
   maxPrice: number;
   currency: string;
+  shippingInfo?: ShippingInfo | null;
 }) {
+  const countryCode = useUserLocationSafe()?.countryCode ?? null;
   const hasDiscount = selectedSku && selectedSku.retailPrice > selectedSku.salePrice;
   const showRange = !selectedSku && minPrice !== maxPrice;
+
+  // Local currency conversion (informational only)
+  const localCurrency = countryCode ? getCurrencyForCountry(countryCode) : null;
+  const showLocalCurrency = localCurrency && localCurrency !== currency;
+  const displayPrice = selectedSku ? selectedSku.salePrice : minPrice;
 
   return (
     <dl className="price-breakdown">
@@ -55,7 +69,13 @@ export default function PriceBreakdown({
               </span>
             </>
           ) : (
-            formatPrice(selectedSku ? selectedSku.salePrice : minPrice, currency)
+            formatPrice(displayPrice, currency)
+          )}
+          {showLocalCurrency && !showRange && (
+            <span className="price-breakdown__local" title="Approximate. Charged in USD">
+              {"\u2248 "}
+              {formatLocalPrice(convertPrice(displayPrice, currency, localCurrency), localCurrency)}
+            </span>
           )}
         </dd>
       </div>
@@ -63,7 +83,11 @@ export default function PriceBreakdown({
       {/* Shipping estimate */}
       <div className="price-breakdown__row">
         <dt className="price-breakdown__label">Shipping</dt>
-        <dd className="price-breakdown__value">Calculated at checkout</dd>
+        <dd className="price-breakdown__value">
+          {shippingInfo?.deliveryEstimate
+            ? shippingInfo.deliveryEstimate.label
+            : "Calculated at checkout"}
+        </dd>
       </div>
 
       {/* Tax estimate */}
@@ -78,7 +102,13 @@ export default function PriceBreakdown({
         <dd className="price-breakdown__value">
           {showRange
             ? `From ${formatPrice(minPrice, currency)}`
-            : formatPrice(selectedSku ? selectedSku.salePrice : minPrice, currency)}
+            : formatPrice(displayPrice, currency)}
+          {showLocalCurrency && !showRange && (
+            <span className="price-breakdown__local" title="Approximate. Charged in USD">
+              {"\u2248 "}
+              {formatLocalPrice(convertPrice(displayPrice, currency, localCurrency), localCurrency)}
+            </span>
+          )}
         </dd>
       </div>
     </dl>

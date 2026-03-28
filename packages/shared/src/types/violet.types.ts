@@ -165,6 +165,10 @@ export interface VioletOfferResponse {
   variants?: VioletVariantResponse[];
   skus?: VioletSkuResponse[];
   albums?: VioletAlbumResponse[];
+  /** Shipping zone data, present when `?include=shipping` is used. Shopify merchants only. */
+  shipping?: {
+    shipping_zones?: Array<{ country_code: string; country_name: string }>;
+  } | null;
 }
 
 /**

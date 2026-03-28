@@ -1,0 +1,99 @@
+/* ─── CountrySelector ─── Popover for country selection
+ *
+ * Positioned absolutely relative to parent trigger button.
+ * BEM block: .country-selector
+ */
+
+.country-selector {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  width: 280px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-ivory);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+  overflow: hidden;
+}
+
+.country-selector__search {
+  padding: var(--space-3);
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  background: transparent;
+  outline: none;
+}
+
+.country-selector__search::placeholder {
+  color: var(--color-silver);
+}
+
+.country-selector__list {
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+}
+
+.country-selector__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.country-selector__option:hover {
+  background: var(--color-sand);
+}
+
+.country-selector__option--active {
+  background: var(--color-sand);
+  font-weight: 600;
+}
+
+.country-selector__flag {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.country-selector__name {
+  flex: 1;
+}
+
+.country-selector__count {
+  font-size: 0.75rem;
+  color: var(--color-steel);
+  background: var(--color-sand);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.country-selector__separator {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: var(--space-1) var(--space-3);
+}
+
+.country-selector__empty {
+  padding: var(--space-4) var(--space-3);
+  text-align: center;
+  color: var(--color-steel);
+  font-size: 0.875rem;
+  margin: 0;
+}

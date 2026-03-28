@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { ApiResponse, Product } from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
+import { getCountryCookieFn } from "./geoip";
 
 /* ─── Server Function ─────────────────────────────────────────────────── */
 
@@ -16,11 +17,14 @@ import { getAdapter } from "./violetAdapter";
  * - Zod validation, retry logic, and snake_case→camelCase already handled by adapter
  * - 404 returns `{ data: null, error: { code: "NOT_FOUND", ... } }`
  *
+ * Includes shipping info when a user country cookie is set.
+ *
  * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
  */
 export const getProductFn = createServerFn({ method: "GET" })
   .inputValidator((input: string) => input)
   .handler(async ({ data: productId }): Promise<ApiResponse<Product>> => {
+    const { countryCode } = await getCountryCookieFn();
     const adapter = getAdapter();
-    return adapter.getProduct(productId);
+    return adapter.getProduct(productId, countryCode ?? undefined);
   });

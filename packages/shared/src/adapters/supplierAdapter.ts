@@ -5,6 +5,7 @@ import type {
   PaginatedResult,
   Cart,
   CartItemInput,
+  CountryOption,
   CreateCartInput,
   CustomerInput,
   PaymentIntent,
@@ -32,8 +33,12 @@ import type {
  */
 export interface SupplierAdapter {
   // Catalog
-  getProducts(params: ProductQuery): Promise<ApiResponse<PaginatedResult<Product>>>;
-  getProduct(id: string): Promise<ApiResponse<Product>>;
+  getProducts(
+    params: ProductQuery,
+    countryCode?: string,
+  ): Promise<ApiResponse<PaginatedResult<Product>>>;
+  getProduct(id: string, countryCode?: string): Promise<ApiResponse<Product>>;
+  getAvailableCountries(): Promise<ApiResponse<CountryOption[]>>;
 
   // Search (AI)
   searchProducts(query: string, filters?: SearchFilters): Promise<ApiResponse<SearchResult>>;

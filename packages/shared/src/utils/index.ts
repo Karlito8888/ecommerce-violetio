@@ -23,6 +23,17 @@ export { webUrlToMobilePath, mobilePushDataToPath, ROUTE_MAPPINGS } from "./deep
 export type { RouteMapping } from "./deepLink.js";
 export { isValidSlug, CONTENT_TYPE_LABELS, CONTENT_FIELD_GUIDE } from "./contentValidation.js";
 export { stripMarkdownSyntax } from "./stripMarkdown.js";
+export {
+  convertPrice,
+  formatLocalPrice,
+  getDeliveryEstimate,
+  getCurrencyForCountry,
+  getCountryName,
+  countryFlag,
+  EXCHANGE_RATES,
+  COUNTRY_TO_CURRENCY,
+  COUNTRY_NAMES,
+} from "./currency.js";
 // guestToken and orderPersistence are server-only (use node:crypto).
 // Import them directly: "@ecommerce/shared/src/utils/guestToken" / "orderPersistence"
 // Do NOT re-export here — it breaks the client bundle.

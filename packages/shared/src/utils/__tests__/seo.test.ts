@@ -98,6 +98,7 @@ const baseProduct: Product = {
   seller: "Test Store",
   vendor: "Widget Co",
   variants: [],
+  shippingInfo: null,
 };
 
 describe("buildProductJsonLd", () => {

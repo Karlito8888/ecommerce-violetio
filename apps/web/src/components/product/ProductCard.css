@@ -127,3 +127,21 @@
   color: var(--color-ink);
   margin: 0;
 }
+
+/* ── Delivery ── */
+
+.product-card__delivery {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--color-steel);
+  margin: var(--space-1) 0 0;
+}
+
+.product-card__delivery--available {
+  color: var(--color-success);
+}
+
+.product-card__delivery--tbd {
+  color: var(--color-silver);
+  font-style: italic;
+}

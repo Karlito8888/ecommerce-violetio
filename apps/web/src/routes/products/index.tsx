@@ -8,6 +8,8 @@ import {
 } from "@ecommerce/shared";
 import type { ProductsFetchFn } from "@ecommerce/shared";
 import { getProductsFn, getCategoriesFn } from "../../server/getProducts";
+import { countryFlag as toFlag, COUNTRY_NAMES } from "@ecommerce/shared";
+import { useUserLocation } from "../../contexts/UserLocationContext";
 import ProductGrid from "../../components/product/ProductGrid";
 import ProductGridSkeleton from "../../components/product/ProductGridSkeleton";
 import CategoryChips from "../../components/product/CategoryChips";
@@ -270,6 +272,7 @@ function ProductListingPage() {
   const { categories } = Route.useLoaderData();
   const { category, minPrice, maxPrice, inStock, sortBy, sortDirection } = Route.useSearch();
   const navigate = useNavigate({ from: "/products/" });
+  const { countryName, countryFlagEmoji, setCountry } = useUserLocation();
 
   /**
    * Consume the infinite query that was prefetched in the loader.
@@ -292,6 +295,13 @@ function ProductListingPage() {
    */
   const allProducts = data.pages.flatMap((page) => page.data?.data ?? []);
   const total = data.pages[0]?.data?.total ?? 0;
+  // emptyReason is set by getProductsFn (ProductsResult extends PaginatedResult).
+  // The infinite query types pages as PaginatedResult<Product>, so we need a type guard.
+  const firstPageData = data.pages[0]?.data;
+  const emptyReason =
+    firstPageData && "emptyReason" in firstPageData
+      ? (firstPageData as { emptyReason?: string }).emptyReason
+      : undefined;
 
   /**
    * Category change resets all filters — navigates to a clean URL with only category.
@@ -373,15 +383,39 @@ function ProductListingPage() {
           onFilterChange={handleFilterChange}
         />
         <div className="products-page__empty">
-          <p>No products match your filters.</p>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              className="products-page__clear-filters"
-              onClick={() => handleFilterChange({})}
-            >
-              Clear filters
-            </button>
+          {emptyReason === "no-shipping" ? (
+            <>
+              <p>
+                No products available for shipping to {countryFlagEmoji}{" "}
+                {countryName ?? "your country"}
+              </p>
+              <p className="products-page__empty-hint">Try browsing from:</p>
+              <div className="products-page__suggested-countries">
+                {["FR", "US", "GB"].map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    className="products-page__country-btn"
+                    onClick={() => setCountry(code)}
+                  >
+                    {toFlag(code)} {COUNTRY_NAMES[code] ?? code}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <p>No products match your filters.</p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  className="products-page__clear-filters"
+                  onClick={() => handleFilterChange({})}
+                >
+                  Clear filters
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

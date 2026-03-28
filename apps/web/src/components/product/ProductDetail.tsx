@@ -11,6 +11,8 @@ import RecommendationRow from "./RecommendationRow";
 import { useCartContext } from "../../contexts/CartContext";
 import { createCartFn, addToCartFn } from "../../server/cartActions";
 import { getSupabaseBrowserClient } from "../../utils/supabase";
+import type { ShippingInfo } from "@ecommerce/shared";
+import { useUserLocationSafe } from "../../contexts/UserLocationContext";
 
 import "./ProductDetail.css";
 
@@ -223,7 +225,10 @@ export default function ProductDetail({ product }: { product: Product }) {
           minPrice={product.minPrice}
           maxPrice={product.maxPrice}
           currency={product.currency}
+          shippingInfo={product.shippingInfo}
         />
+
+        <ShippingSection shippingInfo={product.shippingInfo} />
 
         {showVariants && (
           <VariantSelector
@@ -278,6 +283,41 @@ export default function ProductDetail({ product }: { product: Product }) {
       <div className="product-detail__similar">
         <RecommendationRow productId={product.id} />
       </div>
+    </div>
+  );
+}
+
+function ShippingSection({ shippingInfo }: { shippingInfo: ShippingInfo | null }) {
+  const location = useUserLocationSafe();
+  const countryName = location?.countryName ?? null;
+  const countryFlagEmoji = location?.countryFlagEmoji ?? "";
+
+  if (!shippingInfo) return null;
+
+  if (shippingInfo.source === "OTHER") {
+    return (
+      <div className="product-detail__shipping product-detail__shipping--tbd">
+        <p>Shipping availability confirmed at checkout</p>
+      </div>
+    );
+  }
+
+  if (shippingInfo.shipsToUserCountry) {
+    return (
+      <div className="product-detail__shipping">
+        <h3>
+          Shipping to {countryFlagEmoji} {countryName ?? "your country"}
+        </h3>
+        {shippingInfo.deliveryEstimate && <p>{shippingInfo.deliveryEstimate.label}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="product-detail__shipping product-detail__shipping--unavailable">
+      <p>
+        This product doesn&apos;t ship to {countryFlagEmoji} {countryName ?? "your country"}
+      </p>
     </div>
   );
 }

@@ -620,10 +620,24 @@ function CheckoutPage() {
    * UI shows success. Without checking, the user sees a stale UI that diverges from
    * the actual cart state on the server.
    */
+  /** Find orderSkuId (item.id) for a given skuId by scanning cart bags. */
+  const findOrderSkuId = useCallback(
+    (skuId: string): string => {
+      if (!cart) return skuId;
+      for (const bag of cart.bags) {
+        const item = bag.items.find((i) => i.skuId === skuId);
+        if (item) return item.id;
+      }
+      return skuId;
+    },
+    [cart],
+  );
+
   const handleRemoveItem = useCallback(
     async (skuId: string) => {
       if (!violetCartId) return;
-      const result = await removeFromCartFn({ data: { violetCartId, skuId } });
+      const orderSkuId = findOrderSkuId(skuId);
+      const result = await removeFromCartFn({ data: { violetCartId, orderSkuId, skuId } });
       if (result.error) {
         setCheckoutErrors((prev) => [
           ...prev,
@@ -637,13 +651,16 @@ function CheckoutPage() {
       }
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
-    [violetCartId, queryClient],
+    [violetCartId, queryClient, findOrderSkuId],
   );
 
   const handleUpdateQuantity = useCallback(
     async (skuId: string, quantity: number) => {
       if (!violetCartId) return;
-      const result = await updateCartItemFn({ data: { violetCartId, skuId, quantity } });
+      const orderSkuId = findOrderSkuId(skuId);
+      const result = await updateCartItemFn({
+        data: { violetCartId, orderSkuId, skuId, quantity },
+      });
       if (result.error) {
         setCheckoutErrors((prev) => [
           ...prev,
@@ -657,7 +674,7 @@ function CheckoutPage() {
       }
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
-    [violetCartId, queryClient],
+    [violetCartId, queryClient, findOrderSkuId],
   );
 
   // ── Story 4.7: Pre-submit inventory validation ──────────────────────
@@ -823,11 +840,20 @@ function CheckoutPage() {
     });
     setBagErrorState(errorMap);
 
-    // Auto-select if a bag has only one shipping option (AC#7)
+    // Auto-select shipping methods:
+    // 1. Single option → auto-select (AC#7)
+    // 2. Multiple options → prefer "Standard" label (matches PDP delivery estimates)
     const autoSelections: Record<string, string> = {};
     for (const bagMethods of methods) {
       if (bagMethods.shippingMethods.length === 1) {
         autoSelections[bagMethods.bagId] = bagMethods.shippingMethods[0].id;
+      } else if (bagMethods.shippingMethods.length > 1) {
+        const standard = bagMethods.shippingMethods.find((m) =>
+          m.label?.toLowerCase().includes("standard"),
+        );
+        if (standard) {
+          autoSelections[bagMethods.bagId] = standard.id;
+        }
       }
     }
     if (Object.keys(autoSelections).length > 0) {

@@ -193,6 +193,25 @@ export const violetOfferSchema = z.object({
   variants: z.array(violetVariantSchema).optional().default([]),
   skus: z.array(violetSkuSchema).optional().default([]),
   albums: z.array(violetAlbumSchema).optional().default([]),
+  /**
+   * Shipping zone data, present when `?include=shipping` is passed to Violet API.
+   * Only populated for Shopify merchants. Absent or null for other sources.
+   */
+  shipping: z
+    .object({
+      shipping_zones: z
+        .array(
+          z.object({
+            country_code: z.string(),
+            country_name: z.string().optional().default(""),
+          }),
+        )
+        .optional()
+        .default([]),
+    })
+    .nullable()
+    .optional()
+    .default(null),
 });
 
 /**

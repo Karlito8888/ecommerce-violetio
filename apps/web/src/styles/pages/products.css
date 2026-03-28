@@ -56,6 +56,38 @@
   color: var(--color-ivory);
 }
 
+.products-page__empty-hint {
+  font-size: 0.875rem;
+  margin-top: var(--space-3);
+}
+
+.products-page__suggested-countries {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.products-page__country-btn {
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-midnight);
+  background: transparent;
+  border: 1px solid var(--color-midnight);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.products-page__country-btn:hover {
+  background: var(--color-midnight);
+  color: var(--color-ivory);
+}
+
 /* Skeleton placeholders for filter/category chip bars during loading */
 .products-page__skeleton-chips {
   padding: var(--space-2) var(--space-4);

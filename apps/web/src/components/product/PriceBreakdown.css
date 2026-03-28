@@ -72,3 +72,12 @@
   font-size: 1.125rem;
   font-weight: 600;
 }
+
+/* Approximate local currency display */
+.price-breakdown__local {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--color-steel);
+  margin-top: var(--space-1);
+}

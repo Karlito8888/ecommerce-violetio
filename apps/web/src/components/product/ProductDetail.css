@@ -107,6 +107,35 @@
   margin: 0 0 var(--space-4);
 }
 
+/* ── Shipping section ── */
+.product-detail__shipping {
+  padding: var(--space-3) 0;
+  margin-bottom: var(--space-2);
+}
+
+.product-detail__shipping h3 {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-1);
+}
+
+.product-detail__shipping p {
+  font-size: 0.875rem;
+  color: var(--color-success);
+  margin: 0;
+}
+
+.product-detail__shipping--unavailable p {
+  color: var(--color-error, #c44);
+}
+
+.product-detail__shipping--tbd p {
+  color: var(--color-steel);
+  font-style: italic;
+}
+
 /* ── Trust indicators ── */
 .product-detail__trust {
   display: flex;

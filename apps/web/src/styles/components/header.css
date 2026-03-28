@@ -115,7 +115,8 @@
 }
 
 .site-header__account,
-.site-header__cart {
+.site-header__cart,
+.site-header__country {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -131,9 +132,20 @@
 }
 
 .site-header__account:hover,
-.site-header__cart:hover {
+.site-header__cart:hover,
+.site-header__country:hover {
   color: var(--color-ink);
   background-color: var(--surface-muted);
+}
+
+/* Country selector button */
+.site-header__country {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 /* Cart badge */

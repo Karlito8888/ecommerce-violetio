@@ -19,6 +19,8 @@ import {
   updateCartItemFn,
   removeFromCartFn,
 } from "../server/cartActions";
+import { getCountryCookieFn } from "../server/geoip";
+import UserLocationProvider from "../contexts/UserLocationContext";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
 
 import appCss from "../styles/index.css?url";
@@ -51,8 +53,11 @@ const removeFromCart: RemoveFromCartFn = (input) => removeFromCartFn({ data: inp
  */
 export const Route = createRootRouteWithContext<RouterContext>()({
   loader: async () => {
-    const { violetCartId } = await getCartCookieFn();
-    return { initialVioletCartId: violetCartId ?? null };
+    const [{ violetCartId }, { countryCode }] = await Promise.all([
+      getCartCookieFn(),
+      getCountryCookieFn(),
+    ]);
+    return { initialVioletCartId: violetCartId ?? null, initialCountryCode: countryCode };
   },
   head: () => ({
     meta: [
@@ -78,7 +83,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   // Hydrate CartProvider from the HttpOnly cookie read server-side in the loader.
   // This ensures the cart badge and drawer are populated immediately on page refresh,
   // without waiting for a client-side fetch.
-  const { initialVioletCartId } = Route.useLoaderData();
+  const { initialVioletCartId, initialCountryCode } = Route.useLoaderData();
 
   // Auth session for Realtime subscription (Story 4.6)
   const { user, isAnonymous } = useAuthSession();
@@ -102,22 +107,24 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             supabase={supabase}
             userId={syncUserId}
           >
-            <AppBannerContext.Provider value={appBanner}>
-              <a href="#main-content" className="sr-only sr-only--focusable">
-                Skip to content
-              </a>
-              <AppBanner />
-              <Header />
-              <main id="main-content">{children}</main>
-              <Footer />
-              <CookieConsentBanner />
-            </AppBannerContext.Provider>
-            {/* CartDrawer mounted inside CartProvider — always available app-wide */}
-            <CartDrawer
-              fetchCartFn={fetchCart}
-              updateCartItemFn={updateCartItem}
-              removeFromCartFn={removeFromCart}
-            />
+            <UserLocationProvider initialCountryCode={initialCountryCode}>
+              <AppBannerContext.Provider value={appBanner}>
+                <a href="#main-content" className="sr-only sr-only--focusable">
+                  Skip to content
+                </a>
+                <AppBanner />
+                <Header />
+                <main id="main-content">{children}</main>
+                <Footer />
+                <CookieConsentBanner />
+              </AppBannerContext.Provider>
+              {/* CartDrawer mounted inside CartProvider — always available app-wide */}
+              <CartDrawer
+                fetchCartFn={fetchCart}
+                updateCartItemFn={updateCartItem}
+                removeFromCartFn={removeFromCart}
+              />
+            </UserLocationProvider>
           </CartProvider>
         </ToastProvider>
         <TanStackDevtools
