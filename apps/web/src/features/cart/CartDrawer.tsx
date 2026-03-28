@@ -180,6 +180,9 @@ export default function CartDrawer({
         {/* Footer */}
         {cart && cart.bags.length > 0 && (
           <div className="cart-drawer__footer">
+            <p className="cart-drawer__affiliate">
+              We earn a commission on purchases — this doesn&apos;t affect the price you pay.
+            </p>
             <div className="cart-drawer__summary">
               <div className="cart-drawer__total">
                 <span>Total</span>

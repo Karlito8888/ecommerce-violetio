@@ -402,10 +402,10 @@ Revenue-critical path. Test every scenario meticulously.
 - [x] Tax shown per Bag (or "Calculated at checkout" if not yet determined) *(Est. Tax: $0.00)*
 - [x] Shipping shows "Calculated at checkout" before shipping selection *(Correct)*
 - [x] Grand total = sum of all Bag totals (verify arithmetic) *($603.00 — correct)*
-- [ ] No fake discounts, countdown timers, or urgency indicators
-- [ ] Affiliate disclosure visible in cart summary
-- [ ] Empty cart: appropriate empty state with CTA to browse products
-- [ ] **Web:** "Proceed to Checkout" button visible and functional
+- [x] No fake discounts, countdown timers, or urgency indicators
+- [x] Affiliate disclosure visible in cart summary
+- [x] Empty cart: appropriate empty state with CTA to browse products
+- [x] **Web:** "Proceed to Checkout" button visible and functional
 
 ### Story 4-3: Shipping Method Selection
 
