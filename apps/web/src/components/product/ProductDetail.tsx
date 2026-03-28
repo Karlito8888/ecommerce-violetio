@@ -261,10 +261,6 @@ export default function ProductDetail({ product }: { product: Product }) {
           />
         </div>
 
-        <p className="product-detail__affiliate">
-          We earn a commission on purchases — this doesn&apos;t affect the price you pay.
-        </p>
-
         <div className="product-detail__trust">
           <span>Secure checkout</span>
           <span aria-hidden="true">·</span>

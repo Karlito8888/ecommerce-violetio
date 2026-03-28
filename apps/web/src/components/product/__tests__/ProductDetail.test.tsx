@@ -158,12 +158,6 @@ describe("ProductDetail", () => {
     expect(button.disabled).toBe(true);
   });
 
-  it("renders affiliate disclosure text", () => {
-    const container = renderToContainer(<ProductDetail product={createMockProduct()} />);
-
-    expect(container.textContent).toContain("We earn a commission on purchases");
-  });
-
   it("renders trust indicators", () => {
     const container = renderToContainer(<ProductDetail product={createMockProduct()} />);
 
