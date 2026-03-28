@@ -116,9 +116,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const body = await req.json();
+    const requestBody = await req.json();
 
-    const validation = recommendationRequestSchema.safeParse(body);
+    const validation = recommendationRequestSchema.safeParse(requestBody);
     if (!validation.success) {
       return new Response(
         JSON.stringify({

@@ -1246,12 +1246,17 @@ export class VioletAdapter implements SupplierAdapter {
       skuId: e.sku_id !== undefined ? String(e.sku_id) : undefined,
     }));
 
+    // Violet returns subtotal=0 before checkout steps (shipping, tax).
+    // Compute from items when Violet hasn't calculated yet.
+    const computedSubtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    const subtotal = raw.subtotal > 0 ? raw.subtotal : computedSubtotal;
+
     return {
       id: String(raw.id),
       merchantId: String(raw.merchant_id),
       merchantName: raw.merchant_name,
       items,
-      subtotal: raw.subtotal,
+      subtotal,
       tax: raw.tax,
       shippingTotal: raw.shipping_total,
       errors,

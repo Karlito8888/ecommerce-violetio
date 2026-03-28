@@ -84,9 +84,13 @@ async function violetLogin(config: VioletAuthConfig): Promise<ApiResponse<Violet
       return { data: null, error: { code, message: `Violet login failed (${res.status})` } };
     }
 
-    const body = await res.json();
+    const loginData = await res.json();
     return {
-      data: { token: body.token, refreshToken: body.refresh_token, loginTimestamp: Date.now() },
+      data: {
+        token: loginData.token,
+        refreshToken: loginData.refresh_token,
+        loginTimestamp: Date.now(),
+      },
       error: null,
     };
   } catch (err) {
@@ -116,9 +120,13 @@ async function violetRefreshToken(
       return { data: null, error: { code, message: `Violet refresh failed (${res.status})` } };
     }
 
-    const body = await res.json();
+    const refreshData = await res.json();
     return {
-      data: { token: body.token, refreshToken: body.refresh_token, loginTimestamp: Date.now() },
+      data: {
+        token: refreshData.token,
+        refreshToken: refreshData.refresh_token,
+        loginTimestamp: Date.now(),
+      },
       error: null,
     };
   } catch (err) {

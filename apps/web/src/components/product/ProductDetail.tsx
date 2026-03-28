@@ -78,9 +78,13 @@ export default function ProductDetail({ product }: { product: Product }) {
    * `variantValues` array for it to be considered a match.
    */
   const selectedSku: SKU | null = useMemo(() => {
-    if (product.variants.length === 0 && product.skus.length === 1) {
+    // Single SKU: auto-select regardless of variant definitions.
+    // Violet demo merchants often define variant dimensions (e.g., "color", "size")
+    // at the offer level but only have 1 SKU — no user choice needed.
+    if (product.skus.length === 1) {
       return product.skus[0];
     }
+    if (product.skus.length === 0) return null;
     const entries = Object.entries(selectedValues);
     if (entries.length < product.variants.length) return null;
     return (
