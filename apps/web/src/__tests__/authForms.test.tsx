@@ -82,12 +82,12 @@ describe("signup flow integration", () => {
     mockUpsert.mockResolvedValue({ error: null });
   });
 
-  it("calls signUpWithEmail with email only (step 1 — trigger verification)", async () => {
+  it("calls signUpWithEmail with email and password", async () => {
     mockSignUpWithEmail.mockResolvedValue({ data: { user: { id: "uuid-1" } }, error: null });
 
-    const result = await mockSignUpWithEmail("test@example.com", mockSupabase);
+    const result = await mockSignUpWithEmail("test@example.com", "Pass123!", mockSupabase);
 
-    expect(mockSignUpWithEmail).toHaveBeenCalledWith("test@example.com", mockSupabase);
+    expect(mockSignUpWithEmail).toHaveBeenCalledWith("test@example.com", "Pass123!", mockSupabase);
     expect(result.error).toBeNull();
   });
 
@@ -111,7 +111,7 @@ describe("signup flow integration", () => {
       error: { message: "User already registered" },
     });
 
-    const result = await mockSignUpWithEmail("taken@example.com", mockSupabase);
+    const result = await mockSignUpWithEmail("taken@example.com", "Pass123!", mockSupabase);
 
     expect(result.error.message).toBe("User already registered");
     expect(mapAuthError(result.error.message)).toBe("An account with this email already exists");

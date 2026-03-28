@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useUser } from "@ecommerce/shared";
+import { useUser } from "../hooks/useUser";
 import ThemeToggle from "./ThemeToggle";
 import SearchBar from "./search/SearchBar";
 

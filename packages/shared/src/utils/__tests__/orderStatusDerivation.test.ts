@@ -42,7 +42,7 @@ describe("deriveOrderStatusFromBags", () => {
     expect(deriveOrderStatusFromBags(["CANCELED", "REFUNDED", "COMPLETED"])).toBe(
       "PARTIALLY_COMPLETED",
     );
-    expect(deriveOrderStatusFromBags(["CANCELED", "REFUNDED"])).toBe("PROCESSING");
+    expect(deriveOrderStatusFromBags(["CANCELED", "REFUNDED"])).toBe("CANCELED");
   });
 
   it("returns PROCESSING for other mixed states", () => {

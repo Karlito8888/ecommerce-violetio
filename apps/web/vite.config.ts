@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isTest = !!process.env.VITEST;
 
 const config = defineConfig({
+  envDir: path.resolve(__dirname, "../.."),
   plugins: [
     devtools(),
     tsconfigPaths({ projects: ["./tsconfig.json"] }),

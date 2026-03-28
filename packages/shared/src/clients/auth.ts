@@ -39,20 +39,19 @@ export async function initAnonymousSession(client?: SupabaseClient) {
 }
 
 /**
- * Step 1 of anonymous → full account conversion.
- * Links an email to the current anonymous user. Supabase sends a verification
- * email with a 6-digit OTP. The auth.uid() is preserved so all RLS-linked
- * data (cart, etc.) remains accessible.
+ * Converts an anonymous session to a full account by linking email + password.
+ * The auth.uid() is preserved so all RLS-linked data (cart, etc.) remains accessible.
  *
  * IMPORTANT: Do NOT use supabase.auth.signUp() — that creates a new user
  * with a different UUID, losing all anonymous session data.
  *
- * After this call succeeds, direct the user to the OTP verification screen,
- * then call verifyEmailOtp() followed by setAccountPassword().
+ * When email confirmations are disabled (local dev default), the account is
+ * immediately usable. When enabled, an OTP is sent and verifyEmailOtp() must
+ * be called before the user can sign in on other devices.
  */
-export async function signUpWithEmail(email: string, client?: SupabaseClient) {
+export async function signUpWithEmail(email: string, password: string, client?: SupabaseClient) {
   const supabase = client ?? createSupabaseClient();
-  const { data, error } = await supabase.auth.updateUser({ email });
+  const { data, error } = await supabase.auth.updateUser({ email, password });
   return { data, error };
 }
 

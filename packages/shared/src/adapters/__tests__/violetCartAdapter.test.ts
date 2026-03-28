@@ -73,7 +73,7 @@ describe("VioletAdapter — cart methods", () => {
         "https://test-api.violet.io/v1/checkout/cart",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ channel_id: 12345, currency: "USD" }),
+          body: JSON.stringify({ channel_id: 12345, currency: "USD", wallet_based_checkout: true }),
         }),
       );
     });

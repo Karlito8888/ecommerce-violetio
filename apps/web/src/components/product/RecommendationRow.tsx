@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
-import { useRecommendations, useUser } from "@ecommerce/shared";
+import { useRecommendations } from "@ecommerce/shared";
+import { useUser } from "#/hooks/useUser";
 import { getSupabaseBrowserClient } from "#/utils/supabase";
 import BaseProductCard from "./BaseProductCard";
 

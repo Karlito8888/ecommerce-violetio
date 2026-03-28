@@ -86,13 +86,21 @@ function SignupPage() {
     setIsLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error: authError } = await signUpWithEmail(email, supabase);
+      const { data, error: authError } = await signUpWithEmail(email, password, supabase);
 
       if (authError) {
         setError(mapAuthError(authError.message));
         return;
       }
 
+      // When email confirmations are disabled, the email is confirmed immediately
+      // and the account is ready to use — skip the OTP verify page.
+      if (data?.user?.email_confirmed_at) {
+        await navigate({ to: sanitizeRedirect(redirect) });
+        return;
+      }
+
+      // Email confirmations enabled — OTP was sent, go to verify page.
       await navigate({
         to: "/auth/verify",
         search: { email, redirect },

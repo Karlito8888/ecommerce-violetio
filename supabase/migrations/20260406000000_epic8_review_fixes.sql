@@ -51,8 +51,9 @@ $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 COMMENT ON FUNCTION private.is_admin() IS
   'Check if current user has admin role via JWT app_metadata custom claim. Lives in private schema to prevent direct REST API access.';
 
--- Drop the old public version after creating the private one.
-DROP FUNCTION IF EXISTS public.is_admin();
+-- NOTE: public.is_admin() is dropped AFTER all RLS policies are recreated below
+-- (FIX 1a section), because those policies depend on the old function until they
+-- are replaced with private.is_admin().
 
 -- ── Move set_admin_role() to private schema ────────────────────────────────────
 -- WHY: Writes to auth.users with SECURITY DEFINER privileges. Must never be
@@ -424,6 +425,11 @@ CREATE POLICY "admin_update_alert_rules" ON public.alert_rules
   FOR UPDATE TO authenticated
   USING ((select private.is_admin()))
   WITH CHECK ((select private.is_admin()));
+
+
+-- ── Now safe to drop the old public.is_admin() ──────────────────────────────
+-- All RLS policies above have been recreated to use private.is_admin().
+DROP FUNCTION IF EXISTS public.is_admin();
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════

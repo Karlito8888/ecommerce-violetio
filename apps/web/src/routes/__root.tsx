@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import type { RouterContext } from "../router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
@@ -7,7 +6,6 @@ import AppBanner from "../components/AppBanner";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 import { AppBannerContext, useAppBannerProvider } from "../hooks/useAppBanner";
-import { initAnonymousSession } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "../utils/supabase";
 import { CartProvider } from "../contexts/CartContext";
 import { ToastProvider } from "../components/ui/Toast";
@@ -90,13 +88,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 
   // Browsing history tracking (Story 6.2) — only for authenticated users
   useTrackingListener(syncUserId ?? undefined);
-
-  useEffect(() => {
-    initAnonymousSession(supabase).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn("[auth] initAnonymousSession error:", err);
-    });
-  }, [supabase]);
 
   return (
     <html lang="en" suppressHydrationWarning>

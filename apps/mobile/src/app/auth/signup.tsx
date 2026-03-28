@@ -68,14 +68,20 @@ export default function SignupScreen() {
     setIsLoading(true);
     try {
       const supabase = createSupabaseClient();
-      const { error: authError } = await signUpWithEmail(email, supabase);
+      const { data, error: authError } = await signUpWithEmail(email, password, supabase);
 
       if (authError) {
         setError(mapAuthError(authError.message));
         return;
       }
 
-      // Store password in memory for after verification
+      // When email confirmations are disabled, account is ready immediately
+      if (data?.user?.email_confirmed_at) {
+        router.replace("/");
+        return;
+      }
+
+      // Email confirmations enabled — OTP was sent, go to verify page
       setPendingSignup(email, password);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes not yet regenerated

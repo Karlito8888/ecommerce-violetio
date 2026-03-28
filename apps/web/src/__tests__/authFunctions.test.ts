@@ -42,13 +42,16 @@ describe("signUpWithEmail", () => {
     mockClient = buildMockSupabaseClient();
   });
 
-  it("calls updateUser with email only (step 1 — trigger verification)", async () => {
+  it("calls updateUser with email and password", async () => {
     const mockData = { user: { id: "uuid-1", is_anonymous: true, email: "a@b.com" } };
     mockClient.auth.updateUser.mockResolvedValue({ data: mockData, error: null });
 
-    const result = await signUpWithEmail("a@b.com", mockClient);
+    const result = await signUpWithEmail("a@b.com", "Pass123!", mockClient);
 
-    expect(mockClient.auth.updateUser).toHaveBeenCalledWith({ email: "a@b.com" });
+    expect(mockClient.auth.updateUser).toHaveBeenCalledWith({
+      email: "a@b.com",
+      password: "Pass123!",
+    });
     expect(result.data).toEqual(mockData);
     expect(result.error).toBeNull();
   });
@@ -57,7 +60,7 @@ describe("signUpWithEmail", () => {
     const mockError = { code: "email_exists", message: "Email already in use" };
     mockClient.auth.updateUser.mockResolvedValue({ data: null, error: mockError });
 
-    const result = await signUpWithEmail("a@b.com", mockClient);
+    const result = await signUpWithEmail("a@b.com", "Pass123!", mockClient);
 
     expect(result.data).toBeNull();
     expect(result.error).toEqual(mockError);

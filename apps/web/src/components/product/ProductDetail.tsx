@@ -144,6 +144,11 @@ export default function ProductDetail({ product }: { product: Product }) {
    * Both satisfy the DB CHECK constraint `carts_has_owner`.
    */
   const handleAddToCart = useCallback(async () => {
+    // eslint-disable-next-line no-console
+    console.log("[cart] handleAddToCart:", {
+      selectedSku: selectedSku?.id ?? null,
+      addButtonState,
+    });
     if (!selectedSku || addButtonState !== "idle") return;
     setAddButtonState("loading");
 
@@ -163,9 +168,13 @@ export default function ProductDetail({ product }: { product: Product }) {
           data: { userId, sessionId },
         });
         if (createResult.error || !createResult.data) {
+          // eslint-disable-next-line no-console
+          console.error("[cart] createCart failed:", createResult.error);
           setAddButtonState("idle");
           return;
         }
+        // eslint-disable-next-line no-console
+        console.log("[cart] cart created:", createResult.data.violetCartId);
         setCart(createResult.data.id, createResult.data.violetCartId);
         currentVioletCartId = createResult.data.violetCartId;
       }

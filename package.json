@@ -8,9 +8,10 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun --cwd=apps/web run dev",
+    "dev": "bun --env-file=.env.local --cwd=apps/web run dev",
     "dev:mobile": "bun --cwd=apps/mobile run start",
-    "build": "bun --cwd=apps/web run build",
+    "dev:functions": "supabase functions serve --env-file supabase/.env",
+    "build": "bun --env-file=.env.local --cwd=apps/web run build",
     "typecheck": "bun --cwd=apps/web run typecheck && bun --cwd=apps/mobile run typecheck",
     "lint": "eslint apps/ packages/ --max-warnings 0",
     "lint:fix": "eslint apps/ packages/ --fix",

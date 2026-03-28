@@ -15,18 +15,42 @@ export function configureEnv(vars: Record<string, string>): void {
   Object.assign(_envOverrides, vars);
 }
 
+// Vite 7+ forbids dynamic access to import.meta.env — each variable must be
+// referenced by its full static key. We use a lazy getter so the static
+// references exist in the source (satisfying Vite's static analysis) but the
+// code is only evaluated in Vite environments where import.meta.env is defined.
+function _getViteEnv(name: string): string | undefined {
+  // Metro (React Native) doesn't define import.meta.env — bail early.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof import.meta === "undefined" || !(import.meta as any).env) {
+    return undefined;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const env = (import.meta as any).env;
+  switch (name) {
+    case "SUPABASE_URL":
+      return env.SUPABASE_URL ?? env.VITE_SUPABASE_URL;
+    case "SUPABASE_ANON_KEY":
+      return env.SUPABASE_ANON_KEY ?? env.VITE_SUPABASE_ANON_KEY;
+    case "VIOLET_API_KEY":
+      return env.VIOLET_API_KEY ?? env.VITE_VIOLET_API_KEY;
+    case "VIOLET_API_SECRET":
+      return env.VIOLET_API_SECRET ?? env.VITE_VIOLET_API_SECRET;
+    case "VIOLET_APP_ID":
+      return env.VIOLET_APP_ID ?? env.VITE_VIOLET_APP_ID;
+    case "OPENAI_API_KEY":
+      return env.OPENAI_API_KEY ?? env.VITE_OPENAI_API_KEY;
+    case "STRIPE_PUBLISHABLE_KEY":
+      return env.STRIPE_PUBLISHABLE_KEY ?? env.VITE_STRIPE_PUBLISHABLE_KEY;
+    default:
+      return undefined;
+  }
+}
+
 export function getEnvVar(name: string): string | undefined {
   if (_envOverrides[name] !== undefined) return _envOverrides[name];
-  // In Vite-based apps, import.meta.env contains env vars (VITE_-prefixed on client).
-  // Cast to `any` because import.meta.env is a Vite extension not in base TS types,
-  // and this shared package is consumed by both Vite (web) and Metro (mobile).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meta = typeof import.meta !== "undefined" ? (import.meta as any) : null;
-  if (meta?.env) {
-    const env = meta.env as Record<string, string | undefined>;
-    const metaVal = env[name] || env[`VITE_${name}`];
-    if (metaVal) return metaVal;
-  }
+  const viteVal = _getViteEnv(name);
+  if (viteVal) return viteVal;
   if (typeof process !== "undefined" && process.env) {
     return process.env[name];
   }

@@ -48,6 +48,15 @@ export function getAdapter(): SupplierAdapter {
   const password = process.env.VIOLET_PASSWORD;
   const apiBase = process.env.VIOLET_API_BASE ?? "https://sandbox-api.violet.io/v1";
 
+  // eslint-disable-next-line no-console
+  console.log("[violet] env check:", {
+    appId: !!appId,
+    appSecret: !!appSecret,
+    username: !!username,
+    password: !!password,
+    apiBase,
+  });
+
   if (!appId || !appSecret || !username || !password) {
     throw new Error(
       "Missing required Violet env vars: VIOLET_APP_ID, VIOLET_APP_SECRET, VIOLET_USERNAME, VIOLET_PASSWORD",

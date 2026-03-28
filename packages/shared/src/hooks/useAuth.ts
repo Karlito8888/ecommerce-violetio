@@ -50,7 +50,8 @@ export function useLogin() {
  */
 export function useRegister() {
   return useMutation({
-    mutationFn: ({ email }: { email: string }) => signUpWithEmail(email),
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      signUpWithEmail(email, password),
   });
 }
 

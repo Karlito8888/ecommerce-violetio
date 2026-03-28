@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { useRecentlyViewed, productDetailQueryOptions, useUser } from "@ecommerce/shared";
+import { useRecentlyViewed, productDetailQueryOptions } from "@ecommerce/shared";
+import { useUser } from "#/hooks/useUser";
 import type { Product, ProductDetailFetchFn } from "@ecommerce/shared";
 import { getProductFn } from "#/server/getProduct";
 import BaseProductCard from "./BaseProductCard";

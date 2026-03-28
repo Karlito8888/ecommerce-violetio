@@ -1,10 +1,6 @@
 import { Component, type ReactNode } from "react";
-import {
-  useIsInWishlist,
-  useAddToWishlist,
-  useRemoveFromWishlist,
-  useUser,
-} from "@ecommerce/shared";
+import { useIsInWishlist, useAddToWishlist, useRemoveFromWishlist } from "@ecommerce/shared";
+import { useUser } from "#/hooks/useUser";
 import { useToast } from "../ui/Toast";
 
 interface WishlistButtonProps {
