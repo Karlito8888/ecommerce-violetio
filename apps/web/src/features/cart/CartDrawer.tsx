@@ -56,14 +56,14 @@ export default function CartDrawer({
   const isUpdating = updateMutation.isPending || removeMutation.isPending;
 
   // ── Handlers ────────────────────────────────────────────────────────
-  const handleUpdateQty = (skuId: string, quantity: number) => {
+  const handleUpdateQty = (orderSkuId: string, skuId: string, quantity: number) => {
     if (!violetCartId) return;
-    updateMutation.mutate({ violetCartId, skuId, quantity });
+    updateMutation.mutate({ violetCartId, orderSkuId, skuId, quantity });
   };
 
-  const handleRemove = (skuId: string) => {
+  const handleRemove = (orderSkuId: string, skuId: string) => {
     if (!violetCartId) return;
-    removeMutation.mutate({ violetCartId, skuId });
+    removeMutation.mutate({ violetCartId, orderSkuId, skuId });
   };
 
   // ── Keyboard: Escape to close ───────────────────────────────────────

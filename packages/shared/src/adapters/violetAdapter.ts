@@ -1134,16 +1134,16 @@ export class VioletAdapter implements SupplierAdapter {
    * Updates a SKU quantity via PUT /checkout/cart/{cartId}/skus/{skuId}.
    *
    * @param violetCartId - Violet cart integer ID (as string)
-   * @param skuId - Violet SKU integer ID (as string)
+   * @param orderSkuId - Violet OrderSku ID (cart line item ID, not catalog SKU ID)
    * @param quantity - New quantity (minimum 1)
    */
   async updateCartItem(
     violetCartId: string,
-    skuId: string,
+    orderSkuId: string,
     quantity: number,
   ): Promise<ApiResponse<Cart>> {
     const result = await this.fetchWithRetry(
-      `${this.apiBase}/checkout/cart/${violetCartId}/skus/${skuId}`,
+      `${this.apiBase}/checkout/cart/${violetCartId}/skus/${orderSkuId}`,
       {
         method: "PUT",
         body: JSON.stringify({ quantity }),
@@ -1159,11 +1159,11 @@ export class VioletAdapter implements SupplierAdapter {
    * Removes a SKU from a Violet cart via DELETE /checkout/cart/{cartId}/skus/{skuId}.
    *
    * @param violetCartId - Violet cart integer ID (as string)
-   * @param skuId - Violet SKU integer ID (as string)
+   * @param orderSkuId - Violet OrderSku ID (cart line item ID, not catalog SKU ID)
    */
-  async removeFromCart(violetCartId: string, skuId: string): Promise<ApiResponse<Cart>> {
+  async removeFromCart(violetCartId: string, orderSkuId: string): Promise<ApiResponse<Cart>> {
     const result = await this.fetchWithRetry(
-      `${this.apiBase}/checkout/cart/${violetCartId}/skus/${skuId}`,
+      `${this.apiBase}/checkout/cart/${violetCartId}/skus/${orderSkuId}`,
       { method: "DELETE" },
     );
 

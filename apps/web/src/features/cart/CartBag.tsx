@@ -5,8 +5,8 @@ import CartItem from "./CartItem";
 
 interface CartBagProps {
   bag: Bag;
-  onUpdateQty: (skuId: string, quantity: number) => void;
-  onRemove: (skuId: string) => void;
+  onUpdateQty: (orderSkuId: string, skuId: string, quantity: number) => void;
+  onRemove: (orderSkuId: string, skuId: string) => void;
   isUpdating?: boolean;
 }
 

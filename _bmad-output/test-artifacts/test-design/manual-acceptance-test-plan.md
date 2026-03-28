@@ -369,6 +369,7 @@ Revenue-critical path. Test every scenario meticulously.
 > | 3 | **P1** | Cart drawer shows Subtotal $0.00 / Total $0.00 | Violet returns 0 for aggregates before checkout steps | `violetAdapter.ts`: compute subtotal from items when Violet returns 0 |
 > | 4 | **P2** | Edge Functions return 401 Unauthorized | `verify_jwt=true` (default) blocks unauthenticated/anonymous calls at gateway | `config.toml`: `verify_jwt=false` for `get-recommendations`, `search-products`, `track-event` |
 > | 5 | **P2** | Edge Functions BOOT_ERROR (503) | Duplicate `const body` in `violetAuth.ts` (same function scope) | Renamed to `loginData`/`refreshData` |
+> | 6 | **P1** | +/- quantity and Remove return 404 "Order Sku could not be found" | Update/remove used catalog `skuId` instead of Violet `OrderSku.id` in API path | Pass `orderSkuId` (cart line item ID) through entire chain |
 
 ### Story 4-1: Cart Creation & Item Management
 
@@ -380,9 +381,9 @@ Revenue-critical path. Test every scenario meticulously.
 - [x] **Web:** Cart drawer/panel slides in from right side *(Shopping Bag drawer opens correctly)*
 - [ ] **Web:** Cart badge in header updates to show item count
 - [x] **Web:** Add same product again -- quantity increases (not duplicate line item) *(Confirmed: qty went from 1 to 3)*
-- [ ] **Web:** Click +/- to update quantity -- total updates
-- [ ] **Web:** Click remove (X) -- item removed from cart
-- [ ] **Web:** Remove last item -- empty cart state shown
+- [x] **Web:** Click +/- to update quantity -- total updates *(Fixed: was using catalog skuId instead of OrderSku id for Violet API — 5→4→5 confirmed)*
+- [x] **Web:** Click remove (X) -- item removed from cart *(Remove button works, item disappears)*
+- [x] **Web:** Remove last item -- empty cart state shown *("Your bag is empty" + "Start shopping" displayed)*
 - [ ] **Mobile:** Tap "Add to Cart" -- item added
 - [ ] **Mobile:** Cart tab badge updates with item count
 - [ ] **Mobile:** Can update quantity and remove items

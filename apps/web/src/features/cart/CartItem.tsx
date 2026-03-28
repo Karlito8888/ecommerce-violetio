@@ -5,8 +5,8 @@ import type { CartItem as CartItemType } from "@ecommerce/shared";
 
 interface CartItemProps {
   item: CartItemType;
-  onUpdateQty: (skuId: string, quantity: number) => void;
-  onRemove: (skuId: string) => void;
+  onUpdateQty: (orderSkuId: string, skuId: string, quantity: number) => void;
+  onRemove: (orderSkuId: string, skuId: string) => void;
   isUpdating?: boolean;
 }
 
@@ -22,7 +22,7 @@ export default function CartItem({ item, onUpdateQty, onRemove, isUpdating }: Ca
   const handleRemove = () => {
     setIsRemoving(true);
     // Allow CSS animation to play before removing from DOM
-    setTimeout(() => onRemove(item.skuId), 150);
+    setTimeout(() => onRemove(item.id, item.skuId), 150);
   };
 
   const lineTotal = item.unitPrice * item.quantity;
@@ -55,7 +55,7 @@ export default function CartItem({ item, onUpdateQty, onRemove, isUpdating }: Ca
             className="cart-drawer__qty-btn"
             aria-label="Decrease quantity"
             disabled={item.quantity <= 1 || isUpdating}
-            onClick={() => onUpdateQty(item.skuId, item.quantity - 1)}
+            onClick={() => onUpdateQty(item.id, item.skuId, item.quantity - 1)}
           >
             −
           </button>
@@ -65,7 +65,7 @@ export default function CartItem({ item, onUpdateQty, onRemove, isUpdating }: Ca
             className="cart-drawer__qty-btn"
             aria-label="Increase quantity"
             disabled={isUpdating}
-            onClick={() => onUpdateQty(item.skuId, item.quantity + 1)}
+            onClick={() => onUpdateQty(item.id, item.skuId, item.quantity + 1)}
           >
             +
           </button>

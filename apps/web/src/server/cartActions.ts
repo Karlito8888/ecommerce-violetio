@@ -275,10 +275,12 @@ export const addToCartFn = createServerFn({ method: "POST" })
  * device, the old quantity would overwrite the correct one during the upsert.
  */
 export const updateCartItemFn = createServerFn({ method: "POST" })
-  .inputValidator((input: { violetCartId: string; skuId: string; quantity: number }) => input)
+  .inputValidator(
+    (input: { violetCartId: string; orderSkuId: string; skuId: string; quantity: number }) => input,
+  )
   .handler(async ({ data }): Promise<ApiResponse<Cart>> => {
     const adapter = getAdapter();
-    const result = await adapter.updateCartItem(data.violetCartId, data.skuId, data.quantity);
+    const result = await adapter.updateCartItem(data.violetCartId, data.orderSkuId, data.quantity);
     if (result.error) return result;
 
     const supabaseCartId = await getSupabaseCartId(data.violetCartId);
@@ -350,10 +352,10 @@ export const updateCartItemFn = createServerFn({ method: "POST" })
  * grows unbounded and Supabase bandwidth is wasted on every getCartFn query.
  */
 export const removeFromCartFn = createServerFn({ method: "POST" })
-  .inputValidator((input: { violetCartId: string; skuId: string }) => input)
+  .inputValidator((input: { violetCartId: string; orderSkuId: string; skuId: string }) => input)
   .handler(async ({ data }): Promise<ApiResponse<Cart>> => {
     const adapter = getAdapter();
-    const result = await adapter.removeFromCart(data.violetCartId, data.skuId);
+    const result = await adapter.removeFromCart(data.violetCartId, data.orderSkuId);
     if (result.error) return result;
 
     const supabaseCartId = await getSupabaseCartId(data.violetCartId);

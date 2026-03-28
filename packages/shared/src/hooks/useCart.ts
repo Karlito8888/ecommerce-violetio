@@ -28,6 +28,9 @@ export type AddToCartFn = (input: {
 /** Function signature for updating a cart item quantity. */
 export type UpdateCartItemFn = (input: {
   violetCartId: string;
+  /** Violet OrderSku ID (cart line item ID) — used in Violet API path */
+  orderSkuId: string;
+  /** Catalog SKU ID — used for Supabase cart_items sync */
   skuId: string;
   quantity: number;
 }) => Promise<ApiResponse<Cart>>;
@@ -35,6 +38,9 @@ export type UpdateCartItemFn = (input: {
 /** Function signature for removing a cart item. */
 export type RemoveFromCartFn = (input: {
   violetCartId: string;
+  /** Violet OrderSku ID (cart line item ID) — used in Violet API path */
+  orderSkuId: string;
+  /** Catalog SKU ID — used for Supabase cart_items sync */
   skuId: string;
 }) => Promise<ApiResponse<Cart>>;
 
@@ -200,7 +206,7 @@ export function useUpdateCartItem(updateFn: UpdateCartItemFn) {
             bags: previousCart.data.bags.map((bag) => ({
               ...bag,
               items: bag.items.map((item) =>
-                item.skuId === variables.skuId ? { ...item, quantity: variables.quantity } : item,
+                item.id === variables.orderSkuId ? { ...item, quantity: variables.quantity } : item,
               ),
             })),
           },
@@ -247,7 +253,7 @@ export function useRemoveFromCart(removeFn: RemoveFromCartFn) {
             bags: previousCart.data.bags
               .map((bag) => ({
                 ...bag,
-                items: bag.items.filter((item) => item.skuId !== variables.skuId),
+                items: bag.items.filter((item) => item.id !== variables.orderSkuId),
               }))
               .filter((bag) => bag.items.length > 0),
           },
