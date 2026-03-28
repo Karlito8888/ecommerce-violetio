@@ -379,7 +379,7 @@ Revenue-critical path. Test every scenario meticulously.
 
 - [x] **Web:** Click "Add to Cart" on a product -- cart created via Violet API *(Tested: Unicorn Hoodie, product 59398)*
 - [x] **Web:** Cart drawer/panel slides in from right side *(Shopping Bag drawer opens correctly)*
-- [ ] **Web:** Cart badge in header updates to show item count
+- [ ] **Web:** Cart badge in header updates to show item count *(P2 bug: Cart icon is a `<Link to="/">` — no badge, navigates to home instead of opening drawer)*
 - [x] **Web:** Add same product again -- quantity increases (not duplicate line item) *(Confirmed: qty went from 1 to 3)*
 - [x] **Web:** Click +/- to update quantity -- total updates *(Fixed: was using catalog skuId instead of OrderSku id for Violet API — 5→4→5 confirmed)*
 - [x] **Web:** Click remove (X) -- item removed from cart *(Remove button works, item disappears)*
@@ -387,7 +387,7 @@ Revenue-critical path. Test every scenario meticulously.
 - [ ] **Mobile:** Tap "Add to Cart" -- item added
 - [ ] **Mobile:** Cart tab badge updates with item count
 - [ ] **Mobile:** Can update quantity and remove items
-- [ ] **Both:** Reload page/restart app -- cart persists
+- [x] **Both:** Reload page/restart app -- cart persists *(Cart ID cookie persists across reload + navigation; qty 1 → reload → add → qty 2 confirmed)*
 - [x] **Both:** Items grouped by merchant (Bag structure visible) *(STYLESPHERE merchant shown)*
 - [ ] **Both:** Add out-of-stock item -- error displayed per bag
 
