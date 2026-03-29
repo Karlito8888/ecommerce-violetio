@@ -86,6 +86,7 @@ export async function persistOrder(
           total: bag.total,
           shipping_method: bag.shippingMethod ?? null,
           carrier: bag.carrier ?? null,
+          commission_rate: bag.commissionRate,
         })
         .select("id")
         .single();

@@ -506,6 +506,7 @@ export const persistAndConfirmOrderFn = createServerFn({ method: "POST" })
             total: bag.total,
             shippingMethod: bag.shippingMethod?.label,
             carrier: bag.shippingMethod?.carrier,
+            commissionRate: bag.commissionRate,
             items: bag.items.map((item) => ({
               skuId: item.skuId,
               name: item.name,
