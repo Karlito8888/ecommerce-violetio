@@ -5,6 +5,11 @@ import RecentlyViewedRow from "../components/product/RecentlyViewedRow";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
+const POPULAR_CATEGORIES = [
+  { slug: "fashion", label: "Fashion", filter: "Clothing" },
+  { slug: "home", label: "Home & Living", filter: "Home" },
+] as const;
+
 /**
  * Homepage route — entry point for the platform.
  *
@@ -82,12 +87,45 @@ function App() {
 
       <RecentlyViewedRow />
 
+      <section className="categories-teaser">
+        <h2 className="island-kicker categories-teaser__kicker">Shop by Category</h2>
+        <div className="categories-teaser__grid">
+          {POPULAR_CATEGORIES.map((cat, index) => (
+            <Link
+              key={cat.slug}
+              to="/products"
+              search={{
+                category: cat.filter,
+                minPrice: undefined,
+                maxPrice: undefined,
+                inStock: undefined,
+                sortBy: undefined,
+                sortDirection: undefined,
+              }}
+              className="island-shell categories-teaser__card rise-in"
+              style={{ animationDelay: `${index * 90 + 80}ms` }}
+            >
+              <span className="categories-teaser__label">{cat.label}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <section className="features">
         {[
-          ["Type-Safe Routing", "Routes and links stay in sync across every page."],
-          ["Server Functions", "Call server code from your UI without creating API boilerplate."],
-          ["Streaming by Default", "Ship progressively rendered responses for faster experiences."],
-          ["Vanilla CSS", "Design with custom properties and BEM — no framework needed."],
+          [
+            "AI-Powered Search",
+            "Describe what you\u2019re looking for in your own words \u2014 our search understands intent, not just keywords.",
+          ],
+          [
+            "Curated Merchants",
+            "Every seller is handpicked for quality, authenticity, and reliability.",
+          ],
+          [
+            "Unified Checkout",
+            "One cart, multiple merchants \u2014 a single seamless checkout experience.",
+          ],
+          ["Secure Payments", "Stripe-powered payments with full buyer protection on every order."],
         ].map(([title, desc], index) => (
           <article
             key={title}
@@ -98,23 +136,6 @@ function App() {
             <p className="features__desc">{desc}</p>
           </article>
         ))}
-      </section>
-
-      <section className="island-shell quick-start">
-        <p className="island-kicker quick-start__kicker">Quick Start</p>
-        <ul className="quick-start__list">
-          <li>
-            Edit <code>src/routes/index.tsx</code> to customize the home page.
-          </li>
-          <li>
-            Update <code>src/components/Header.tsx</code> and <code>src/components/Footer.tsx</code>{" "}
-            for brand links.
-          </li>
-          <li>
-            Add routes in <code>src/routes</code> and tweak visual tokens in{" "}
-            <code>src/styles.css</code>.
-          </li>
-        </ul>
       </section>
     </section>
   );

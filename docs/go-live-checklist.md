@@ -3,14 +3,34 @@
 This checklist must be fully checked before scheduling the Violet go-live demo.
 Share this file with the Violet team at support@violet.io when booking.
 
-## Stripe
+## Stripe Platform Account
 
-- [ ] Stripe Platform account created at stripe.com
-- [ ] Stripe Connect activated (Settings → Connect settings → Platform)
-- [ ] KYC completed and approved by Stripe
-- [ ] Stripe Platform account linked to Violet via channel.violet.io → App Settings → Payments
+- [x] Stripe Platform account created (`acct_1TGHSsLL5d4dVawJ`)
+- [x] Stripe Connect activated as Marketplace
+- [x] Restricted key `violet-test` created with all required scopes
+- [x] OAuth enabled with Violet redirect URIs configured
+- [x] OAuth Client ID: `ca_UEm0xAdznqYjzTFRGqvRWFj99mbOiuZD`
+- [x] Test publishable key added to `.env.local`
+- [x] Test secret key added to `.env.local` (server-side only)
+- [ ] KYC completed and approved by Stripe (required for Live Mode)
+- [ ] Live restricted key `violet-live` created (when ready for production)
 - [ ] Live publishable key (`pk_live_...`) added to production environment
-- [ ] Live secret key (`sk_live_...`) added to production environment (server-side only)
+
+## Violet Credentials & Contract
+
+- [x] Encrypted credentials generated via Violet Credentials Encryptor (saved in `docs/stripe-encrypted-credentials-test.json`)
+- [ ] **ACTION REQUIRED**: Send encrypted credentials to Violet Support via Slack or DevRev
+- [ ] **ACTION REQUIRED**: Sign formal agreement/contract with Violet
+- [ ] **ACTION REQUIRED**: Confirm payment settings (capture, transfer, tax-remitter) with Violet Support
+
+## Violet Webhooks
+
+- [x] 18 webhooks registered on sandbox (endpoint: `https://maison-emile.netlify.app/api/webhooks/violet`)
+  - Orders: ACCEPTED, UPDATED, COMPLETED, SHIPPED, DELIVERED, REFUNDED, CANCELED, FAILED
+  - Merchants: CONNECTED, DISCONNECTED, ENABLED, DISABLED, COMPLETE, PAYOUT_ACCOUNT_CREATED
+  - Payments: TRANSFER_SENT, TRANSFER_FAILED, CAPTURE_CAPTURED, CAPTURE_FAILED
+- [ ] Webhook handler endpoint implemented in the app
+- [ ] Webhook URL updated to actual deployment URL (when deployed)
 
 ## Violet Connect Configuration
 

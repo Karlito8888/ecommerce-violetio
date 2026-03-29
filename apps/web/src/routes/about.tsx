@@ -17,7 +17,7 @@ export const Route = createFileRoute("/about")({
     meta: buildPageMeta({
       title: "About | Maison Émile",
       description:
-        "Learn about Maison Émile — a curated shopping platform bringing you unique products from handpicked merchants.",
+        "Maison Émile curates handpicked merchants and AI-powered search for a seamless multi-merchant shopping experience.",
       url: "/about",
       siteUrl: SITE_URL,
     }),
@@ -29,11 +29,17 @@ function About() {
   return (
     <section className="page-wrap about">
       <section className="island-shell about__section">
-        <p className="island-kicker about__kicker">About</p>
-        <h1 className="display-title about__title">A small starter with room to grow.</h1>
+        <p className="island-kicker about__kicker">Our Story</p>
+        <h1 className="display-title about__title">Curated shopping, powered by people and AI.</h1>
         <p className="about__text">
-          TanStack Start gives you type-safe routing, server functions, and modern SSR defaults. Use
-          this as a clean foundation, then layer in your own routes, styling, and add-ons.
+          Maison Émile brings together handpicked merchants who share our commitment to quality and
+          authenticity. Every product in our catalog has been curated — not by algorithms alone, but
+          by people who care about what they recommend.
+        </p>
+        <p className="about__text">
+          Powered by AI-driven search and a seamless multi-merchant checkout, we make it effortless
+          to discover and purchase from the best independent sellers — all in one place, with full
+          buyer protection on every order.
         </p>
       </section>
     </section>

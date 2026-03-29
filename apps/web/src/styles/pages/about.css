@@ -39,3 +39,7 @@
   line-height: 2;
   color: var(--color-charcoal);
 }
+
+.about__text + .about__text {
+  margin-top: 1rem;
+}
