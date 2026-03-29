@@ -34,6 +34,9 @@ import type {
   VioletOfferResponse,
   VioletSkuResponse,
   VioletAlbumResponse,
+  Distribution,
+  DistributionType,
+  DistributionStatus,
 } from "../types/index.js";
 import { getDeliveryEstimate, countryFlag } from "../utils/currency.js";
 import type { SupplierAdapter } from "./supplierAdapter.js";
@@ -1515,6 +1518,36 @@ export class VioletAdapter implements SupplierAdapter {
       },
       error: null,
     };
+  }
+
+  async getOrderDistributions(violetOrderId: string): Promise<ApiResponse<Distribution[]>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/orders/${violetOrderId}/distributions`,
+      {
+        method: "GET",
+      },
+    );
+    if (result.error) return { data: null, error: result.error };
+
+    const raw = result.data as unknown;
+    const items: unknown[] = Array.isArray(raw)
+      ? raw
+      : (((raw as Record<string, unknown>).content as unknown[]) ?? []);
+
+    const distributions: Distribution[] = items.map((item: unknown) => {
+      const d = item as Record<string, unknown>;
+      return {
+        violetBagId: d["bag_id"] != null ? String(d["bag_id"]) : null,
+        type: (d["type"] as DistributionType) ?? "PAYMENT",
+        status: (d["status"] as DistributionStatus) ?? "PENDING",
+        channelAmountCents: Number(d["channel_amount"] ?? 0),
+        stripeFee: Number(d["stripe_fee"] ?? 0),
+        merchantAmountCents: Number(d["merchant_amount"] ?? 0),
+        subtotalCents: Number(d["subtotal"] ?? 0),
+      };
+    });
+
+    return { data: distributions, error: null };
   }
 
   async getOrders(_userId: string): Promise<ApiResponse<Order[]>> {

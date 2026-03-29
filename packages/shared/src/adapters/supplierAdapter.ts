@@ -18,6 +18,7 @@ import type {
   ShippingAddressInput,
   ShippingMethodsAvailable,
   SetShippingMethodInput,
+  Distribution,
 } from "../types/index.js";
 
 /**
@@ -154,6 +155,14 @@ export interface SupplierAdapter {
    * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
    */
   getOrder(orderId: string): Promise<ApiResponse<OrderDetail>>;
+
+  /**
+   * Fetches payment distributions for a Violet order.
+   * Returns per-bag breakdown of channel commission, Stripe fees, and merchant payout.
+   * No Violet webhook exists for distributions — must be fetched on-demand.
+   */
+  getOrderDistributions(violetOrderId: string): Promise<ApiResponse<Distribution[]>>;
+
   getOrders(userId: string): Promise<ApiResponse<Order[]>>;
 
   // Webhooks
