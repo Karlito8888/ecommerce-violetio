@@ -5,7 +5,9 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { ApiResponse } from "../types/api.types.js";
 import type { CommissionSummary, DashboardMetrics, TimeRangeParams } from "../types/admin.types.js";
+import type { DistributionRow } from "../types/index.js";
 
 /**
  * Resolve a TimeRangeParams union to concrete ISO date strings for SQL functions.
@@ -137,4 +139,26 @@ export async function getCommissionSummary(client: SupabaseClient): Promise<Comm
 export async function refreshDashboardViews(client: SupabaseClient): Promise<void> {
   const { error } = await client.rpc("refresh_dashboard_views");
   if (error) throw error;
+}
+
+/**
+ * Fetches persisted distributions for a Violet order from Supabase.
+ * Returns all distribution rows ordered by type.
+ * Returns empty array if no distributions have been synced yet.
+ */
+export async function getOrderDistributions(
+  supabase: SupabaseClient,
+  violetOrderId: string,
+): Promise<ApiResponse<DistributionRow[]>> {
+  const { data, error } = await supabase
+    .from("order_distributions")
+    .select("*")
+    .eq("violet_order_id", violetOrderId)
+    .order("type");
+
+  if (error) {
+    return { data: null, error: { code: error.code, message: error.message } };
+  }
+
+  return { data: data as DistributionRow[], error: null };
 }

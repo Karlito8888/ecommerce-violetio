@@ -37,6 +37,7 @@ export {
   getDashboardMetrics,
   getCommissionSummary,
   refreshDashboardViews,
+  getOrderDistributions,
 } from "./admin.js";
 export {
   getSupportInquiries,
