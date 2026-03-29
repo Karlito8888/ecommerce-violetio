@@ -23,6 +23,9 @@ import { getAdminDashboardFn } from "#/server/getAdminDashboard";
 import DashboardMetrics from "#/components/admin/DashboardMetrics";
 import CommissionTable from "#/components/admin/CommissionTable";
 import TimeRangeSelector from "#/components/admin/TimeRangeSelector";
+import { syncOrderDistributionsFn } from "#/server/distributions";
+import DistributionsTable from "#/components/admin/DistributionsTable";
+import type { DistributionRow } from "@ecommerce/shared";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
@@ -55,6 +58,9 @@ function AdminDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [distributions, setDistributions] = useState<DistributionRow[]>([]);
+  const [syncingOrderId, setSyncingOrderId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   async function handleRangeChange(params: TimeRangeParams) {
     setSelectedRange(params.range);
@@ -85,6 +91,21 @@ function AdminDashboardPage() {
     }
   }
 
+  async function handleSyncDistributions(violetOrderId: string) {
+    setSyncingOrderId(violetOrderId);
+    setSelectedOrderId(violetOrderId);
+    try {
+      const result = await syncOrderDistributionsFn({ data: { violetOrderId } });
+      if (result.data) {
+        setDistributions(result.data);
+      }
+    } catch {
+      setError("Failed to sync distributions. Please try again.");
+    } finally {
+      setSyncingOrderId(null);
+    }
+  }
+
   return (
     <div className="page-wrap admin-dashboard">
       <header className="admin-dashboard__header">
@@ -107,6 +128,31 @@ function AdminDashboardPage() {
       <section className="admin-dashboard__commission">
         <h2 className="admin-dashboard__section-title">Commission Breakdown</h2>
         <CommissionTable data={dashboardData.commission} />
+      </section>
+
+      <section className="admin-dashboard__distributions">
+        <h2 className="admin-dashboard__section-title">Distributions</h2>
+        <div className="admin-dashboard__dist-input">
+          <label htmlFor="dist-order-id">Check distributions for Violet order ID:</label>
+          <input
+            id="dist-order-id"
+            type="text"
+            placeholder="e.g. 123456"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.currentTarget.value) {
+                handleSyncDistributions(e.currentTarget.value);
+              }
+            }}
+          />
+        </div>
+        {selectedOrderId && (
+          <DistributionsTable
+            distributions={distributions}
+            violetOrderId={selectedOrderId}
+            onSync={handleSyncDistributions}
+            isSyncing={syncingOrderId === selectedOrderId}
+          />
+        )}
       </section>
 
       <nav className="admin-dashboard__nav">
