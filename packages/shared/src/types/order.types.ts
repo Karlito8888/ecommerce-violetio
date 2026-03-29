@@ -241,6 +241,8 @@ export interface OrderBag {
   taxTotal: number;
   /** Bag total in integer cents (subtotal + shipping + tax) */
   total: number;
+  /** Commission rate (%) Violet applies to this bag's subtotal. */
+  commissionRate: number;
   /** Shipping carrier and method label — absent if not yet shipped */
   shippingMethod?: { carrier: string; label: string };
 }

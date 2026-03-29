@@ -101,6 +101,8 @@ export interface OrderBagRow {
   tax_total: number;
   /** Bag total in integer cents */
   total: number;
+  /** Commission rate (%) snapshotted from Violet at order time */
+  commission_rate: number;
   /** Shipping method label (e.g., "Standard Shipping") — null if not yet shipped */
   shipping_method: string | null;
   /** Carrier tracking number — populated on BAG_SHIPPED webhook */
@@ -239,6 +241,8 @@ export interface PersistOrderBagInput {
   shippingMethod?: string;
   /** Shipping carrier name — absent pre-shipment */
   carrier?: string;
+  /** Commission rate (%) from Violet — snapshotted at order time. */
+  commissionRate: number;
   /** Line items (SKUs) in this bag */
   items: PersistOrderItemInput[];
 }
