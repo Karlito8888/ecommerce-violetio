@@ -55,7 +55,10 @@ export function getSupabaseSessionClient(): SupabaseClient {
     throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables");
   }
 
-  const host = new URL(supabaseUrl).hostname;
+  // @supabase/ssr derives the cookie name prefix from the first segment of
+  // the hostname: "127.0.0.1" → "127", "abcdefgh.supabase.co" → "abcdefgh".
+  // The server must use the same derivation so it reads the correct cookie.
+  const host = new URL(supabaseUrl).hostname.split(".")[0];
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

@@ -213,6 +213,7 @@ function PaymentForm({
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paymentLoadError, setPaymentLoadError] = useState<string | null>(null);
 
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
@@ -419,7 +420,20 @@ function PaymentForm({
 
   return (
     <form onSubmit={handlePlaceOrder}>
-      <PaymentElement />
+      <PaymentElement
+        onLoadError={(event) => {
+          setPaymentLoadError(
+            event.error?.message ??
+              "Payment form could not be loaded. Please refresh and try again.",
+          );
+        }}
+      />
+
+      {paymentLoadError && (
+        <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
+          {paymentLoadError}
+        </p>
+      )}
 
       {submitError && (
         <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
@@ -430,7 +444,7 @@ function PaymentForm({
       <button
         type="submit"
         className={`checkout__submit checkout__submit--place-order${isSubmitting ? " checkout__submit--loading" : ""}`}
-        disabled={isSubmitting || !stripe || !elements}
+        disabled={isSubmitting || !stripe || !elements || !!paymentLoadError}
         style={{ marginTop: "1.5rem" }}
       >
         {isSubmitting ? (

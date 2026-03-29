@@ -101,3 +101,18 @@ export function createSupabaseClient(config?: SupabaseBrowserConfig): SupabaseCl
 export function _resetSupabaseClient(): void {
   _supabaseClient = null;
 }
+
+/**
+ * Inject an externally-created Supabase client as the shared singleton.
+ *
+ * On the web app, `@supabase/ssr`'s `createBrowserClient()` stores the
+ * session in cookies (visible to the SSR server), whereas the default
+ * `createSupabaseClient()` uses localStorage. Call this function early
+ * in the web app's lifecycle so that all shared hooks and client functions
+ * (wishlist, profile, tracking, etc.) use the cookie-based client.
+ *
+ * Mobile apps do NOT need this — localStorage is the correct storage there.
+ */
+export function _setSupabaseClient(client: SupabaseClient): void {
+  _supabaseClient = client;
+}

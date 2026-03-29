@@ -22,6 +22,7 @@ import {
 import { getCountryCookieFn } from "../server/geoip";
 import UserLocationProvider from "../contexts/UserLocationContext";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
+import { _setSupabaseClient } from "@ecommerce/shared";
 
 import appCss from "../styles/index.css?url";
 
@@ -88,6 +89,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   // Auth session for Realtime subscription (Story 4.6)
   const { user, isAnonymous } = useAuthSession();
   const supabase = getSupabaseBrowserClient();
+
+  // Inject the SSR cookie-based client into the shared package singleton.
+  // Without this, shared hooks (wishlist, profile) default to a localStorage-based
+  // client that has no session — causing all RLS-protected mutations to fail on web.
+  _setSupabaseClient(supabase);
+
   // Only provide userId for non-anonymous authenticated users — anonymous users don't sync
   const syncUserId = user && !isAnonymous ? user.id : null;
 
