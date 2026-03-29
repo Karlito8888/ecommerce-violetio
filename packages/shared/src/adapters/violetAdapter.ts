@@ -1481,6 +1481,7 @@ export class VioletAdapter implements SupplierAdapter {
               label: String(shippingMethodRaw.label ?? ""),
             }
           : undefined,
+        commissionRate: Number(bag.commission_rate ?? 10),
       };
     });
 
