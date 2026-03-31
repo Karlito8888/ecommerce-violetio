@@ -13,16 +13,35 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
   profileQueryOptions,
+  profileKeys,
   useUpdateProfile,
   updateProfileSchema,
   mapAuthError,
   buildPageMeta,
+  getProfile,
 } from "@ecommerce/shared";
 import { getSupabaseBrowserClient } from "#/utils/supabase";
+import { getSupabaseSessionClient } from "#/server/supabaseServer";
+
+/**
+ * Server function that fetches the profile using the authenticated session client.
+ *
+ * Mirrors the prefetchWishlistFn pattern (Bug #13 fix): the shared `profileQueryOptions`
+ * queryFn uses `createSupabaseClient()` which is unauthenticated during SSR, causing
+ * RLS to return null and the 5-minute staleTime to cache that null. This server function
+ * reads cookies via the H3 request context so RLS passes correctly on hard refresh.
+ */
+const prefetchProfileFn = createServerFn({ method: "GET" })
+  .inputValidator((userId: string) => userId)
+  .handler(async ({ data: userId }) => {
+    const supabase = getSupabaseSessionClient();
+    return getProfile(userId, supabase);
+  });
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
@@ -38,7 +57,8 @@ export const Route = createFileRoute("/account/profile")({
   }),
   loader: async ({ context }) => {
     const { user } = context as { user: { id: string; email: string | null } };
-    await context.queryClient.ensureQueryData(profileQueryOptions(user.id));
+    const profileData = await prefetchProfileFn({ data: user.id });
+    context.queryClient.setQueryData(profileKeys.detail(user.id), profileData);
     return { user };
   },
   component: ProfilePage,

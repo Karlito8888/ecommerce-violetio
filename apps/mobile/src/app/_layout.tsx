@@ -4,6 +4,9 @@ import React, { useCallback, useState } from "react";
 import { useColorScheme } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StripeProvider } from "@stripe/stripe-react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
 
 import { router } from "expo-router";
 import {
@@ -128,12 +131,14 @@ export default function TabLayout() {
   const stripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
   return (
-    <AuthProvider>
-      <StripeProvider publishableKey={stripeKey}>
-        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-          <AppContent />
-        </ThemeProvider>
-      </StripeProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <StripeProvider publishableKey={stripeKey}>
+          <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+            <AppContent />
+          </ThemeProvider>
+        </StripeProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

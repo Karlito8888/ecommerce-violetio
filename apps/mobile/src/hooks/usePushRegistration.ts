@@ -14,10 +14,26 @@
 
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { upsertPushToken } from "@ecommerce/shared";
+
+// expo-notifications Android push support was removed from Expo Go in SDK 53.
+// Detect Expo Go via Constants.appOwnership and skip all notification setup.
+// In a dev build or production build, appOwnership is null/standalone.
+const IS_EXPO_GO = Constants.appOwnership === "expo";
+
+// Only import if we're NOT in Expo Go (dev build or production)
+
+const Notifications: typeof import("expo-notifications") | null = IS_EXPO_GO
+  ? null
+  : (() => {
+      try {
+        return require("expo-notifications");
+      } catch {
+        return null;
+      }
+    })();
 
 /**
  * Registers the device for push notifications and saves the token to Supabase.
@@ -68,21 +84,29 @@ export function useNotificationListeners(
   responseCallback.current = onNotificationResponse;
 
   useEffect(() => {
-    const receivedSub = Notifications.addNotificationReceivedListener((_notification) => {
-      // Foreground notification received — no action needed,
-      // the notification handler (set at module level) controls display.
-    });
+    const N = Notifications;
+    if (!N) return;
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (data && responseCallback.current) {
-        responseCallback.current(data as Record<string, unknown>);
-      }
-    });
+    let receivedSub: { remove: () => void } | null = null;
+    let responseSub: { remove: () => void } | null = null;
+
+    try {
+      receivedSub = N.addNotificationReceivedListener((_notification) => {
+        // Foreground notification received — display controlled by notification handler.
+      });
+      responseSub = N.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data;
+        if (data && responseCallback.current) {
+          responseCallback.current(data as Record<string, unknown>);
+        }
+      });
+    } catch {
+      // expo-notifications not supported in Expo Go SDK 53+ — silently skip
+    }
 
     return () => {
-      receivedSub.remove();
-      responseSub.remove();
+      receivedSub?.remove();
+      responseSub?.remove();
     };
   }, []);
 }
@@ -92,18 +116,27 @@ export function useNotificationListeners(
  * Call this once at module level (outside component) in the root layout.
  */
 export function setupNotificationHandler(): void {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  const N = Notifications;
+  if (!N) return;
+  try {
+    N.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch {
+    // expo-notifications not supported in Expo Go SDK 53+ — silently skip
+  }
 }
 
 /** Requests permission and returns the Expo push token, or undefined on failure. */
 async function registerForPushNotificationsAsync(): Promise<string | undefined> {
+  const N = Notifications;
+  if (!N) return undefined;
+
   if (!Device.isDevice) {
     // eslint-disable-next-line no-console
     console.warn("[usePushRegistration] Push notifications require a physical device");
@@ -112,18 +145,18 @@ async function registerForPushNotificationsAsync(): Promise<string | undefined> 
 
   // Android requires a notification channel (Android 8+)
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
+    await N.setNotificationChannelAsync("default", {
       name: "Default",
-      importance: Notifications.AndroidImportance.MAX,
+      importance: N.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
     });
   }
 
   // Request permission
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  const { status: existingStatus } = await N.getPermissionsAsync();
   let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await N.requestPermissionsAsync();
     finalStatus = status;
   }
   if (finalStatus !== "granted") {
@@ -138,6 +171,6 @@ async function registerForPushNotificationsAsync(): Promise<string | undefined> 
     return undefined;
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+  const tokenData = await N.getExpoPushTokenAsync({ projectId });
   return tokenData.data;
 }

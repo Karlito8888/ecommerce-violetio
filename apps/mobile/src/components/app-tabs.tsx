@@ -1,100 +1,137 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import React from "react";
-import { Platform, useColorScheme } from "react-native";
-import { useUser, useWishlistProductIds } from "@ecommerce/shared";
-
-import { Colors } from "@/constants/theme";
+import { useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { HamburgerMenu } from "./HamburgerMenu";
 
 /**
- * Standard tab navigator using expo-router's Tabs component.
- * Compatible with Expo Go (unlike NativeTabs which requires a dev build).
- *
- * ## Code Review Fix M3 — Wishlist tab auth-gated
- * AC #10 / Task 14.3: "Only show for authenticated users — hide tab for guests"
- * The Wishlist tab uses `href: null` for unauthenticated users, which hides it
- * from the tab bar while keeping the route registered (required by expo-router).
- *
- * ## Code Review Fix L2 — Badge dot on wishlist tab
- * AC #10 / Task 14.4: "badge dot when wishlist has items"
- * Uses `tabBarBadge` with an empty string to show a dot indicator.
+ * Tab navigator with 4 core tabs: Home, Search, Cart, Profile.
+ * All secondary routes (help, legal, order, content, checkout, settings, etc.)
+ * are hidden from the tab bar with href: null — they remain accessible via the
+ * HamburgerMenu or programmatic navigation.
  */
 export default function AppTabs() {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : scheme];
+  const colors = Colors[scheme === "unspecified" ? "light" : (scheme ?? "light")];
+  const [menuVisible, setMenuVisible] = useState(false);
 
-  const { data: user } = useUser();
-  const isAuthenticated = !!user && !user.is_anonymous;
-  const userId = isAuthenticated ? user.id : undefined;
-  const { data: wishlistIds } = useWishlistProductIds(userId);
-  const hasWishlistItems = (wishlistIds?.length ?? 0) > 0;
+  const headerRight = () => (
+    <Pressable
+      onPress={() => setMenuVisible(true)}
+      style={({ pressed }) => [styles.hamburgerBtn, { opacity: pressed ? 0.6 : 1 }]}
+      accessibilityLabel="Ouvrir le menu"
+      accessibilityRole="button"
+    >
+      <Ionicons name="menu-outline" size={26} color={colors.text} />
+    </Pressable>
+  );
+
+  const headerTitle = () => (
+    <Text style={[styles.headerBrand, { color: colors.text, fontFamily: Fonts?.serif }]}>
+      Maison Émile
+    </Text>
+  );
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.tint,
-        tabBarStyle: Platform.select({
-          ios: { position: "absolute" },
-          default: { backgroundColor: colors.background },
-        }),
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
+    <>
+      <Tabs
+        screenOptions={{
+          headerShown: true,
+          headerStyle: { backgroundColor: colors.background },
+          headerShadowVisible: false,
+          headerTitle: headerTitle,
+          headerRight: headerRight,
+          headerLeft: () => <View style={styles.headerLeftSpacer} />,
+          tabBarActiveTintColor: colors.tint,
+          tabBarInactiveTintColor: colors.textSecondary,
+          tabBarStyle: [
+            styles.tabBar,
+            Platform.select({
+              ios: { position: "absolute" },
+              default: { backgroundColor: colors.background },
+            }),
+          ],
+          tabBarLabelStyle: styles.tabBarLabel,
         }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          title: "Search",
-          tabBarIcon: ({ color }) => <TabIcon name="search" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="wishlist"
-        options={{
-          title: "Wishlist",
-          tabBarIcon: ({ color }) => <TabIcon name="wishlist" color={color} />,
-          // Hide tab for guests (Code Review Fix M3), show badge dot (Fix L2)
-          href: isAuthenticated ? undefined : null,
-          tabBarBadge: isAuthenticated && hasWishlistItems ? "" : undefined,
-          tabBarBadgeStyle: { minWidth: 8, minHeight: 8, borderRadius: 4, maxWidth: 8 },
-        }}
-      />
-      <Tabs.Screen
-        name="cart"
-        options={{
-          title: "Cart",
-          tabBarIcon: ({ color }) => <TabIcon name="cart" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color }) => <TabIcon name="profile" color={color} />,
-        }}
-      />
-      {/* Hide non-tab routes from the tab bar */}
-      <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="auth" options={{ href: null }} />
-      <Tabs.Screen name="products" options={{ href: null }} />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Accueil",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="search"
+          options={{
+            title: "Recherche",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "search" : "search-outline"} size={22} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="cart"
+          options={{
+            title: "Panier",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "bag" : "bag-outline"} size={22} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Profil",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
+            ),
+          }}
+        />
+
+        {/* Hidden secondary routes — accessible via HamburgerMenu or deep links */}
+        <Tabs.Screen name="wishlist" options={{ href: null }} />
+        <Tabs.Screen name="explore" options={{ href: null }} />
+        <Tabs.Screen name="auth" options={{ href: null }} />
+        <Tabs.Screen name="products" options={{ href: null }} />
+        <Tabs.Screen name="checkout" options={{ href: null }} />
+        <Tabs.Screen name="content" options={{ href: null }} />
+        <Tabs.Screen name="help" options={{ href: null }} />
+        <Tabs.Screen name="legal" options={{ href: null }} />
+        <Tabs.Screen name="order" options={{ href: null }} />
+        <Tabs.Screen name="settings" options={{ href: null }} />
+      </Tabs>
+
+      <HamburgerMenu visible={menuVisible} onClose={() => setMenuVisible(false)} />
+    </>
   );
 }
 
-/** Minimal text-based tab icon (avoids native icon dependency issues in Expo Go). */
-function TabIcon({ name, color }: { name: string; color: string }) {
-  const icons: Record<string, string> = {
-    home: "\u2302",
-    search: "\u{1F50D}",
-    wishlist: "\u2665",
-    cart: "\u{1F6D2}",
-    profile: "\u{1F464}",
-  };
-  const { Text } = require("react-native");
-  return <Text style={{ fontSize: 20, color }}>{icons[name] || "?"}</Text>;
-}
+const styles = StyleSheet.create({
+  headerBrand: {
+    fontSize: 18,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  headerLeftSpacer: {
+    width: 44,
+  },
+  hamburgerBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  tabBar: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.06)",
+    paddingTop: 4,
+  },
+  tabBarLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 0.2,
+    marginBottom: 2,
+  },
+});

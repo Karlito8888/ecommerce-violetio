@@ -18,9 +18,12 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import {
   wishlistQueryOptions,
+  wishlistKeys,
+  getWishlist,
   useRemoveFromWishlist,
   productDetailQueryOptions,
   buildPageMeta,
@@ -30,12 +33,38 @@ import {
 import type { Product, ProductDetailFetchFn, AddToCartFn } from "@ecommerce/shared";
 import { getProductFn } from "#/server/getProduct";
 import { addToCartFn, createCartFn } from "#/server/cartActions";
+import { getSupabaseSessionClient } from "#/server/supabaseServer";
 import WishlistButton from "#/components/product/WishlistButton";
 import { useToast } from "#/components/ui/Toast";
 import { useCartContext } from "#/contexts/CartContext";
 import { getSupabaseBrowserClient } from "#/utils/supabase";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
+/**
+ * Server function that fetches the wishlist using the authenticated session client.
+ *
+ * ## Why a dedicated server function instead of wishlistQueryOptions directly?
+ *
+ * `wishlistQueryOptions` calls `getWishlist(userId)` → `createSupabaseClient()`, which
+ * returns an unauthenticated singleton on SSR (the `_setSupabaseClient` injection from
+ * `__root.tsx` only runs client-side in the React component). On a hard refresh, the
+ * loader runs before React renders, so the singleton is unauthenticated → empty wishlist
+ * gets cached for 5 minutes (staleTime).
+ *
+ * `createServerFn` handlers always run on the server regardless of SSR vs. client
+ * navigation, making `getSupabaseSessionClient()` (which reads cookies via the H3 request
+ * context) safely available. The returned data seeds the query cache via `setQueryData`,
+ * bypassing the unauthenticated `queryFn` for the initial render.
+ *
+ * This follows the same pattern as `getAuthUserFn` in `account/route.tsx`.
+ */
+const prefetchWishlistFn = createServerFn({ method: "GET" })
+  .inputValidator((userId: string) => userId)
+  .handler(async ({ data: userId }) => {
+    const supabase = getSupabaseSessionClient();
+    return getWishlist(userId, supabase);
+  });
 
 /** Adapter: wraps TanStack Start Server Function to match shared hook signature. */
 const fetchProductAdapter: ProductDetailFetchFn = (id) => getProductFn({ data: id });
@@ -62,7 +91,11 @@ export const Route = createFileRoute("/account/wishlist")({
   }),
   loader: async ({ context }) => {
     const { user } = context as { user: { id: string; email: string | null } };
-    await context.queryClient.ensureQueryData(wishlistQueryOptions(user.id));
+    // Prefetch the wishlist with the authenticated SSR session client.
+    // setQueryData seeds the cache directly, bypassing the unauthenticated
+    // singleton that wishlistQueryOptions would use during SSR.
+    const wishlistData = await prefetchWishlistFn({ data: user.id });
+    context.queryClient.setQueryData(wishlistKeys.all(user.id), wishlistData);
     return { user };
   },
   component: WishlistPage,

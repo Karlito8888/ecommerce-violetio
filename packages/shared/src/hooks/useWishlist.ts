@@ -36,6 +36,7 @@ import {
   removeFromWishlist,
 } from "../clients/wishlist.js";
 import type { Wishlist } from "../types/wishlist.types.js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const wishlistKeys = {
   all: (userId: string) => ["wishlist", userId] as const,
@@ -45,11 +46,16 @@ export const wishlistKeys = {
 /**
  * Query options for a user's full wishlist.
  * staleTime 5 min matches architecture.md caching spec ("profile 5 min").
+ *
+ * @param client Optional Supabase client to use for the fetch. Pass the SSR
+ *   session client (from a server function) to ensure the authenticated session
+ *   is used during SSR prefetch. Omit on the client — the shared singleton
+ *   (set by `_setSupabaseClient` in `__root.tsx`) will be used instead.
  */
-export function wishlistQueryOptions(userId: string) {
+export function wishlistQueryOptions(userId: string, client?: SupabaseClient) {
   return queryOptions({
     queryKey: wishlistKeys.all(userId),
-    queryFn: () => getWishlist(userId),
+    queryFn: () => getWishlist(userId, client),
     staleTime: 5 * 60 * 1000,
   });
 }

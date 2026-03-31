@@ -1,4 +1,5 @@
-import { Image, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
 import type { Product } from "@ecommerce/shared";
 import { formatPrice } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
@@ -16,10 +17,16 @@ import { Colors, Fonts, Spacing } from "@/constants/theme";
  * Uses React Native StyleSheet with design tokens from theme constants.
  */
 export default function ProductCard({ product }: { product: Product }) {
+  const router = useRouter();
   const priceDisplay = formatPrice(product.minPrice, product.currency);
 
   return (
-    <View style={styles.card}>
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={() => router.push(`/products/${product.id}` as never)}
+      accessibilityRole="button"
+      accessibilityLabel={`${product.name}, ${priceDisplay}`}
+    >
       {product.thumbnailUrl ? (
         <Image
           source={{ uri: product.thumbnailUrl }}
@@ -50,7 +57,7 @@ export default function ProductCard({ product }: { product: Product }) {
         </ThemedText>
         <ThemedText style={styles.price}>{priceDisplay}</ThemedText>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -106,5 +113,8 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  cardPressed: {
+    opacity: 0.75,
   },
 });

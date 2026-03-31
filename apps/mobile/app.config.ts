@@ -92,7 +92,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-notifications",
     // Required for native Stripe SDK linking during expo prebuild / EAS Build
-    "@stripe/stripe-react-native",
+    // merchantIdentifier is iOS-only (Apple Pay) — empty string is fine for Android dev
+    ["@stripe/stripe-react-native", { merchantIdentifier: "" }],
     [
       "expo-local-authentication",
       {

@@ -6,16 +6,28 @@
  * toggle feedback.
  */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Switch, View, Pressable, Linking, Platform } from "react-native";
-import * as Notifications from "expo-notifications";
-
+import Constants from "expo-constants";
 import { ThemedText } from "@/components/themed-text";
 import { Spacing } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { colors } from "@ecommerce/ui";
 import { useNotificationPreferences, useUpdateNotificationPreference } from "@ecommerce/shared";
 import type { NotificationType } from "@ecommerce/shared";
+
+// expo-notifications Android push support was removed from Expo Go in SDK 53.
+const IS_EXPO_GO = Constants.appOwnership === "expo";
+
+const Notifications: typeof import("expo-notifications") | null = IS_EXPO_GO
+  ? null
+  : (() => {
+      try {
+        return require("expo-notifications");
+      } catch {
+        return null;
+      }
+    })();
 
 interface PreferenceRowProps {
   label: string;
@@ -81,6 +93,7 @@ export default function NotificationPreferencesScreen() {
   const [permissionStatus, setPermissionStatus] = useState<string>("undetermined");
 
   useEffect(() => {
+    if (!Notifications) return;
     Notifications.getPermissionsAsync().then(({ status }) => {
       setPermissionStatus(status);
     });

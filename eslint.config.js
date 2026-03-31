@@ -16,6 +16,9 @@ export default tseslint.config(
       "_bmad-output/",
       "**/scripts/",
       "**/metro.config.js",
+      "**/babel.config.js",
+      "**/android/",
+      "**/ios/",
     ],
   },
   {

@@ -32,7 +32,20 @@ config.resolver.nodeModulesPaths = [
 config.resolver.disableHierarchicalLookup = false;
 
 // Resolve .js imports to .ts files (ESM-style imports in workspace packages)
+// Also forces singleton packages that use React Context to resolve to a single
+// instance — prevents "No QueryClient set" errors caused by Bun hoisting the
+// same semver version into two different .bun/ content-hash directories.
+const SINGLETON_MODULES = ["@tanstack/react-query"];
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Force all react-query imports to resolve from the mobile app's own
+  // node_modules, so the same React Context object is shared everywhere.
+  if (SINGLETON_MODULES.includes(moduleName)) {
+    return context.resolveRequest(
+      { ...context, originModulePath: path.resolve(projectRoot, "package.json") },
+      moduleName,
+      platform,
+    );
+  }
   if (moduleName.endsWith(".js")) {
     const tsModuleName = moduleName.replace(/\.js$/, ".ts");
     try {
