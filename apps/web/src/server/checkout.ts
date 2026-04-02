@@ -249,8 +249,8 @@ export const setCustomerFn = createServerFn({ method: "POST" })
  * All checkout server functions log errors to error_logs for operational visibility.
  * This ensures complete checkout failure traceability.
  *
- * Only called when the user unchecks "Same as shipping address".
- * If billing matches shipping, this call is skipped entirely.
+ * Always called before fetching the PaymentIntent — Violet requires billing_address
+ * on every order submission, including when billing matches shipping.
  *
  * ## Violet billing_address body
  * Same shape as shipping_address but WITHOUT `phone` field.

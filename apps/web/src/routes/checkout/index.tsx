@@ -1070,7 +1070,17 @@ function CheckoutPage() {
     setIsBillingSubmitting(true);
     setBillingError(null);
 
-    // If different billing address, send it to Violet
+    // Violet requires billing_address on every order, even when same as shipping.
+    const effectiveBilling = billingSameAsShipping
+      ? {
+          address1: address.address1,
+          city: address.city,
+          state: address.state,
+          postalCode: address.postalCode,
+          country: address.country,
+        }
+      : billingAddress;
+
     if (!billingSameAsShipping) {
       if (
         !billingAddress.address1.trim() ||
@@ -1083,22 +1093,22 @@ function CheckoutPage() {
         setIsBillingSubmitting(false);
         return;
       }
+    }
 
-      const billingResult = await setBillingAddressFn({
-        data: {
-          address1: billingAddress.address1,
-          city: billingAddress.city,
-          state: billingAddress.state,
-          postalCode: billingAddress.postalCode,
-          country: billingAddress.country,
-        },
-      });
+    const billingResult = await setBillingAddressFn({
+      data: {
+        address1: effectiveBilling.address1,
+        city: effectiveBilling.city,
+        state: effectiveBilling.state,
+        postalCode: effectiveBilling.postalCode,
+        country: effectiveBilling.country,
+      },
+    });
 
-      if (billingResult.error) {
-        setBillingError(billingResult.error.message);
-        setIsBillingSubmitting(false);
-        return;
-      }
+    if (billingResult.error) {
+      setBillingError(billingResult.error.message);
+      setIsBillingSubmitting(false);
+      return;
     }
 
     // Fetch PaymentIntent client secret from Violet (GET /cart → extract secret)
