@@ -75,19 +75,24 @@ export const Route = createFileRoute("/checkout/")({
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
 
 /**
- * Stripe instance — loaded once at module level to prevent re-initialization.
+ * Cache for Stripe instances by publishable key.
  *
- * `loadStripe()` returns a Promise that resolves to a Stripe object. Calling it
- * multiple times (inside a component) would reload the Stripe SDK on every render.
- * Module-level ensures single initialization.
+ * Violet creates payment intents on their own Stripe platform account (Demo/Test Mode),
+ * so the correct publishable key comes from the PI response (`stripe_key` field), not
+ * from our `VITE_STRIPE_PUBLISHABLE_KEY` env var. A mismatch causes PaymentElement loaderror.
  *
- * Uses `VITE_STRIPE_PUBLISHABLE_KEY` (Vite exposes `VITE_` prefixed env vars
- * to the client). This is the Stripe publishable key (pk_test_... or pk_live_...),
- * safe for client-side use.
+ * This cache ensures `loadStripe()` is called at most once per key (Stripe's recommendation),
+ * while allowing the key to be determined at runtime from Violet's response.
  *
  * @see https://stripe.com/docs/stripe-js/react#elements-provider
  */
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
+const stripeInstanceCache = new Map<string, ReturnType<typeof loadStripe>>();
+function getStripePromise(publishableKey: string): ReturnType<typeof loadStripe> {
+  if (!stripeInstanceCache.has(publishableKey)) {
+    stripeInstanceCache.set(publishableKey, loadStripe(publishableKey));
+  }
+  return stripeInstanceCache.get(publishableKey)!;
+}
 
 /**
  * Countries supported by Violet's Stripe platform account (US/UK/EU).
@@ -459,6 +464,37 @@ function PaymentForm({
   );
 }
 
+// ─── Checkout Form Persistence ───────────────────────────────────────────
+// Persists form state to sessionStorage so navigating away and back
+// does not lose the user's progress (Bug #10 fix).
+
+const CHECKOUT_STORAGE_KEY = "checkout-form";
+
+interface CheckoutPersistedState {
+  step: CheckoutStep;
+  address: AddressFormState;
+  selectedMethods: Record<string, string>;
+  guestInfo: CustomerInput;
+  billingSameAsShipping: boolean;
+  billingAddress: AddressFormState;
+}
+
+function readCheckoutStorage(): Partial<CheckoutPersistedState> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = sessionStorage.getItem(CHECKOUT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Partial<CheckoutPersistedState>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function clearCheckoutStorage() {
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(CHECKOUT_STORAGE_KEY);
+  }
+}
+
 // ─── CheckoutPage ─────────────────────────────────────────────────────────
 
 function CheckoutPage() {
@@ -470,7 +506,13 @@ function CheckoutPage() {
   const cart = cartResponse?.data ?? null;
 
   // ── Checkout flow step ──────────────────────────────────────────────
-  const [step, setStep] = useState<CheckoutStep>("address");
+  const [step, setStep] = useState<CheckoutStep>(() => {
+    const saved = readCheckoutStorage().step;
+    // "payment" can't be restored — clientSecret is transient
+    // "methods" can't be restored — availableMethods must be re-fetched
+    if (saved === "payment" || saved === "methods") return "address";
+    return saved ?? "address";
+  });
 
   // ── Story 4.7: Checkout error state ─────────────────────────────────
   const [checkoutErrors, setCheckoutErrors] = useState<CheckoutError[]>([]);
@@ -741,12 +783,16 @@ function CheckoutPage() {
   }, [violetCartId, setCartHealth, queryClient]);
 
   // ── Address form ────────────────────────────────────────────────────
-  const [address, setAddress] = useState<AddressFormState>({
-    address1: "",
-    city: "",
-    state: "",
-    postalCode: "",
-    country: "US",
+  const [address, setAddress] = useState<AddressFormState>(() => {
+    return (
+      readCheckoutStorage().address ?? {
+        address1: "",
+        city: "",
+        state: "",
+        postalCode: "",
+        country: "US",
+      }
+    );
   });
   const [addressErrors, setAddressErrors] = useState<AddressFormErrors>({});
   const [isAddressSubmitting, setIsAddressSubmitting] = useState(false);
@@ -756,36 +802,49 @@ function CheckoutPage() {
   const [availableMethods, setAvailableMethods] = useState<ShippingMethodsAvailable[]>([]);
   const [bagLoadingState, setBagLoadingState] = useState<Record<string, boolean>>({});
   const [bagErrorState, setBagErrorState] = useState<Record<string, string>>({});
-  const [selectedMethods, setSelectedMethods] = useState<Record<string, string>>({});
+  const [selectedMethods, setSelectedMethods] = useState<Record<string, string>>(
+    () => readCheckoutStorage().selectedMethods ?? {},
+  );
 
   // ── Continue to payment ─────────────────────────────────────────────
   const [isSubmittingShipping, setIsSubmittingShipping] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
 
   // ── Guest info (Story 4.4) ──────────────────────────────────────────
-  const [guestInfo, setGuestInfo] = useState<CustomerInput>({
-    email: "",
-    firstName: "",
-    lastName: "",
-    marketingConsent: false,
+  const [guestInfo, setGuestInfo] = useState<CustomerInput>(() => {
+    return (
+      readCheckoutStorage().guestInfo ?? {
+        email: "",
+        firstName: "",
+        lastName: "",
+        marketingConsent: false,
+      }
+    );
   });
   const [guestError, setGuestError] = useState<string | null>(null);
   const [isGuestSubmitting, setIsGuestSubmitting] = useState(false);
 
   // ── Billing address (Story 4.4) ─────────────────────────────────────
-  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
-  const [billingAddress, setBillingAddress] = useState<AddressFormState>({
-    address1: "",
-    city: "",
-    state: "",
-    postalCode: "",
-    country: "US",
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState<boolean>(
+    () => readCheckoutStorage().billingSameAsShipping ?? true,
+  );
+  const [billingAddress, setBillingAddress] = useState<AddressFormState>(() => {
+    return (
+      readCheckoutStorage().billingAddress ?? {
+        address1: "",
+        city: "",
+        state: "",
+        postalCode: "",
+        country: "US",
+      }
+    );
   });
   const [billingError, setBillingError] = useState<string | null>(null);
   const [isBillingSubmitting, setIsBillingSubmitting] = useState(false);
 
   // ── Stripe payment (Story 4.4) ──────────────────────────────────────
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   /**
@@ -797,6 +856,19 @@ function CheckoutPage() {
    * @see Story 4.4 AC#13 — idempotency via appOrderId
    */
   const appOrderIdRef = useRef(crypto.randomUUID());
+
+  // Persist form state across navigations — cleared on order success (Bug #10 fix)
+  useEffect(() => {
+    const state: CheckoutPersistedState = {
+      step,
+      address,
+      selectedMethods,
+      guestInfo,
+      billingSameAsShipping,
+      billingAddress,
+    };
+    sessionStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(state));
+  }, [step, address, selectedMethods, guestInfo, billingSameAsShipping, billingAddress]);
 
   const allBagsSelected =
     availableMethods.length > 0 &&
@@ -1039,6 +1111,9 @@ function CheckoutPage() {
       return;
     }
 
+    const stripeKey =
+      piResult.data!.stripePublishableKey ?? import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "";
+    setStripePromise(getStripePromise(stripeKey));
     setClientSecret(piResult.data!.clientSecret);
     setStep("payment");
     setIsBillingSubmitting(false);
@@ -1067,6 +1142,9 @@ function CheckoutPage() {
    * confirmation page can display it with copy-to-clipboard.
    */
   async function handleOrderSuccess(orderId: string) {
+    // Clear persisted form state — order is complete, no need to restore it
+    clearCheckoutStorage();
+
     // Clear cart cookie so next addToCart creates a fresh cart
     await clearCartCookieFn();
 
@@ -1773,7 +1851,7 @@ function CheckoutPage() {
             )}
 
             {/* ── Section 5: Stripe payment (Story 4.4) ── */}
-            {step === "payment" && clientSecret && (
+            {step === "payment" && clientSecret && stripePromise && (
               <section
                 className="checkout__section checkout__payment"
                 aria-labelledby="checkout-payment-title"

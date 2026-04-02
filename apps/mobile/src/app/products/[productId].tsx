@@ -24,39 +24,59 @@ async function getSessionToken(): Promise<string | null> {
 }
 
 /**
+ * Resolves a Violet offer ID to its first available SKU ID.
+ *
+ * Violet's cart API requires a SKU id (the purchasable variant), not an offer id
+ * (the product listing). This calls GET /cart/offers/{offerId} which fetches
+ * the offer from Violet server-side and returns the first available SKU id.
+ *
+ * @see supabase/functions/cart/index.ts — GET /offers/{offerId} route
+ * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
+ */
+async function resolveSkuId(
+  offerId: string,
+  token: string,
+): Promise<{ skuId: string; name: string } | null> {
+  if (!EDGE_FN_BASE) return null;
+  try {
+    const res = await fetch(`${EDGE_FN_BASE}/offers/${offerId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const data = json.data as { skuId: string | null; name: string } | null;
+    if (!data?.skuId) return null;
+    return { skuId: data.skuId, name: data.name };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Mobile product detail screen using Expo Router Stack navigation.
  *
  * Uses `[productId]` dynamic segment convention (Expo Router).
  *
  * ## Data Fetching (placeholder)
  *
- * Currently renders a placeholder screen. Full data fetching will be implemented
- * when Supabase Edge Functions are set up for mobile API access (future story).
+ * Currently renders a placeholder screen. Full product data fetching will be
+ * wired up in a future story via `GET /catalog/offers/{id}` through an Edge Function.
  * The web version uses TanStack Start Server Functions which are not available
  * in React Native — mobile needs its own fetch mechanism via Edge Functions.
  *
- * ## Companion Component
+ * ## Add to Bag — SKU resolution
  *
- * A fully implemented `MobileProductDetail` component exists at
- * `apps/mobile/src/components/product/ProductDetail.tsx`. It handles:
- * - Horizontal image gallery with `pagingEnabled` swiping
- * - Product info layout (merchant, name, price, description)
- * - "Add to Bag" CTA (placeholder)
+ * Violet requires a sku_id (not an offer_id) for POST /checkout/cart/{id}/skus.
+ * This screen calls `GET /cart/offers/{offerId}` first to resolve the first
+ * available SKU id, then uses it to add the item to cart.
  *
- * Once Edge Function data fetching is wired up, replace this placeholder
- * with: `<MobileProductDetail product={data} />`
- *
- * ## Navigation
- *
- * This screen lives under `products/_layout.tsx` (Stack navigator) and is
- * registered in `app-tabs.tsx` with `href: null` to hide it from the tab bar.
- * Users navigate here by pressing a product card in the catalog.
- *
- * @see https://docs.expo.dev/router/reference/dynamic-routes/
+ * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
+ * @see https://docs.violet.io/prism/catalog/skus — SKU fields: id, available, status
  */
 export default function ProductDetailScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
-  const [addState, setAddState] = useState<"idle" | "loading" | "added">("idle");
+  const [addState, setAddState] = useState<"idle" | "loading" | "added" | "error">("idle");
+  const [productName, setProductName] = useState<string | null>(null);
 
   // Track product view on screen focus (Story 6.2)
   const trackProductView = useTrackProductView(productId);
@@ -68,32 +88,34 @@ export default function ProductDetailScreen() {
 
   /**
    * Add to cart via the Supabase Edge Function.
-   * Creates a new cart if none exists, then adds the product SKU.
-   * Stores the violet_cart_id in SecureStore for cross-session persistence.
    *
-   * ## sku_id limitation (TODO: fix in mobile product fetch story)
-   * `productId` from the route params is a Violet **offer ID**, not a SKU ID.
-   * Violet's `POST /checkout/cart/{id}/skus` requires a specific `sku_id` (variant).
-   * Until mobile product data fetching is implemented (pending Edge Function wiring),
-   * this uses `productId` as a placeholder — it will fail for multi-variant products
-   * or if the offer ID != any SKU ID. Full variant selection requires fetching the
-   * product's SKUs via `GET /catalog/offers/{id}` first.
-   *
-   * @see apps/mobile/src/app/products/[productId].tsx — Data Fetching (placeholder) JSDoc
+   * Flow:
+   * 1. Get session token
+   * 2. Resolve offer ID → first available SKU id via GET /cart/offers/{offerId}
+   * 3. Get or create Violet cart
+   * 4. POST sku_id to /cart/{cartId}/skus
    */
   const handleAddToCart = async () => {
     if (!EDGE_FN_BASE || addState !== "idle") return;
     setAddState("loading");
 
     try {
-      // Use the session access token — Edge Function validates a user JWT, not the anon key
       const token = await getSessionToken();
       if (!token) {
         setAddState("idle");
         return;
       }
 
-      // Get or create cart ID
+      // Step 1: Resolve offer ID → first available SKU id
+      const resolved = await resolveSkuId(productId, token);
+      if (!resolved) {
+        setAddState("error");
+        setTimeout(() => setAddState("idle"), 2000);
+        return;
+      }
+      if (resolved.name && !productName) setProductName(resolved.name);
+
+      // Step 2: Get or create cart
       let violetCartId = await SecureStore.getItemAsync(CART_KEY);
       if (!violetCartId) {
         const createRes = await fetch(EDGE_FN_BASE, {
@@ -113,36 +135,41 @@ export default function ProductDetailScreen() {
         await SecureStore.setItemAsync(CART_KEY, violetCartId);
       }
 
-      // Add product SKU to cart
-      // TODO: productId is an offer ID — replace with the actual sku_id once
-      // mobile product data fetching is wired up via Edge Function.
+      // Step 3: Add SKU to cart using the resolved sku_id
       const addRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/skus`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          sku_id: Number(productId),
+          sku_id: Number(resolved.skuId),
           quantity: 1,
-          // productName and thumbnailUrl will be populated once real product
-          // data fetching is wired up (pending Edge Function integration).
-          productName: undefined,
-          thumbnailUrl: undefined,
+          productName: resolved.name,
         }),
       });
 
-      setAddState(addRes.ok ? "added" : "idle");
+      setAddState(addRes.ok ? "added" : "error");
       if (addRes.ok) setTimeout(() => setAddState("idle"), 1500);
+      else setTimeout(() => setAddState("idle"), 2000);
     } catch {
       setAddState("idle");
     }
   };
 
+  const btnLabel =
+    addState === "loading"
+      ? "Adding…"
+      : addState === "added"
+        ? "✓ Added!"
+        : addState === "error"
+          ? "Failed — retry"
+          : "Add to Bag";
+
   return (
     <>
-      <Stack.Screen options={{ title: "Product Detail" }} />
+      <Stack.Screen options={{ title: productName ?? "Product Detail" }} />
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#c9a96e" />
         <ThemedText type="subtitle" style={styles.title}>
-          Product Detail
+          {productName ?? "Product Detail"}
         </ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.subtitle}>
           Product #{productId}
@@ -151,7 +178,6 @@ export default function ProductDetailScreen() {
           Full product detail coming soon — pending Edge Function integration.
         </ThemedText>
 
-        {/* Add to Cart CTA — wired to Edge Function */}
         <TouchableOpacity
           style={[styles.addBtn, addState !== "idle" && styles.addBtnDisabled]}
           onPress={handleAddToCart}
@@ -159,9 +185,7 @@ export default function ProductDetailScreen() {
           accessibilityLabel="Add to bag"
           accessibilityState={{ busy: addState === "loading" }}
         >
-          <ThemedText style={styles.addBtnText}>
-            {addState === "loading" ? "Adding…" : addState === "added" ? "✓ Added!" : "Add to Bag"}
-          </ThemedText>
+          <ThemedText style={styles.addBtnText}>{btnLabel}</ThemedText>
         </TouchableOpacity>
       </View>
     </>

@@ -192,6 +192,12 @@ export interface PaymentIntent {
   /** Amount in integer cents */
   amount: number;
   currency: string;
+  /**
+   * Stripe publishable key from Violet — must be used to initialize Stripe Elements.
+   * In Demo/Test Mode, Violet creates payment intents on their own Stripe platform account,
+   * so this key differs from our VITE_STRIPE_PUBLISHABLE_KEY.
+   */
+  stripePublishableKey?: string;
 }
 
 // ─── Order Detail (Story 4.5 — Confirmation Page) ────────────────────

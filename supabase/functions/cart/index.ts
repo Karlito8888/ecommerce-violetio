@@ -1070,6 +1070,45 @@ Deno.serve(async (req: Request) => {
     return json({ data: transformOrder(raw), error: null });
   }
 
+  // ── Route: GET /offers/{offerId} — resolve offer → first available SKU ──
+  // Mobile PDP uses this to get the real sku_id before adding to cart.
+  // Violet's POST /checkout/cart/{id}/skus requires a SKU id, not an offer id.
+  // @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
+  const offerMatch = path.match(/^\/offers\/([^/]+)$/);
+  if (req.method === "GET" && offerMatch) {
+    const offerId = offerMatch[1];
+    const violetHeadersResult = await getVioletHeaders();
+    if (violetHeadersResult.error) {
+      return errorResponse("VIOLET.AUTH_FAILED", "Violet auth failed", 503);
+    }
+    const offerVioletHeaders = { ...violetHeadersResult.data };
+
+    const offerRes = await fetch(`${VIOLET_API_BASE}/catalog/offers/${offerId}`, {
+      headers: offerVioletHeaders,
+    });
+
+    if (!offerRes.ok) {
+      return errorResponse("VIOLET.NOT_FOUND", `Offer ${offerId} not found`, offerRes.status);
+    }
+
+    const offer = await offerRes.json();
+    const skus: Array<{ id: number; available?: boolean; status?: string }> = offer.skus ?? [];
+
+    // Pick first available SKU — prefer status=AVAILABLE and available=true
+    const firstAvailable =
+      skus.find((s) => s.available !== false && s.status !== "UNAVAILABLE") ?? skus[0];
+
+    return json({
+      data: {
+        offerId: String(offer.id),
+        name: String(offer.name ?? ""),
+        skuId: firstAvailable ? String(firstAvailable.id) : null,
+        skuCount: skus.length,
+      },
+      error: null,
+    });
+  }
+
   return errorResponse("CART.NOT_FOUND", "Route not found", 404);
 });
 

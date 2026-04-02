@@ -70,6 +70,39 @@ const BASE_DELAY_MS = 1000;
  */
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * In-memory cache for Demo Mode product listings.
+ *
+ * ## Why cache here?
+ *
+ * In Violet Demo Mode, `POST /catalog/offers/search` returns 0 results
+ * (demo merchants are not indexed). The fallback `getProductsFromMerchants`
+ * makes multiple sequential Violet API calls:
+ *   1. GET /merchants (~200ms)
+ *   2. GET /catalog/offers/merchants/{id} × N merchants (~500ms each)
+ *
+ * This chain causes ~2100ms SSR TTFB on the /products page.
+ * Caching the raw offers list for 60 seconds reduces repeat requests to <10ms.
+ *
+ * ## What is cached
+ * The raw offer objects (before country-specific transformation), keyed by nothing
+ * since Demo Mode always returns the same set of merchants/offers. Transformation
+ * via `transformOffer(offer, countryCode)` is re-applied per-request (cheap, O(n)).
+ *
+ * ## TTL choice
+ * 60 seconds balances freshness with performance. Products update via webhooks
+ * (OFFER_ADDED/UPDATED/REMOVED), so a 60s lag is acceptable for catalog browsing.
+ * Webhooks handle eventual consistency; this cache handles SSR latency.
+ *
+ * @see getProductsFromMerchants — the only consumer of this cache
+ */
+interface DemoOffersCache {
+  rawOffers: unknown[];
+  expiresAt: number;
+}
+let _demoOffersCache: DemoOffersCache | null = null;
+const DEMO_CACHE_TTL_MS = 60_000;
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -268,34 +301,49 @@ export class VioletAdapter implements SupplierAdapter {
     const page = params.page ?? 1;
     const size = params.pageSize ?? 20;
 
-    // Step 1: Get connected merchants
-    const merchantsResult = await this.fetchWithRetry(`${this.apiBase}/merchants?page=1&size=50`, {
-      method: "GET",
-    });
-    if (merchantsResult.error) return { data: null, error: merchantsResult.error };
+    // ── Cache check ──────────────────────────────────────────────────────────
+    // The raw offer list from Violet is the bottleneck: GET /merchants + N×GET
+    // /catalog/offers/merchants/{id} takes ~2s in Demo Mode. Cache for 60s.
+    // Filtering/sorting/pagination run in-memory from the cached raw offers.
+    let allRawOffers: unknown[];
+    const now = Date.now();
 
-    const merchantsData = merchantsResult.data as {
-      content: Array<{ id: number; connection_status?: string }>;
-    };
-    const merchantIds = merchantsData.content.map((m) => m.id);
-
-    if (merchantIds.length === 0) {
-      return { data: { data: [], total: 0, page, pageSize: size, hasNext: false }, error: null };
-    }
-
-    // Step 2: Fetch offers from all merchants in parallel
-    const offerPromises = merchantIds.map(async (merchantId) => {
-      const res = await this.fetchWithRetry(
-        `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100&include=shipping`,
+    if (_demoOffersCache && _demoOffersCache.expiresAt > now) {
+      allRawOffers = _demoOffersCache.rawOffers;
+    } else {
+      // Step 1: Get connected merchants
+      const merchantsResult = await this.fetchWithRetry(
+        `${this.apiBase}/merchants?page=1&size=50`,
         { method: "GET" },
       );
-      if (res.error || !res.data) return [];
-      const data = res.data as { content?: unknown[] };
-      return data.content ?? [];
-    });
+      if (merchantsResult.error) return { data: null, error: merchantsResult.error };
 
-    const allOfferArrays = await Promise.all(offerPromises);
-    const allRawOffers = allOfferArrays.flat();
+      const merchantsData = merchantsResult.data as {
+        content: Array<{ id: number; connection_status?: string }>;
+      };
+      const merchantIds = merchantsData.content.map((m) => m.id);
+
+      if (merchantIds.length === 0) {
+        return { data: { data: [], total: 0, page, pageSize: size, hasNext: false }, error: null };
+      }
+
+      // Step 2: Fetch offers from all merchants in parallel
+      const offerPromises = merchantIds.map(async (merchantId) => {
+        const res = await this.fetchWithRetry(
+          `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100&include=shipping`,
+          { method: "GET" },
+        );
+        if (res.error || !res.data) return [];
+        const data = res.data as { content?: unknown[] };
+        return data.content ?? [];
+      });
+
+      const allOfferArrays = await Promise.all(offerPromises);
+      allRawOffers = allOfferArrays.flat();
+
+      // Populate cache for subsequent SSR requests
+      _demoOffersCache = { rawOffers: allRawOffers, expiresAt: now + DEMO_CACHE_TTL_MS };
+    }
 
     // Step 3: Filter raw offers before transformation (saves processing)
     let filteredRaw = allRawOffers;
@@ -1062,6 +1110,7 @@ export class VioletAdapter implements SupplierAdapter {
         clientSecret: secret,
         amount: parsed.data.total ?? 0,
         currency: parsed.data.currency ?? "USD",
+        stripePublishableKey: parsed.data.stripe_key,
       },
       error: null,
     };
