@@ -68,7 +68,7 @@ interface CartContextValue {
   /** Set cart health status (Story 4.7) */
   setCartHealth: (status: CartHealthStatus) => void;
   /** Clear cart and cookie, guide user to start fresh (Story 4.7) */
-  resetCart: () => void;
+  resetCart: () => Promise<void>;
   /** Clear the merge error notification */
   clearMergeError: () => void;
 }

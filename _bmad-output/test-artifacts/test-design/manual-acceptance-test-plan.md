@@ -1,8 +1,8 @@
 # Manual Acceptance Test Plan -- Maison Emile E-Commerce Platform
 
-**Version:** 2.10
-**Date:** 2026-04-01
-**Last Test Execution:** 2026-04-01 Session 20 (Mobile emulator tests: tab nav PASS, home 12/39 products PASS, search "dress" → 4 semantic results PASS, PDP tap navigation PASS, cart empty state PASS, profil/settings PASS. Bug fix: EXPO_PUBLIC_SUPABASE_URL → 10.0.2.2 for Android emulator. Bug fix: handle-webhook verify_jwt=false. Add to Bag mobile PARTIAL — known limitation: offer ID ≠ SKU ID, documented TODO in code.)
+**Version:** 2.11
+**Date:** 2026-04-02
+**Last Test Execution:** 2026-04-02 Session 21 (Checkout tunnel E2E PASS — Bug fix `dda4674`: `billing_address` now always sent to Violet before order submit, even when "same as shipping" checked. Order #230715 confirmed at `/order/230715/confirmation`. Story 4-4 "On success" unblocked. Story 4-5 confirmation page PASS. Known bug: cart not cleared after successful order — badge still shows 1 item post-confirmation.)
 **Platforms:** Web (Browser), Mobile (Android Studio Emulator)
 **Total Stories:** 48 across 8 Epics
 **Total Test Cases:** 230+
@@ -449,10 +449,10 @@ Revenue-critical path. Test every scenario meticulously.
 - [x] Enter test card `4242 4242 4242 4242`, future date, any CVC *(Tested 2026-04-01 S18: card 4242×4242 + 12/29 + CVC 424 entered successfully. `elements.submit()` PASS, `stripe.confirmPayment()` PASS. Violet `submitOrderFn` returns VIOLET.API_ERROR — expected in Demo Mode (simulated payments cannot be submitted). Full Stripe flow unblocked, Demo Mode is the remaining wall.)*
 - [x] "Place Order" button shows loading state during processing *("Processing…" shown — PASS)*
 - [x] "Place Order" button disabled while processing (no double-submit) *(PASS — button disabled during 10s polling cycle)*
-- [ ] On success -- redirected to confirmation page *(BLOCKED by Violet Demo Mode — requires Violet Test Mode with real Stripe account to complete submit)*
+- [x] On success -- redirected to confirmation page *(Tested 2026-04-02 S21: Order #230715 created. Page navigated to `/order/230715/confirmation?token=...` — PASS. Fix: `billing_address` must always be sent to Violet before submit, commit `dda4674`.)*
 - [ ] **Mobile:** Stripe PaymentSheet renders and accepts test card
-- [ ] On failure (use declined card `4000 0000 0000 0002`) -- stays on checkout with error *(BLOCKED by Demo Mode — same blocker)*
-- [ ] Form data preserved after payment failure (email, address not cleared) *(BLOCKED by Demo Mode)*
+- [ ] On failure (use declined card `4000 0000 0000 0002`) -- stays on checkout with error *(PENDING)*
+- [ ] Form data preserved after payment failure (email, address not cleared) *(PENDING)*
 
 ### Story 4-5: Payment Confirmation & 3D Secure Handling
 
@@ -462,10 +462,10 @@ Revenue-critical path. Test every scenario meticulously.
 
 - [ ] Use 3DS test card `4000 0025 0000 3155` -- 3D Secure challenge modal appears
 - [ ] Complete 3D Secure challenge -- order submitted successfully
-- [ ] Confirmation page shows: order ID, ordered items, total paid
-- [ ] Cart cleared after successful order (badge shows 0, cart empty)
-- [ ] **Web:** Confirmation page accessible at `/order/[id]/confirmation`
-- [ ] **Web:** Reload confirmation page -- content still displayed
+- [x] Confirmation page shows: order ID, ordered items, total paid *(Tested 2026-04-02 S21: Order #230715, Unicorn Hoodie $201.00, Economy $0.00, Total $201.00, status ACCEPTED — PASS)*
+- [ ] Cart cleared after successful order (badge shows 0, cart empty) *(Tested 2026-04-02 S21: FAIL — cart badge still shows "1 items" after confirmation. Bug to fix.)*
+- [x] **Web:** Confirmation page accessible at `/order/[id]/confirmation` *(Tested 2026-04-02 S21: URL `/order/230715/confirmation?token=...` — PASS)*
+- [ ] **Web:** Reload confirmation page -- content still displayed *(PENDING)*
 - [ ] **Mobile:** Confirmation screen renders with order details
 
 ### Story 4-6: Cross-Device Cart Sync

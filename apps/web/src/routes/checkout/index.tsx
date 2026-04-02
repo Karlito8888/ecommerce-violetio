@@ -1155,13 +1155,8 @@ function CheckoutPage() {
     // Clear persisted form state — order is complete, no need to restore it
     clearCheckoutStorage();
 
-    // Clear cart cookie so next addToCart creates a fresh cart
-    await clearCartCookieFn();
-
-    // Clear cart state so CartDrawer shows empty
-    if (violetCartId) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.cart.detail(violetCartId) });
-    }
+    // Clear cart state + cookie so CartDrawer shows empty and next addToCart creates a fresh cart
+    await resetCart();
 
     /**
      * Persist order to Supabase (Story 5.1).
