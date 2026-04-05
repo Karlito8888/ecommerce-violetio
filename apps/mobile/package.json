@@ -16,6 +16,7 @@
     "@ecommerce/config": "workspace:*",
     "@ecommerce/shared": "workspace:*",
     "@ecommerce/ui": "workspace:*",
+    "@expo/vector-icons": "^15.0.2",
     "@tanstack/react-query": "^5.90.21",
     "@react-navigation/bottom-tabs": "^7.10.1",
     "@react-navigation/elements": "^2.9.10",

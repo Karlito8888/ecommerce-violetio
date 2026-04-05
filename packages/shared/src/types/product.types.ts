@@ -202,3 +202,22 @@ export interface ProductQuery {
   /** Sort direction. Only meaningful when `sortBy` is set. */
   sortDirection?: "ASC" | "DESC";
 }
+
+/**
+ * A single category for navigation/filtering.
+ *
+ * Returned by Violet's `GET /catalog/categories` endpoint, mapped to a
+ * platform-agnostic type at the adapter boundary.
+ *
+ * - `slug`: URL-friendly identifier (used as React key, URL param)
+ * - `label`: Display text shown in chips/nav
+ * - `filter`: Value sent as `source_category_name` to Violet's search API.
+ *   `undefined` means "show all products" (no category filter).
+ *
+ * @see https://docs.violet.io/api-reference/catalog/categories/get-categories
+ */
+export interface CategoryItem {
+  slug: string;
+  label: string;
+  filter: string | undefined;
+}

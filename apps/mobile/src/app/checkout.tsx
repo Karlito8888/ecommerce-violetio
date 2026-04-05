@@ -992,9 +992,9 @@ export default function CheckoutScreen() {
         )}
 
         {/* Affiliate disclosure */}
-        <ThemedText style={styles.affiliate}>
+        {/* <ThemedText style={styles.affiliate}>
           We earn a commission on purchases — this doesn't affect your price.
-        </ThemedText>
+        </ThemedText> */}
       </ScrollView>
     </SafeAreaView>
   );

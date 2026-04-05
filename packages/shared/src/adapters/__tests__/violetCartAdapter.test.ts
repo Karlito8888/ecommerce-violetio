@@ -258,4 +258,92 @@ describe("VioletAdapter — cart methods", () => {
       expect(bag?.items[0]).not.toHaveProperty("sku_id");
     });
   });
+
+  // ── submitOrder ───────────────────────────────────────────────────
+
+  describe("submitOrder", () => {
+    it("returns COMPLETED status on success", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 230715,
+            status: "COMPLETED",
+            bags: [{ id: 100, status: "ACCEPTED", financial_status: "PAID", total: 20100 }],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await adapter.submitOrder("999", "uuid-idempotency-key");
+
+      expect(result.error).toBeNull();
+      expect(result.data?.status).toBe("COMPLETED");
+      expect(result.data?.id).toBe("230715");
+    });
+
+    /**
+     * Regression test for the payment_status bug.
+     *
+     * Violet signals 3DS via `payment_status: "REQUIRES_ACTION"` (not `status`).
+     * The adapter must promote this to `OrderSubmitResult.status` so the checkout
+     * handler can detect it via `result.data.status === "REQUIRES_ACTION"`.
+     *
+     * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-stripejs-v3
+     */
+    it("maps payment_status REQUIRES_ACTION to result.data.status for 3DS detection", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 230716,
+            status: "IN_PROGRESS",
+            payment_status: "REQUIRES_ACTION",
+            payment_intent_client_secret: "pi_test_secret_3ds",
+            bags: [{ id: 101, status: "IN_PROGRESS", financial_status: "UNPAID", total: 20100 }],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await adapter.submitOrder("999", "uuid-idempotency-key");
+
+      expect(result.error).toBeNull();
+      expect(result.data?.status).toBe("REQUIRES_ACTION");
+      expect(result.data?.paymentIntentClientSecret).toBe("pi_test_secret_3ds");
+    });
+
+    it("falls back to status field when payment_status is absent", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 230717,
+            status: "REJECTED",
+            bags: [],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await adapter.submitOrder("999", "uuid-idempotency-key");
+
+      expect(result.error).toBeNull();
+      expect(result.data?.status).toBe("REJECTED");
+    });
+
+    it("returns error on 200-with-errors pattern", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errors: [{ message: "Inventory unavailable for SKU 300" }],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await adapter.submitOrder("999", "uuid-idempotency-key");
+
+      expect(result.data).toBeNull();
+      expect(result.error?.code).toBe("VIOLET.ORDER_ERROR");
+      expect(result.error?.message).toContain("Inventory unavailable");
+    });
+  });
 });

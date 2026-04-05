@@ -2,10 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "include": ["**/*.ts", "**/*.tsx"],
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "#/*": ["./src/*"],
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
@@ -15,6 +14,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
-  }
+    "noUncheckedSideEffectImports": true,
+  },
 }

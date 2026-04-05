@@ -141,7 +141,7 @@ export const Route = createFileRoute("/products/")({
     const sortDirRaw = String(search.sortDirection ?? "");
 
     return {
-      category: (search.category as string) || undefined,
+      category: typeof search.category === "string" ? search.category : undefined,
       minPrice: parseNumericParam(search.minPrice),
       maxPrice: parseNumericParam(search.maxPrice),
       inStock: search.inStock === "true" || search.inStock === true ? true : undefined,

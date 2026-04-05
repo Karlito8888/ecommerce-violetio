@@ -14,6 +14,7 @@ export type {
   VariantValue,
   ProductVariant,
   SkuDimensions,
+  CategoryItem,
 } from "./product.types.js";
 export type {
   Cart,

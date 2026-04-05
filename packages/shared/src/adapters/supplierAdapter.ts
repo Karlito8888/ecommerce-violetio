@@ -19,6 +19,7 @@ import type {
   ShippingMethodsAvailable,
   SetShippingMethodInput,
   Distribution,
+  CategoryItem,
 } from "../types/index.js";
 
 /**
@@ -40,6 +41,21 @@ export interface SupplierAdapter {
   ): Promise<ApiResponse<PaginatedResult<Product>>>;
   getProduct(id: string, countryCode?: string): Promise<ApiResponse<Product>>;
   getAvailableCountries(): Promise<ApiResponse<CountryOption[]>>;
+
+  /**
+   * Fetches product categories from the supplier.
+   *
+   * Returns top-level categories available for the configured merchant(s).
+   * Used for navigation links and category filter chips.
+   *
+   * Each category includes:
+   * - `slug`: URL-friendly key
+   * - `label`: Display name
+   * - `filter`: Value for filtering product searches (undefined = all products)
+   *
+   * @see https://docs.violet.io/api-reference/catalog/categories/get-categories
+   */
+  getCategories(): Promise<ApiResponse<CategoryItem[]>>;
 
   // Search (AI)
   searchProducts(query: string, filters?: SearchFilters): Promise<ApiResponse<SearchResult>>;

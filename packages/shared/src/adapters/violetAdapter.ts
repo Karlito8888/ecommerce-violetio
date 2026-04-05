@@ -12,6 +12,7 @@ import type {
   BagError,
   CartItem,
   CartItemInput,
+  CategoryItem,
   CreateCartInput,
   CustomerInput,
   PaymentIntent,
@@ -102,6 +103,18 @@ interface DemoOffersCache {
 }
 let _demoOffersCache: DemoOffersCache | null = null;
 const DEMO_CACHE_TTL_MS = 60_000;
+
+/**
+ * Cache for dynamically derived categories. Categories rarely change
+ * (only when merchants add products in new categories), so a 5-minute TTL
+ * balances freshness with API call reduction.
+ */
+interface CategoriesCache {
+  data: CategoryItem[];
+  expiresAt: number;
+}
+let _categoriesCache: CategoriesCache | null = null;
+const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -347,13 +360,22 @@ export class VioletAdapter implements SupplierAdapter {
 
     // Step 3: Filter raw offers before transformation (saves processing)
     let filteredRaw = allRawOffers;
-    if (params.category) {
-      const cat = params.category.toLowerCase();
-      filteredRaw = filteredRaw.filter((raw) => {
-        const r = raw as Record<string, unknown>;
-        const sourceCat = (r.source_category_name as string) ?? "";
-        return sourceCat.toLowerCase().includes(cat);
-      });
+    if (params.category !== undefined) {
+      if (params.category === "") {
+        // "Other" — match products with no source_category_name
+        filteredRaw = filteredRaw.filter((raw) => {
+          const r = raw as Record<string, unknown>;
+          const sourceCat = ((r.source_category_name as string) ?? "").trim();
+          return sourceCat === "";
+        });
+      } else {
+        const cat = params.category.toLowerCase();
+        filteredRaw = filteredRaw.filter((raw) => {
+          const r = raw as Record<string, unknown>;
+          const sourceCat = (r.source_category_name as string) ?? "";
+          return sourceCat.toLowerCase().includes(cat);
+        });
+      }
     }
 
     // Step 4: Validate and transform each offer
@@ -482,6 +504,186 @@ export class VioletAdapter implements SupplierAdapter {
       .sort((a, b) => b.productCount - a.productCount);
 
     return { data: countries, error: null };
+  }
+
+  // ─── Categories ──────────────────────────────────────────────────
+
+  /**
+   * Fetches product categories derived from actual offer data.
+   *
+   * ## Strategy: derive from offers, not taxonomy
+   *
+   * Violet products carry a `source_category_name` field (e.g., "Clothing", "Home")
+   * that is used for filtering via `POST /catalog/offers/search`. Rather than
+   * navigating the Google Product Taxonomy tree (5000+ categories across 100+ pages,
+   * mismatched depth levels), we extract categories directly from the offers
+   * we have access to.
+   *
+   * This guarantees:
+   * - Every nav category corresponds to real products (no empty results)
+   * - Filter values match exactly what the search API expects (`source_category_name`)
+   * - New merchant categories appear automatically
+   * - No hardcoded fallback categories needed
+   *
+   * ## Caching
+   *
+   * Results are cached for 5 minutes in memory. Categories rarely change — they
+   * only shift when merchants add/remove products with new categories.
+   *
+   * @see https://docs.violet.io/prism/catalog/categories
+   * @see https://docs.violet.io/api-reference/catalog/offers/search-offers
+   */
+  async getCategories(): Promise<ApiResponse<CategoryItem[]>> {
+    // Return cached categories if still fresh
+    if (_categoriesCache && Date.now() < _categoriesCache.expiresAt) {
+      return { data: _categoriesCache.data, error: null };
+    }
+
+    try {
+      const offerCategories = await this.deriveCategoriesFromOffers();
+
+      // Always prepend "All" — capped at 6 total (All + 5 categories)
+      const result: CategoryItem[] = [
+        { slug: "all", label: "All", filter: undefined },
+        ...offerCategories.slice(0, 5),
+      ];
+
+      // Cache for 5 minutes
+      _categoriesCache = {
+        data: result,
+        expiresAt: Date.now() + CATEGORIES_CACHE_TTL_MS,
+      };
+
+      return { data: result, error: null };
+    } catch {
+      // API unreachable — return just "All" (no hardcoded categories)
+      return { data: [{ slug: "all", label: "All", filter: undefined }], error: null };
+    }
+  }
+
+  /**
+   * Extracts unique `source_category_name` values from available offers.
+   *
+   * Two-phase approach:
+   * 1. **Search endpoint** (`POST /catalog/offers/search`) — works in production
+   *    with real merchants whose products are indexed by Violet.
+   * 2. **Merchant fallback** — fetches from each merchant directly via
+   *    `GET /catalog/offers/merchants/{id}`. Needed in Violet Demo Mode where
+   *    demo merchants' products are NOT in the search index. Reuses the
+   *    `_demoOffersCache` if fresh (populated by `getProductsFromMerchants`).
+   *
+   * The `source_category_name` on each offer is the exact value used for
+   * category filtering in `POST /catalog/offers/search`, guaranteeing that
+   * nav categories always match the search API's expectations.
+   *
+   * @returns CategoryItem[] derived from real product data (without "All")
+   */
+  private async deriveCategoriesFromOffers(): Promise<CategoryItem[]> {
+    // Phase 1: Try the search endpoint (works in production)
+    const searchResult = await this.fetchWithRetry(
+      `${this.apiBase}/catalog/offers/search?page=0&size=100`,
+      { method: "POST", body: JSON.stringify({}) },
+    );
+
+    if (!searchResult.error && searchResult.data) {
+      const data = searchResult.data as {
+        content?: Array<{ source_category_name?: string }>;
+      };
+      const offers = data.content ?? [];
+      if (offers.length > 0) {
+        return this.extractCategoriesFromRawOffers(offers);
+      }
+    }
+
+    // Phase 2: Demo mode — fetch from merchants directly
+    // We need merchant_id alongside source_category_name to infer missing
+    // categories from same-merchant products.
+    let rawOffers: Array<{ source_category_name?: string; merchant_id?: number }>;
+    const now = Date.now();
+
+    // Reuse _demoOffersCache if fresh (shared with getProductsFromMerchants)
+    if (_demoOffersCache && _demoOffersCache.expiresAt > now) {
+      rawOffers = _demoOffersCache.rawOffers as Array<{
+        source_category_name?: string;
+        merchant_id?: number;
+      }>;
+    } else {
+      const merchantsResult = await this.fetchWithRetry(
+        `${this.apiBase}/merchants?page=1&size=50`,
+        { method: "GET" },
+      );
+      if (merchantsResult.error) return [];
+
+      const merchantsData = merchantsResult.data as {
+        content: Array<{ id: number }>;
+      };
+      const merchantIds = merchantsData.content.map((m) => m.id);
+      if (merchantIds.length === 0) return [];
+
+      // Fetch offers from all merchants in parallel
+      const offerPromises = merchantIds.map(async (merchantId) => {
+        const res = await this.fetchWithRetry(
+          `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100`,
+          { method: "GET" },
+        );
+        if (res.error || !res.data) return [];
+        const d = res.data as { content?: unknown[] };
+        return d.content ?? [];
+      });
+
+      const allOfferArrays = await Promise.all(offerPromises);
+      rawOffers = allOfferArrays.flat() as Array<{
+        source_category_name?: string;
+        merchant_id?: number;
+      }>;
+
+      // Cache for subsequent requests (shared with getProductsFromMerchants)
+      _demoOffersCache = {
+        rawOffers: rawOffers as unknown[],
+        expiresAt: now + DEMO_CACHE_TTL_MS,
+      };
+    }
+
+    return this.extractCategoriesFromRawOffers(rawOffers);
+  }
+
+  /**
+   * Extracts unique `source_category_name` values from raw offers.
+   *
+   * Products with an empty `source_category_name` are grouped under an "Other"
+   * category. Violet's docs warn that category data depends on merchant input:
+   * "If a Merchant hasn't entered categories for their products, there would be
+   * no data for Violet to consume." Rather than silently dropping these products,
+   * we surface them under "Other" so every product is reachable via the chips.
+   */
+  private extractCategoriesFromRawOffers(
+    offers: Array<{ source_category_name?: string }>,
+  ): CategoryItem[] {
+    const seen = new Set<string>();
+    const categories: CategoryItem[] = [];
+    let hasUncategorized = false;
+
+    for (const offer of offers) {
+      const cat = offer.source_category_name?.trim();
+      if (cat) {
+        if (!seen.has(cat)) {
+          seen.add(cat);
+          categories.push({
+            slug: cat.toLowerCase().replace(/\s+/g, "-"),
+            label: cat,
+            filter: cat,
+          });
+        }
+      } else {
+        hasUncategorized = true;
+      }
+    }
+
+    if (hasUncategorized) {
+      categories.push({ slug: "other", label: "Other", filter: "" });
+    }
+
+    return categories;
   }
 
   /**
@@ -1159,6 +1361,9 @@ export class VioletAdapter implements SupplierAdapter {
       status?: string;
       payment_status?: string;
       payment_intent_client_secret?: string;
+      payment_transactions?: Array<{
+        payment_intent_client_secret?: string;
+      }>;
       bags?: Array<{
         id?: number;
         status?: string;
@@ -1182,11 +1387,27 @@ export class VioletAdapter implements SupplierAdapter {
       };
     }
 
+    /**
+     * Violet uses `payment_status` (not `status`) to signal 3DS REQUIRES_ACTION.
+     * Per the Stripe V3 checkout guide, when additional authentication is required
+     * the response contains `{ "payment_status": "REQUIRES_ACTION" }`.
+     * We promote this to the canonical `status` field so the checkout handler can
+     * detect it uniformly via `result.data.status === "REQUIRES_ACTION"`.
+     *
+     * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-stripejs-v3
+     */
+    const effectiveStatus: OrderStatus =
+      data.payment_status === "REQUIRES_ACTION"
+        ? "REQUIRES_ACTION"
+        : ((data.status ?? "COMPLETED") as OrderStatus);
+
     return {
       data: {
         id: String(data.id ?? ""),
-        status: (data.status ?? "COMPLETED") as OrderStatus,
-        paymentIntentClientSecret: data.payment_intent_client_secret,
+        status: effectiveStatus,
+        paymentIntentClientSecret:
+          data.payment_intent_client_secret ??
+          data.payment_transactions?.[0]?.payment_intent_client_secret,
         bags: (data.bags ?? []).map((b) => ({
           id: String(b.id ?? ""),
           status: (b.status ?? "IN_PROGRESS") as BagStatus,
