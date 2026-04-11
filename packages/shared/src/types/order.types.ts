@@ -248,6 +248,8 @@ export interface OrderBagItem {
  */
 export interface OrderBag {
   id: string;
+  /** Violet merchant ID — used to join with merchants table */
+  merchantId: string;
   merchantName: string;
   /** Bag-level fulfillment status — uses the BagStatus state machine */
   status: BagStatus;

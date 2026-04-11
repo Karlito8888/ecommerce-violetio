@@ -269,10 +269,16 @@ export async function processSyncEvent(
  * Processes MERCHANT_CONNECTED webhook event.
  *
  * Fired when a merchant completes Violet Connect onboarding.
- * Logs the connection for audit trail. The merchant_id is stored in
- * webhook_events.entity_id for future reference.
+ * Stores merchant info in the `merchants` table (central source of truth),
+ * logs the connection for audit trail, auto-enables feature flags,
+ * and persists enabled flags in merchant_feature_flags table.
+ *
+ * ## Idempotency
+ * Uses UPSERT (ON CONFLICT merchant_id) so duplicate webhooks are safe.
+ * Feature flags and feature_flags table use upsert as well.
  *
  * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
+ * @see https://docs.violet.io/prism/violet-connect/guides/detecting-merchants-post-connection
  */
 export async function processMerchantConnected(
   supabase: SupabaseClient,
@@ -286,6 +292,27 @@ export async function processMerchantConnected(
   console.log(
     `[merchant] Merchant connected: id=${merchantId} name="${merchantName}" source=${source}`,
   );
+
+  // ─── Upsert into merchants table (central source of truth) ────────
+  // ON CONFLICT handles idempotent webhook deliveries gracefully.
+  const { error: merchantError } = await supabase.from("merchants").upsert(
+    {
+      merchant_id: merchantId,
+      name: merchantName,
+      platform: source,
+      status: "CONNECTED",
+    },
+    { onConflict: "merchant_id" },
+  );
+
+  if (merchantError) {
+    // Non-blocking — the merchant connection webhook is still acknowledged.
+    // The merchant row can be created on next connection event or manually.
+    console.error(
+      `[merchant] Failed to upsert merchants row for ${merchantId}:`,
+      merchantError.message,
+    );
+  }
 
   // Store a log entry in error_logs for the admin dashboard
   await supabase.from("error_logs").insert({
@@ -324,7 +351,8 @@ export async function processMerchantConnected(
  * Processes MERCHANT_DISCONNECTED webhook event.
  *
  * Fired when a merchant disconnects their store from Violet.
- * Logs the disconnection. Products from this merchant will stop syncing.
+ * Updates the merchants table status and logs the disconnection.
+ * Products from this merchant will stop syncing.
  *
  * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
  */
@@ -339,6 +367,19 @@ export async function processMerchantDisconnected(
   console.warn(
     `[merchant] Merchant disconnected: id=${merchantId} name="${merchantName}"`,
   );
+
+  // ─── Update merchants table ────────────────────────────────────────
+  const { error: merchantError } = await supabase
+    .from("merchants")
+    .update({ status: "DISCONNECTED" })
+    .eq("merchant_id", merchantId);
+
+  if (merchantError) {
+    console.error(
+      `[merchant] Failed to update merchants status for ${merchantId}:`,
+      merchantError.message,
+    );
+  }
 
   // Store a log entry for the admin dashboard
   await supabase.from("error_logs").insert({
@@ -357,8 +398,7 @@ export async function processMerchantDisconnected(
  * MERCHANT_ENABLED: merchant reactivated (e.g., Shopify plan restored).
  * MERCHANT_DISABLED: merchant deactivated (e.g., Shopify app uninstalled, plan frozen).
  *
- * Both are logged for operational visibility. In the future, this could
- * trigger product catalog refresh or hide/show merchant products.
+ * Updates the merchants table status and logs for operational visibility.
  *
  * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
  */
@@ -376,6 +416,19 @@ export async function processMerchantStatusChange(
   console.log(
     `[merchant] Merchant ${isEnabled ? "enabled" : "disabled"}: id=${merchantId} name="${merchantName}" status=${status}`,
   );
+
+  // ─── Update merchants table ────────────────────────────────────────
+  const { error: merchantError } = await supabase
+    .from("merchants")
+    .update({ status: isEnabled ? "ENABLED" : "DISABLED" })
+    .eq("merchant_id", merchantId);
+
+  if (merchantError) {
+    console.error(
+      `[merchant] Failed to update merchants status for ${merchantId}:`,
+      merchantError.message,
+    );
+  }
 
   await supabase.from("error_logs").insert({
     source: "webhook",

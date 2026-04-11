@@ -77,6 +77,7 @@ export async function persistOrder(
         .insert({
           order_id: orderRow.id,
           violet_bag_id: bag.violetBagId,
+          merchant_id: bag.merchantId || null,
           merchant_name: bag.merchantName,
           status: bag.status,
           financial_status: bag.financialStatus,

@@ -2057,6 +2057,7 @@ export class VioletAdapter implements SupplierAdapter {
 
       return {
         id: String(bag.id ?? ""),
+        merchantId: String(bag.merchant_id ?? ""),
         merchantName: String(bag.merchant_name ?? ""),
         status: String(bag.status ?? "IN_PROGRESS") as BagStatus,
         financialStatus: String(bag.financial_status ?? "UNPAID") as BagFinancialStatus,

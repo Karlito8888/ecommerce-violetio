@@ -1414,6 +1414,7 @@ function transformOrder(raw: unknown): Record<string, unknown> {
 
     return {
       id: String(bag.id ?? ""),
+      merchantId: String(bag.merchant_id ?? ""),
       merchantName: String(bag.merchant_name ?? ""),
       status: String(bag.status ?? ""),
       financialStatus: String(bag.financial_status ?? ""),

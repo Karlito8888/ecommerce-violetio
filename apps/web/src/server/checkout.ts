@@ -535,6 +535,7 @@ export const persistAndConfirmOrderFn = createServerFn({ method: "POST" })
           currency: orderResult.data.currency,
           bags: orderResult.data.bags.map((bag) => ({
             violetBagId: bag.id,
+            merchantId: bag.merchantId,
             merchantName: bag.merchantName,
             status: bag.status,
             financialStatus: bag.financialStatus,

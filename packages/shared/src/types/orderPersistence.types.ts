@@ -1,4 +1,29 @@
 /**
+ * Supabase row type for the `merchants` table — central source of truth for connected merchants.
+ *
+ * Populated by MERCHANT_CONNECTED webhook and updated by MERCHANT_DISCONNECTED/ENABLED/DISABLED.
+ * Replaces scattered merchant data across error_logs, webhook_events, and order_bags.
+ *
+ * @see https://docs.violet.io/prism/violet-connect/guides/detecting-merchants-post-connection
+ */
+export interface MerchantRow {
+  /** Violet merchant ID (TEXT — string cast from Violet's numeric ID) */
+  merchant_id: string;
+  /** Merchant display name from Violet */
+  name: string;
+  /** E-commerce platform (SHOPIFY, BIGCOMMERCE, etc.) */
+  platform: string | null;
+  /** Connection status: CONNECTED | DISCONNECTED | ENABLED | DISABLED */
+  status: string;
+  /** Commission rate as decimal (e.g., 0.12 = 12%). Nullable — may not be in webhook payload. */
+  commission_rate: number | null;
+  /** ISO 8601 timestamp of initial connection */
+  connected_at: string;
+  /** ISO 8601 timestamp of last status update */
+  updated_at: string;
+}
+
+/**
  * Supabase row type for the `orders` table — our local mirror of Violet's order data.
  *
  * This is distinct from Violet's `OrderDetail` (API response) — it represents the
@@ -87,6 +112,8 @@ export interface OrderBagRow {
   order_id: string;
   /** Violet's numeric bag ID (stored as TEXT) */
   violet_bag_id: string;
+  /** FK to merchants.merchant_id — populated at order creation from Violet bag data */
+  merchant_id: string | null;
   /** Merchant display name from Violet */
   merchant_name: string;
   /** Bag fulfillment status — updated via BAG_* webhooks */
@@ -223,6 +250,8 @@ export interface PersistOrderInput {
 export interface PersistOrderBagInput {
   /** Violet's numeric bag ID (as string) */
   violetBagId: string;
+  /** Violet merchant ID — FK to merchants table */
+  merchantId: string;
   /** Merchant display name */
   merchantName: string;
   /** Bag fulfillment status from Violet */
