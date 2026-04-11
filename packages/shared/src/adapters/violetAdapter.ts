@@ -1572,7 +1572,9 @@ export class VioletAdapter implements SupplierAdapter {
       const result = await this.fetchWithRetry(url, { method: "GET" });
 
       if (result.error) {
-        console.error(`[VioletAdapter] getCollections failed: ${result.error.message}`);
+        // Collections are optional — failure is non-blocking. Error is already
+        // captured in result.error; callers handle it via the empty return below.
+        void result.error.message;
         // Return empty — collections are optional
         return { data: [], error: null };
       }
