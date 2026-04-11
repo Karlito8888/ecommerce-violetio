@@ -35,9 +35,11 @@ import type {
   VioletOfferResponse,
   VioletSkuResponse,
   VioletAlbumResponse,
+  VioletPaginatedResponse,
   Distribution,
   DistributionType,
   DistributionStatus,
+  CollectionItem,
 } from "../types/index.js";
 import { getDeliveryEstimate, countryFlag } from "../utils/currency.js";
 import type { SupplierAdapter } from "./supplierAdapter.js";
@@ -140,6 +142,22 @@ function mapHttpError(status: number): string {
       return "VIOLET.AUTH_FAILED";
     case 404:
       return "VIOLET.NOT_FOUND";
+    /**
+     * 409 Conflict — duplicate submission with a different app_order_id,
+     * or cart state conflict (e.g., already submitted with different data).
+     *
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-completion/submit-cart
+     */
+    case 409:
+      return "VIOLET.CONFLICT";
+    /**
+     * 412 Precondition Failed — cart not priced, missing required checkout steps,
+     * or cart currency mismatch. Indicates the checkout flow was incomplete.
+     *
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-completion/submit-cart
+     */
+    case 412:
+      return "VIOLET.PRECONDITION_FAILED";
     default:
       return "VIOLET.API_ERROR";
   }
@@ -204,7 +222,7 @@ export class VioletAdapter implements SupplierAdapter {
     const queryParams = new URLSearchParams({
       page: String(page),
       size: String(size),
-      include: "shipping",
+      include: "shipping,metadata,sku_metadata",
     });
 
     /**
@@ -343,7 +361,7 @@ export class VioletAdapter implements SupplierAdapter {
       // Step 2: Fetch offers from all merchants in parallel
       const offerPromises = merchantIds.map(async (merchantId) => {
         const res = await this.fetchWithRetry(
-          `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100&include=shipping`,
+          `${this.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100&include=shipping,metadata,sku_metadata`,
           { method: "GET" },
         );
         if (res.error || !res.data) return [];
@@ -429,7 +447,7 @@ export class VioletAdapter implements SupplierAdapter {
    */
   async getProduct(id: string, countryCode?: string): Promise<ApiResponse<Product>> {
     const result = await this.fetchWithRetry(
-      `${this.apiBase}/catalog/offers/${id}?include=shipping`,
+      `${this.apiBase}/catalog/offers/${id}?include=shipping,metadata,sku_metadata`,
       { method: "GET" },
     );
 
@@ -457,7 +475,7 @@ export class VioletAdapter implements SupplierAdapter {
   async getAvailableCountries(): Promise<ApiResponse<CountryOption[]>> {
     // Fetch a large batch of offers with shipping data
     const result = await this.fetchWithRetry(
-      `${this.apiBase}/catalog/offers/search?page=0&size=200&include=shipping`,
+      `${this.apiBase}/catalog/offers/search?page=0&size=200&include=shipping,metadata,sku_metadata`,
       { method: "POST", body: JSON.stringify({}) },
     );
 
@@ -1176,6 +1194,34 @@ export class VioletAdapter implements SupplierAdapter {
     return this.parseAndTransformCart(result.data);
   }
 
+  /**
+   * Prices a cart via GET /checkout/cart/{id}/price.
+   *
+   * Forces a deep update against all underlying e-commerce platforms to ensure
+   * tax, shipping, and pricing data is consistent. Returns the fully priced cart.
+   *
+   * ## When to call this
+   * After `setShippingMethods`, if any bag has `tax_total === 0`, the pricing
+   * may not have been calculated automatically. Call this to force pricing before
+   * submitting the order.
+   *
+   * ## Rate limit impact
+   * This call hits external e-commerce platform APIs, so it impacts rate limits.
+   * Only call when necessary (tax_total is 0 after shipping methods).
+   *
+   * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-pricing/price-cart
+   * @see https://docs.violet.io/prism/overview/place-an-order/submit-cart — pricing note
+   */
+  async priceCart(violetCartId: string): Promise<ApiResponse<Cart>> {
+    const result = await this.fetchWithRetry(
+      `${this.apiBase}/checkout/cart/${violetCartId}/price`,
+      { method: "GET" },
+    );
+    if (result.error) return { data: null, error: result.error };
+
+    return this.parseAndTransformCart(result.data);
+  }
+
   // ─── Checkout — Customer & Billing (Story 4.4) ───────────────────
 
   /**
@@ -1356,6 +1402,17 @@ export class VioletAdapter implements SupplierAdapter {
 
     if (result.error) return { data: null, error: result.error };
 
+    /**
+     * Violet submit response — typed from official API reference.
+     *
+     * The `errors[]` array uses a different structure than cart-level errors:
+     * - Submit errors: `{ entity_type: "SKU", entity_id, bag_id, type, message, platform }`
+     * - Cart errors:  `{ entity_type: "order_sku", sku_id, type, message }`
+     *
+     * Both are normalized to our `BagError` type at the adapter boundary.
+     *
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-completion/submit-cart
+     */
     const data = result.data as {
       id?: number;
       status?: string;
@@ -1363,6 +1420,9 @@ export class VioletAdapter implements SupplierAdapter {
       payment_intent_client_secret?: string;
       payment_transactions?: Array<{
         payment_intent_client_secret?: string;
+        metadata?: {
+          payment_intent_client_secret?: string;
+        };
       }>;
       bags?: Array<{
         id?: number;
@@ -1370,12 +1430,52 @@ export class VioletAdapter implements SupplierAdapter {
         financial_status?: string;
         total?: number;
       }>;
-      errors?: unknown[];
+      errors?: Array<{
+        id?: number;
+        order_id?: number;
+        bag_id?: number;
+        entity_id?: string;
+        entity_type?: string;
+        type?: string;
+        message?: string;
+        date_created?: string;
+        platform?: string;
+        code?: string | number;
+      }>;
     };
 
-    // Check 200-with-errors pattern — Violet returns HTTP 200 with errors[]
-    if (Array.isArray(data.errors) && data.errors.length > 0) {
-      const firstError = data.errors[0] as { message?: string } | undefined;
+    // Determine effective status before error analysis
+    // (needed to distinguish partial success from total failure)
+    const effectiveStatus: OrderStatus =
+      data.payment_status === "REQUIRES_ACTION"
+        ? "REQUIRES_ACTION"
+        : ((data.status ?? "COMPLETED") as OrderStatus);
+
+    const hasErrors = Array.isArray(data.errors) && data.errors.length > 0;
+
+    /**
+     * ## Partial vs Total failure handling
+     *
+     * Per Violet's API reference, submit can return three scenarios:
+     *
+     * 1. **All bags succeed**: HTTP 200, `status: "COMPLETED"`, no errors.
+     *    Card charged for all bags.
+     *
+     * 2. **Some bags fail (PARTIAL SUCCESS)**: HTTP 200, `status: "COMPLETED"`,
+     *    `errors[]` populated. Successful bags: `ACCEPTED`/`PAID`.
+     *    Failed bags: `REJECTED`/`VOIDED`. Card charged ONLY for successful bags.
+     *    → Return data so UI navigates to confirmation page.
+     *
+     * 3. **All bags fail (TOTAL FAILURE)**: HTTP 200, `status: "IN_PROGRESS"`,
+     *    `errors[]` populated. Payment `CANCELLED`. User NOT charged.
+     *    → Return error so UI shows failure message.
+     *
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-completion/submit-cart
+     *   — "Submission Response Scenarios" section
+     */
+    if (hasErrors && effectiveStatus !== "COMPLETED") {
+      // Total failure — all bags rejected, payment cancelled
+      const firstError = data.errors![0];
       return {
         data: null,
         error: {
@@ -1387,36 +1487,246 @@ export class VioletAdapter implements SupplierAdapter {
       };
     }
 
-    /**
-     * Violet uses `payment_status` (not `status`) to signal 3DS REQUIRES_ACTION.
-     * Per the Stripe V3 checkout guide, when additional authentication is required
-     * the response contains `{ "payment_status": "REQUIRES_ACTION" }`.
-     * We promote this to the canonical `status` field so the checkout handler can
-     * detect it uniformly via `result.data.status === "REQUIRES_ACTION"`.
-     *
-     * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-stripejs-v3
-     */
-    const effectiveStatus: OrderStatus =
-      data.payment_status === "REQUIRES_ACTION"
-        ? "REQUIRES_ACTION"
-        : ((data.status ?? "COMPLETED") as OrderStatus);
+    // Build the common result payload (shared by full success and partial success)
+    const baseResult = {
+      id: String(data.id ?? ""),
+      status: effectiveStatus,
+      paymentIntentClientSecret:
+        data.payment_intent_client_secret ??
+        data.payment_transactions?.[0]?.payment_intent_client_secret ??
+        data.payment_transactions?.[0]?.metadata?.payment_intent_client_secret,
+      bags: (data.bags ?? []).map((b) => ({
+        id: String(b.id ?? ""),
+        status: (b.status ?? "IN_PROGRESS") as BagStatus,
+        financialStatus: (b.financial_status ?? "UNPAID") as BagFinancialStatus,
+        total: b.total ?? 0,
+      })),
+    };
 
+    // Partial success — COMPLETED with some bags REJECTED
+    // Attach errors so the confirmation page can show per-bag results
+    if (hasErrors) {
+      return {
+        data: {
+          ...baseResult,
+          errors: data.errors!.map((e) => ({
+            code: String(e.type ?? e.code ?? "UNKNOWN"),
+            message: e.message ?? "",
+            skuId: e.entity_type === "SKU" && e.entity_id ? String(e.entity_id) : undefined,
+            bagId: e.bag_id != null ? String(e.bag_id) : undefined,
+            type: e.type,
+            entityType: e.entity_type,
+            externalPlatform: e.platform,
+          })),
+        },
+        error: null,
+      };
+    }
+
+    // Full success — no errors, all bags accepted
+    return {
+      data: baseResult,
+      error: null,
+    };
+  }
+
+  // ─── Collections (sync_collections feature) ────────────────────────
+
+  /**
+   * Cache for dynamically fetched collections. Collections rarely change
+   * (synced daily by Violet), so a 10-minute TTL is appropriate.
+   */
+  private _collectionsCache: { data: CollectionItem[]; expiresAt: number } | null = null;
+  private static COLLECTIONS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+  /**
+   * Fetches product collections from Violet.
+   *
+   * If `merchantId` is provided, fetches collections for that merchant via
+   * `GET /catalog/collections/merchants/{merchant_id}`.
+   * Otherwise, fetches all collections via `GET /catalog/collections`.
+   *
+   * Requires `sync_collections` feature flag enabled for the merchant(s).
+   * Currently Shopify-only.
+   *
+   * Results are cached for 10 minutes — collections are synced daily by Violet.
+   *
+   * @see https://docs.violet.io/prism/catalog/collections
+   * @see https://docs.violet.io/api-reference/catalog/collections/get-collections
+   */
+  async getCollections(merchantId?: string): Promise<ApiResponse<CollectionItem[]>> {
+    // Return cached collections if still fresh
+    if (this._collectionsCache && Date.now() < this._collectionsCache.expiresAt) {
+      return { data: this._collectionsCache.data, error: null };
+    }
+
+    try {
+      let url: string;
+
+      if (merchantId) {
+        url = `${this.apiBase}/catalog/collections/merchants/${merchantId}`;
+      } else {
+        url = `${this.apiBase}/catalog/collections`;
+      }
+
+      const result = await this.fetchWithRetry(url, { method: "GET" });
+
+      if (result.error) {
+        console.error(`[VioletAdapter] getCollections failed: ${result.error.message}`);
+        // Return empty — collections are optional
+        return { data: [], error: null };
+      }
+
+      const data = result.data as Array<{
+        id: number;
+        name: string;
+        description?: string;
+        type?: "CUSTOM" | "AUTOMATED";
+        merchant_id: number;
+        external_id?: string;
+        image_url?: string;
+        sort_order?: number;
+        date_created?: string;
+        date_last_modified?: string;
+      }>;
+
+      const collections: CollectionItem[] = data.map((c) => ({
+        id: String(c.id),
+        merchantId: String(c.merchant_id),
+        name: c.name,
+        description: c.description ?? "",
+        type: c.type ?? "CUSTOM",
+        externalId: c.external_id ?? "",
+        imageUrl: c.image_url ?? null,
+        sortOrder: c.sort_order ?? 0,
+        productCount: 0, // Will be populated by getCollectionOffers or a separate count query
+        dateCreated: c.date_created ?? new Date().toISOString(),
+        dateLastModified: c.date_last_modified ?? new Date().toISOString(),
+      }));
+
+      // Cache for 10 minutes
+      this._collectionsCache = {
+        data: collections,
+        expiresAt: Date.now() + VioletAdapter.COLLECTIONS_CACHE_TTL_MS,
+      };
+
+      return { data: collections, error: null };
+    } catch {
+      // API unreachable — return empty (collections are optional)
+      return { data: [], error: null };
+    }
+  }
+
+  /**
+   * Fetches offers (products) belonging to a specific collection.
+   *
+   * Uses `GET /catalog/collections/{collection_id}/offers` with pagination.
+   * Requires `sync_collections` feature flag enabled.
+   *
+   * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers
+   */
+  async getCollectionOffers(
+    collectionId: string,
+    page = 1,
+    pageSize = 24,
+  ): Promise<ApiResponse<PaginatedResult<Product>>> {
+    const violetPage = page - 1; // 0-based
+
+    const url =
+      `${this.apiBase}/catalog/collections/${collectionId}/offers` +
+      `?page=${violetPage}&size=${pageSize}`;
+
+    const result = await this.fetchWithRetry(url, { method: "GET" });
+
+    if (result.error) {
+      return {
+        data: null,
+        error: {
+          code: "VIOLET.API_ERROR",
+          message: `getCollectionOffers failed: ${result.error.message}`,
+        },
+      };
+    }
+
+    const data = result.data as VioletPaginatedResponse<VioletOfferResponse>;
     return {
       data: {
-        id: String(data.id ?? ""),
-        status: effectiveStatus,
-        paymentIntentClientSecret:
-          data.payment_intent_client_secret ??
-          data.payment_transactions?.[0]?.payment_intent_client_secret,
-        bags: (data.bags ?? []).map((b) => ({
-          id: String(b.id ?? ""),
-          status: (b.status ?? "IN_PROGRESS") as BagStatus,
-          financialStatus: (b.financial_status ?? "UNPAID") as BagFinancialStatus,
-          total: b.total ?? 0,
-        })),
+        data: data.content.map((offer) => this.transformOffer(offer)),
+        total: data.total_elements,
+        page: data.number + 1, // Violet 0-based → internal 1-based
+        pageSize: data.size,
+        hasNext: !data.last,
       },
       error: null,
     };
+  }
+
+  // ─── Merchant Feature Flags ────────────────────────────────────────
+
+  /**
+   * Enables the `sync_collections` feature flag for a merchant.
+   *
+   * Triggers an immediate collection sync and subsequent daily re-syncs.
+   * Required for receiving COLLECTION_* webhook events.
+   * Shopify merchants only.
+   *
+   * @see https://docs.violet.io/api-reference/merchants/configuration/toggle-merchant-configuration-global-feature-flag
+   */
+  async enableCollectionSync(merchantId: string): Promise<ApiResponse<void>> {
+    return this.toggleFeatureFlag(merchantId, "sync_collections", true);
+  }
+
+  /**
+   * Enables `sync_metadata` feature flag for a merchant (Offer-level).
+   *
+   * Note: This may increase sync time due to additional API calls to Shopify.
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing
+   */
+  async enableMetadataSync(merchantId: string): Promise<ApiResponse<void>> {
+    return this.toggleFeatureFlag(merchantId, "sync_metadata", true);
+  }
+
+  /**
+   * Enables `sync_sku_metadata` feature flag for a merchant (SKU-level).
+   *
+   * Must be enabled separately from `sync_metadata`.
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
+   */
+  async enableSkuMetadataSync(merchantId: string): Promise<ApiResponse<void>> {
+    return this.toggleFeatureFlag(merchantId, "sync_sku_metadata", true);
+  }
+
+  /**
+   * Toggles a merchant configuration feature flag via
+   * PUT /merchants/{merchant_id}/configuration/global_feature_flags/{flag_name}
+   *
+   * @see https://docs.violet.io/api-reference/merchants/configuration/toggle-merchant-configuration-global-feature-flag
+   */
+  private async toggleFeatureFlag(
+    merchantId: string,
+    flagName: string,
+    enabled: boolean,
+  ): Promise<ApiResponse<void>> {
+    const url = `${this.apiBase}/merchants/${merchantId}/configuration/global_feature_flags/${flagName}`;
+
+    const result = await this.fetchWithRetry(url, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+
+    if (result.error) {
+      return {
+        data: null,
+        error: {
+          code: "VIOLET.API_ERROR",
+          message: `toggleFeatureFlag(${flagName}) failed: ${result.error.message}`,
+        },
+      };
+    }
+
+    return { data: undefined, error: null };
   }
 
   // ─── Not implemented (future stories) ─────────────────────────────
@@ -1645,9 +1955,14 @@ export class VioletAdapter implements SupplierAdapter {
   private transformBag(raw: VioletBagResponse): Bag {
     const items = raw.skus.map((sku) => this.transformCartSku(sku));
     const errors: BagError[] = raw.errors.map((e) => ({
-      code: e.code,
+      // Violet may return `type` or `code` depending on the error source.
+      // Prefer `type` (documented field) and fall back to `code`.
+      code: e.type ?? e.code ?? "UNKNOWN",
       message: e.message,
       skuId: e.sku_id !== undefined ? String(e.sku_id) : undefined,
+      type: e.type,
+      entityType: e.entity_type,
+      externalPlatform: e.external_platform,
     }));
 
     // Violet returns subtotal=0 before checkout steps (shipping, tax).

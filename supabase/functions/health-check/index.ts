@@ -2,12 +2,21 @@
  * Edge Function: health-check
  *
  * Provides a /health endpoint that checks connectivity to external services:
- * Supabase (DB query), Violet.io (API reachability), Stripe (key validation).
+ * Supabase (DB query), Violet.io (API reachability), Stripe (key validation),
+ * and merchant Connection Health via Violet's Operations API.
  *
  * ## Authentication
  * Uses a shared secret via Authorization Bearer token (HEALTH_CHECK_SECRET).
  * This allows external uptime monitors (UptimeRobot, Pingdom) to call this
  * endpoint without needing Supabase JWTs.
+ *
+ * ## Merchant Connection Health
+ * Uses GET /operations/connection_health (batch endpoint) to fetch all merchants'
+ * health in a single API call. Only merchants with non-COMPLETE status are included
+ * in the response, with full sub-check details (Connection, Scopes, Sync, etc.).
+ *
+ * @see https://docs.violet.io/prism/violet-connect/guides/connection-health
+ * @see https://docs.violet.io/api-reference/operations/connection/get-connection-health
  *
  * ## Response
  * Returns HealthCheckResult with per-service status and overall health.
@@ -30,10 +39,197 @@ interface HealthCheckResult {
     violet: ServiceStatus;
     stripe: ServiceStatus;
   };
+  /** Connection Health for each connected merchant (Violet API). */
+  merchants?: Array<{
+    merchant_id: number;
+    name: string;
+    status: string;
+  }>;
   checked_at: string;
 }
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
+/**
+ * A single sub-check within a merchant's Connection Health report.
+ *
+ * Violet checks 7 areas per merchant: Connection, Scopes, Sync Status,
+ * Invalid Products, Offers Published, Payout Account, Commission Rate.
+ * Each can be COMPLETE (green), INCOMPLETE (yellow), or NEEDS_ATTENTION (red).
+ *
+ * @see https://docs.violet.io/prism/violet-connect/guides/connection-health
+ */
+interface ConnectionHealthCheck {
+  /** Machine-readable check identifier (e.g., "connection", "scopes", "sync_status") */
+  type: string;
+  /** Human-readable label for display in the admin dashboard */
+  label: string;
+  /** Current state of this sub-check */
+  status: "COMPLETE" | "INCOMPLETE" | "NEEDS_ATTENTION" | "UNKNOWN";
+  /** Optional guidance message when status is not COMPLETE */
+  message?: string;
+}
+
+/**
+ * Connection Health summary for a single merchant.
+ *
+ * Maps from Violet's ConnectionHealth response. Only merchants with
+ * non-COMPLETE overall status are included in the health-check response.
+ *
+ * @see https://docs.violet.io/api-reference/operations/connection/get-connection-health
+ */
+interface MerchantConnectionHealth {
+  merchant_id: number;
+  merchant_name: string;
+  /** Overall status across all sub-checks */
+  overall_status: "COMPLETE" | "INCOMPLETE" | "NEEDS_ATTENTION" | "UNKNOWN";
+  /** Detailed sub-check results */
+  checks: ConnectionHealthCheck[];
+}
+
+/**
+ * Fetches Connection Health for all connected merchants from Violet API.
+ *
+ * ## Strategy: batch endpoint
+ * Uses GET /operations/connection_health to fetch ALL merchants' health
+ * in a **single API call** instead of N+1 calls (GET /merchants + N × GET per-merchant).
+ * This reduces latency, avoids rate limiting, and aligns with Violet's
+ * documented API surface.
+ *
+ * ## Filtering
+ * Only merchants with non-COMPLETE overall status are returned.
+ * Healthy merchants add noise without actionable value.
+ *
+ * @see https://docs.violet.io/api-reference/operations/connection/get-connection-health
+ * @see https://docs.violet.io/prism/violet-connect/guides/connection-health
+ */
+async function checkMerchantConnectionHealth(): Promise<
+  MerchantConnectionHealth[] | null
+> {
+  const appId = Deno.env.get("VIOLET_APP_ID");
+  const appSecret = Deno.env.get("VIOLET_APP_SECRET");
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io";
+
+  if (!appId || !appSecret) return null;
+
+  try {
+    // First, login to get a token
+    const loginRes = await fetch(`${apiBase}/v1/login`, {
+      method: "POST",
+      headers: {
+        "X-Violet-App-Id": appId,
+        "X-Violet-App-Secret": appSecret,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: Deno.env.get("VIOLET_USERNAME"),
+        password: Deno.env.get("VIOLET_PASSWORD"),
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!loginRes.ok) return null;
+    const { token } = await loginRes.json();
+    if (!token) return null;
+
+    // Batch endpoint: GET /operations/connection_health
+    // Returns health for ALL connected merchants in one call.
+    const healthRes = await fetch(
+      `${apiBase}/v1/operations/connection_health`,
+      {
+        method: "GET",
+        headers: {
+          "X-Violet-App-Id": appId,
+          "X-Violet-App-Secret": appSecret,
+          "X-Violet-Token": token,
+        },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+
+    if (!healthRes.ok) {
+      // Fallback: if batch endpoint fails (e.g., not yet available in sandbox),
+      // return null rather than failing the entire health check
+      return null;
+    }
+
+    const healthData = await healthRes.json();
+
+    // The response can be an array directly or wrapped in a content array
+    const reports: Array<Record<string, unknown>> = Array.isArray(healthData)
+      ? healthData
+      : (healthData?.content ?? []);
+
+    if (reports.length === 0) return [];
+
+    /**
+     * Map Violet's sub-check field names to human-readable labels.
+     * Violet's API returns check objects with a `type` field.
+     *
+     * @see https://docs.violet.io/prism/violet-connect/guides/connection-health
+     */
+    const checkLabelMap: Record<string, string> = {
+      connection: "Store Connection",
+      scopes: "API Scopes",
+      sync_status: "Product Sync",
+      invalid_products: "Invalid Products",
+      offers_published: "Published Offers",
+      payout_account: "Payout Account",
+      commission_rate: "Commission Rate",
+    };
+
+    const results: MerchantConnectionHealth[] = reports
+      .map((report) => {
+        const overallStatus = String(
+          report.overall_status ?? report.status ?? "UNKNOWN",
+        ).toUpperCase() as MerchantConnectionHealth["overall_status"];
+
+        // Extract sub-checks from Violet's response
+        // The exact structure varies; Violet may return checks as an array or as top-level fields
+        const rawChecks = Array.isArray(report.checks)
+          ? report.checks
+          : Array.isArray(report.connection_health_checks)
+            ? report.connection_health_checks
+            : [];
+
+        const checks: ConnectionHealthCheck[] = rawChecks.map(
+          (check: Record<string, unknown>) => ({
+            type: String(check.type ?? check.name ?? "unknown"),
+            label: checkLabelMap[String(check.type ?? check.name ?? "")] ??
+              String(check.label ?? check.name ?? "Unknown"),
+            status: normalizeStatus(String(check.status ?? "UNKNOWN")),
+            message: check.message ? String(check.message) : undefined,
+          }),
+        );
+
+        return {
+          merchant_id: Number(report.merchant_id ?? 0),
+          merchant_name: String(report.merchant_name ?? "Unknown"),
+          overall_status: overallStatus,
+          checks,
+        };
+      })
+      // Only return merchants that need attention (non-COMPLETE)
+      .filter((m) => m.overall_status !== "COMPLETE");
+
+    return results;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalizes Violet's status strings to our canonical enum values.
+ */
+function normalizeStatus(
+  raw: string,
+): "COMPLETE" | "INCOMPLETE" | "NEEDS_ATTENTION" | "UNKNOWN" {
+  const upper = raw.toUpperCase();
+  if (upper === "COMPLETE" || upper === "GREEN") return "COMPLETE";
+  if (upper === "INCOMPLETE" || upper === "YELLOW") return "INCOMPLETE";
+  if (upper === "NEEDS_ATTENTION" || upper === "RED") return "NEEDS_ATTENTION";
+  return "UNKNOWN";
+}
 
 async function checkSupabase(): Promise<ServiceStatus> {
   const start = Date.now();
@@ -153,10 +349,11 @@ Deno.serve(async (req: Request) => {
   }
 
   // Run all checks in parallel
-  const [supabase, violet, stripe] = await Promise.all([
+  const [supabase, violet, stripe, merchants] = await Promise.all([
     checkSupabase(),
     checkViolet(),
     checkStripe(),
+    checkMerchantConnectionHealth(),
   ]);
 
   const services = { supabase, violet, stripe };
@@ -175,6 +372,7 @@ Deno.serve(async (req: Request) => {
   const result: HealthCheckResult = {
     overall_status,
     services,
+    merchants: merchants ?? undefined,
     checked_at: new Date().toISOString(),
   };
 

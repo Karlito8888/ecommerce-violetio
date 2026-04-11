@@ -17,12 +17,14 @@ import {
   setShippingAddressFn,
   getAvailableShippingMethodsFn,
   setShippingMethodsFn,
+  priceCartFn,
   setCustomerFn,
   setBillingAddressFn,
   getPaymentIntentFn,
   submitOrderFn,
   clearCartCookieFn,
   persistAndConfirmOrderFn,
+  logClientErrorFn,
 } from "../../server/checkout";
 import { useAuthSession } from "../../hooks/useAuthSession";
 import { CheckoutErrorBoundary } from "../../components/checkout/CheckoutErrorBoundary";
@@ -249,6 +251,13 @@ function PaymentForm({
     if (submitError) {
       setSubmitError(submitError.message ?? "Please check your payment details and try again.");
       setIsSubmitting(false);
+      logClientErrorFn({
+        data: {
+          error_type: "STRIPE.ELEMENTS_SUBMIT_FAILED",
+          message: submitError.message ?? "Elements submit failed",
+          context: { code: submitError.code },
+        },
+      });
       return;
     }
 
@@ -269,6 +278,13 @@ function PaymentForm({
     if (stripeError) {
       setSubmitError(getStripeErrorMessage(stripeError));
       setIsSubmitting(false);
+      logClientErrorFn({
+        data: {
+          error_type: "STRIPE.PAYMENT_FAILED",
+          message: stripeError.message ?? "Payment confirmation failed",
+          context: { code: stripeError.code, type: stripeError.type },
+        },
+      });
       return;
     }
 
@@ -319,6 +335,30 @@ function PaymentForm({
         }
         setSubmitError(
           "Your order may have been placed. Please check your email for confirmation before trying again.",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      /**
+       * 409 Conflict — duplicate submission with a different app_order_id.
+       * This typically means the cart was already submitted. Don't retry — poll instead.
+       */
+      if (result.error.code === "VIOLET.CONFLICT") {
+        setSubmitError(
+          "This order may have already been placed. Please check your email before trying again.",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      /**
+       * 412 Precondition Failed — cart not priced or checkout incomplete.
+       * This means our checkout flow missed a required step. User should start a new cart.
+       */
+      if (result.error.code === "VIOLET.PRECONDITION_FAILED") {
+        setSubmitError(
+          "Your cart could not be submitted because checkout was incomplete. Please start a new order.",
         );
         setIsSubmitting(false);
         return;
@@ -393,7 +433,22 @@ function PaymentForm({
       return;
     }
 
-    // Success — COMPLETED status
+    /**
+     * Success — COMPLETED status (full or partial).
+     *
+     * ## Partial success handling
+     * Multi-bag carts may have some bags succeed and some fail. When this happens,
+     * Violet returns `status: "COMPLETED"` with `errors[]` populated for failed bags.
+     * Failed bags have `status: "REJECTED"` / `financialStatus: "VOIDED"`.
+     * The card is only charged for successful bags — no overcharge risk.
+     *
+     * We navigate to the confirmation page regardless. The confirmation page fetches
+     * `OrderDetail` from Violet which includes per-bag statuses (ACCEPTED vs REJECTED),
+     * so the user sees exactly which items were fulfilled and which weren't.
+     *
+     * @see packages/shared/src/types/order.types.ts — OrderSubmitResult.errors
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-completion/submit-cart
+     */
     onSuccess(result.data?.id ?? "");
   }
 
@@ -1022,6 +1077,38 @@ function CheckoutPage() {
       setShippingError(result.error.message);
       setIsSubmittingShipping(false);
       return;
+    }
+
+    /**
+     * Price Cart — tax_total check per Violet docs.
+     *
+     * "When building your own integration, there are instances where carts are
+     * not priced automatically after applying shipping methods. You will know
+     * this is needed when the response from the apply shipping methods call has
+     * a 0 value for tax_total. If that happens, make a call to price cart before
+     * calling submit."
+     *
+     * @see https://docs.violet.io/prism/overview/place-an-order/submit-cart
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-pricing/price-cart
+     */
+    const pricedCart = result.data;
+    const needsPricing =
+      pricedCart?.bags.some((bag) => bag.subtotal > 0 && bag.tax === 0 && bag.shippingTotal >= 0) ??
+      false;
+
+    if (needsPricing) {
+      const priceResult = await priceCartFn();
+      if (priceResult.error) {
+        // Non-fatal: pricing may succeed at submit time. Log but don't block.
+        // The user can still proceed — submit will attempt pricing again.
+        logClientErrorFn({
+          data: {
+            error_type: "CHECKOUT.PRICE_CART_FAILED",
+            message: priceResult.error.message,
+            context: { step: "priceCart", violetCartId },
+          },
+        });
+      }
     }
 
     if (violetCartId) {

@@ -329,10 +329,11 @@ describe("VioletAdapter — cart methods", () => {
       expect(result.data?.status).toBe("REJECTED");
     });
 
-    it("returns error on 200-with-errors pattern", async () => {
+    it("returns error on 200-with-errors when status is not COMPLETED (total failure)", async () => {
       fetchSpy.mockResolvedValueOnce(
         new Response(
           JSON.stringify({
+            status: "IN_PROGRESS",
             errors: [{ message: "Inventory unavailable for SKU 300" }],
           }),
           { status: 200 },
@@ -344,6 +345,112 @@ describe("VioletAdapter — cart methods", () => {
       expect(result.data).toBeNull();
       expect(result.error?.code).toBe("VIOLET.ORDER_ERROR");
       expect(result.error?.message).toContain("Inventory unavailable");
+    });
+
+    it("returns data with errors on partial success (COMPLETED + errors)", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 10000,
+            status: "COMPLETED",
+            bags: [
+              {
+                id: 11111,
+                status: "ACCEPTED",
+                financial_status: "PAID",
+                total: 22712,
+              },
+              {
+                id: 22223,
+                status: "REJECTED",
+                financial_status: "VOIDED",
+                total: 10900,
+              },
+            ],
+            errors: [
+              {
+                bag_id: 22223,
+                entity_id: "99999",
+                entity_type: "SKU",
+                type: "EXTERNAL_SUBMIT_CART",
+                message: "This item is no longer available for purchase.",
+                platform: "SHOPIFY",
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await adapter.submitOrder("999", "uuid-idempotency-key");
+
+      expect(result.error).toBeNull();
+      expect(result.data?.status).toBe("COMPLETED");
+      expect(result.data?.bags).toHaveLength(2);
+      expect(result.data?.bags[0].status).toBe("ACCEPTED");
+      expect(result.data?.bags[1].status).toBe("REJECTED");
+      expect(result.data?.errors).toHaveLength(1);
+      expect(result.data?.errors?.[0].message).toBe(
+        "This item is no longer available for purchase.",
+      );
+      expect(result.data?.errors?.[0].bagId).toBe("22223");
+      expect(result.data?.errors?.[0].skuId).toBe("99999");
+      expect(result.data?.errors?.[0].type).toBe("EXTERNAL_SUBMIT_CART");
+      expect(result.data?.errors?.[0].externalPlatform).toBe("SHOPIFY");
+    });
+  });
+
+  // ── priceCart ──────────────────────────────────────────────────────
+
+  describe("priceCart", () => {
+    it("calls GET /checkout/cart/{id}/price and returns priced cart", async () => {
+      const pricedCart = makeVioletCartResponse({
+        bags: [
+          {
+            id: 100,
+            merchant_id: 50,
+            merchant_name: "Test Merchant",
+            skus: [{ id: 200, sku_id: 300, quantity: 2, price: 1999 }],
+            subtotal: 3998,
+            tax: 320,
+            shipping_total: 599,
+            errors: [],
+          },
+        ],
+      });
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(pricedCart), { status: 200 }));
+
+      const result = await adapter.priceCart("999");
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "https://test-api.violet.io/v1/checkout/cart/999/price",
+        expect.objectContaining({ method: "GET" }),
+      );
+      expect(result.error).toBeNull();
+      expect(result.data?.bags[0].tax).toBe(320);
+      expect(result.data?.bags[0].shippingTotal).toBe(599);
+    });
+
+    it("returns error when Violet API fails", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "Internal Server Error" }), { status: 500 }),
+      );
+
+      const result = await adapter.priceCart("999");
+
+      expect(result.data).toBeNull();
+      expect(result.error).toBeDefined();
+    });
+
+    it("returns error when cart not found", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }),
+      );
+
+      const result = await adapter.priceCart("999");
+
+      expect(result.data).toBeNull();
+      expect(result.error).toBeDefined();
     });
   });
 });

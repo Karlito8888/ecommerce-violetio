@@ -1,3 +1,5 @@
+import type { BagError } from "./cart.types.js";
+
 /**
  * Order and webhook types.
  *
@@ -89,6 +91,19 @@ export interface OrderSubmitResult {
     /** Bag total in integer cents */
     total: number;
   }>;
+  /**
+   * Present on partial success: some bags failed but others succeeded.
+   *
+   * When a multi-bag cart has one or more failed bags alongside successful ones,
+   * Violet returns HTTP 200 with `status: "COMPLETED"` and this `errors[]` array.
+   * Failed bags have `status: "REJECTED"` / `financialStatus: "VOIDED"`.
+   * The card is only charged for successful bags.
+   *
+   * Not present on full success (all bags accepted) or total failure (all bags rejected).
+   *
+   * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-completion/submit-cart
+   */
+  errors?: BagError[];
 }
 
 /**

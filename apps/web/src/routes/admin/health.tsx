@@ -25,6 +25,7 @@ import type {
   AlertRule,
   RecentError,
   ErrorTypeCount,
+  MerchantConnectionHealth,
 } from "@ecommerce/shared";
 import { getAdminUserFn } from "#/server/adminAuth";
 import { getAdminHealthFn, triggerHealthCheckFn } from "#/server/getAdminHealth";
@@ -93,6 +94,61 @@ function MetricCard({
     <div className={`admin-health__metric admin-health__metric--${severity}`}>
       <span className="admin-health__metric-value">{value}</span>
       <span className="admin-health__metric-label">{label}</span>
+    </div>
+  );
+}
+
+/** Displays connection health issues for a single merchant. */
+function MerchantHealthCard({ merchant }: { merchant: MerchantConnectionHealth }) {
+  const statusClass =
+    merchant.overall_status === "NEEDS_ATTENTION"
+      ? "admin-health__merchant-status--critical"
+      : merchant.overall_status === "INCOMPLETE"
+        ? "admin-health__merchant-status--warning"
+        : "admin-health__merchant-status--unknown";
+
+  return (
+    <div className={`admin-health__merchant-card ${statusClass}`}>
+      <div className="admin-health__merchant-header">
+        <span className="admin-health__merchant-name">{merchant.merchant_name}</span>
+        <span className="admin-health__merchant-status">
+          {merchant.overall_status.replace("_", " ")}
+        </span>
+      </div>
+      {merchant.checks.length > 0 ? (
+        <ul className="admin-health__merchant-checks">
+          {merchant.checks
+            .filter((c) => c.status !== "COMPLETE")
+            .map((check) => (
+              <li key={check.type} className="admin-health__merchant-check">
+                <StatusDot
+                  status={
+                    check.status === "NEEDS_ATTENTION"
+                      ? "down"
+                      : check.status === "INCOMPLETE"
+                        ? "unknown"
+                        : "up"
+                  }
+                />
+                <span className="admin-health__check-label">{check.label}</span>
+                {check.message && (
+                  <span className="admin-health__check-message">{check.message}</span>
+                )}
+              </li>
+            ))}
+        </ul>
+      ) : (
+        <p className="admin-health__check-message">
+          Review on{" "}
+          <a
+            href={`https://channel.violet.io/merchants/${merchant.merchant_id}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Channel Dashboard
+          </a>
+        </p>
+      )}
     </div>
   );
 }
@@ -275,6 +331,16 @@ function AdminHealthPage() {
           <p className="admin-health__checked-at">
             Last checked: {new Date(healthCheck.checked_at).toLocaleString()}
           </p>
+
+          {/* Merchant Connection Health — only non-COMPLETE merchants */}
+          {healthCheck.merchants && healthCheck.merchants.length > 0 && (
+            <div className="admin-health__merchants">
+              <h3 className="admin-health__subsection-title">Merchant Issues</h3>
+              {healthCheck.merchants.map((m) => (
+                <MerchantHealthCard key={m.merchant_id} merchant={m} />
+              ))}
+            </div>
+          )}
         </section>
       )}
 

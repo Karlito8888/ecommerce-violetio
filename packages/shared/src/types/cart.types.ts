@@ -35,11 +35,32 @@ export interface Bag {
   errors: BagError[];
 }
 
-/** Structured per-bag error from Violet's 200-with-errors pattern. */
+/**
+ * Structured per-bag error from Violet's 200-with-errors pattern.
+ *
+ * ## Violet documented fields (from lifecycle-of-a-cart.md)
+ * - `type`: error category (e.g., "EXTERNAL_SUBMISSION_FAILED")
+ * - `bag_id`: which bag the error belongs to
+ * - `entity_type`: "order_sku" (item-level) or "bag" (bag-level)
+ * - `external_platform`: originating platform (e.g., "SHOPIFY")
+ *
+ * The `code` field may also appear — some Violet responses use `code` instead of `type`.
+ * We capture both for resilience.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart
+ */
 export interface BagError {
   code: string;
   message: string;
   skuId?: string;
+  /** Violet bag ID associated with this error (present on submit-level errors) */
+  bagId?: string;
+  /** Violet error category (e.g., "EXTERNAL_SUBMISSION_FAILED", "EXTERNAL_SUBMIT_CART") */
+  type?: string;
+  /** Error entity type from Violet (e.g., "SKU", "order_sku", "bag") */
+  entityType?: string;
+  /** Originating external platform (e.g., "SHOPIFY") */
+  externalPlatform?: string;
 }
 
 /** The unified cart across all merchants (Supabase + Violet combined view). */

@@ -15,6 +15,10 @@ export type {
   ProductVariant,
   SkuDimensions,
   CategoryItem,
+  CollectionItem,
+  CollectionType,
+  MetadataItem,
+  MetadataValueType,
 } from "./product.types.js";
 export type {
   Cart,
@@ -71,6 +75,9 @@ export type {
   VioletVariantValueResponse,
   VioletVariantResponse,
   VioletSkuDimensionsResponse,
+  VioletCollectionResponse,
+  VioletCollectionWebhookPayload,
+  VioletMetadataResponse,
 } from "./violet.types.js";
 export type {
   BiometricStatus,
@@ -171,6 +178,8 @@ export type {
   AlertRule,
   PlatformHealthData,
   RecentError,
+  MerchantConnectionHealth,
+  ConnectionHealthCheck,
 } from "./health.types.js";
 export type {
   ShippingZone,

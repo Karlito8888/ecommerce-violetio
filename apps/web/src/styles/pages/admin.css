@@ -900,6 +900,96 @@
   margin-top: var(--space-2);
 }
 
+/* ── Merchant Connection Health ─────────────────────────────────────── */
+
+.admin-health__merchants {
+  margin-top: var(--space-4);
+}
+
+.admin-health__subsection-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+}
+
+.admin-health__merchant-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.admin-health__merchant-status--critical {
+  border-left: 3px solid var(--color-error);
+}
+
+.admin-health__merchant-status--warning {
+  border-left: 3px solid var(--color-warning);
+}
+
+.admin-health__merchant-status--unknown {
+  border-left: 3px solid var(--color-text-tertiary);
+}
+
+.admin-health__merchant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.admin-health__merchant-name {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.admin-health__merchant-status {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: capitalize;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.admin-health__merchant-status--critical .admin-health__merchant-status {
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+  color: var(--color-error);
+}
+
+.admin-health__merchant-status--warning .admin-health__merchant-status {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
+}
+
+.admin-health__merchant-checks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.admin-health__merchant-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+
+.admin-health__check-label {
+  font-weight: 500;
+}
+
+.admin-health__check-message {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+.admin-health__merchant-card a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 /* ── Health Metrics Row ──────────────────────────────────────────────── */
 
 .admin-health__metrics-row {
