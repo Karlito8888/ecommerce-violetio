@@ -118,6 +118,13 @@ export interface VioletSkuResponse {
   variant_values?: VioletVariantValueResponse[];
   sku_dimensions?: VioletSkuDimensionsResponse | null;
   albums?: VioletAlbumResponse[];
+  /**
+   * SKU metadata from the merchant's custom variant data (Shopify metafields).
+   * Present when `?include=sku_metadata` is used AND `sync_sku_metadata` flag is enabled.
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
+   */
+  metadata?: VioletMetadataResponse[];
   date_created?: string;
   date_last_modified?: string;
 }
@@ -169,6 +176,95 @@ export interface VioletOfferResponse {
   shipping?: {
     shipping_zones?: Array<{ country_code: string; country_name: string }>;
   } | null;
+  /**
+   * Offer metadata from the merchant's custom product data (Shopify metafields).
+   * Present when `?include=metadata` is used AND `sync_metadata` flag is enabled.
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing
+   */
+  metadata?: VioletMetadataResponse[];
+}
+
+// ─── Violet Collection Types ────────────────────────────────────────────
+
+/**
+ * Raw Collection from Violet API response (snake_case fields).
+ *
+ * Collections are curated groups of offers created by merchants.
+ * Two types: CUSTOM (manually curated) and AUTOMATED (rule-based).
+ * Currently only supported for Shopify merchants.
+ *
+ * Requires `sync_collections` feature flag enabled per merchant via
+ * PUT /merchants/{merchant_id}/configuration/global_feature_flags/sync_collections
+ *
+ * @see https://docs.violet.io/prism/catalog/collections
+ * @see https://docs.violet.io/api-reference/catalog/collections/get-collections
+ */
+export interface VioletCollectionResponse {
+  id: number;
+  name: string;
+  description?: string;
+  type: "CUSTOM" | "AUTOMATED";
+  external_id?: string;
+  merchant_id: number;
+  image_url?: string;
+  sort_order?: number;
+  date_created?: string;
+  date_last_modified?: string;
+}
+
+/**
+ * Payload for COLLECTION_* webhook events.
+ *
+ * Violet sends these when collections are created, updated, removed,
+ * or when the offers within a collection change.
+ *
+ * Available events:
+ * - COLLECTION_CREATED — new collection created
+ * - COLLECTION_UPDATED — collection metadata changed (name, description, image)
+ * - COLLECTION_REMOVED — collection no longer available
+ * - COLLECTION_OFFERS_UPDATED — offers added to or removed from collection
+ *
+ * Note: COLLECTION_OFFERS_UPDATED fires for offer composition changes,
+ * NOT for collection property changes (use COLLECTION_UPDATED for those).
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ */
+export interface VioletCollectionWebhookPayload {
+  id: number;
+  name?: string;
+  description?: string;
+  type?: "CUSTOM" | "AUTOMATED";
+  merchant_id: number;
+  external_id?: string;
+  image_url?: string;
+  sort_order?: number;
+  date_last_modified?: string;
+}
+
+// ─── Violet Metadata Types ────────────────────────────────────────────
+
+/**
+ * Metadata item from Violet API response.
+ *
+ * Metadata represents custom data that merchants have applied to their
+ * products (e.g., materials, colors, size guides, labels). Synced from
+ * Shopify metafields.
+ *
+ * Requires `sync_metadata` and/or `sync_sku_metadata` feature flags enabled
+ * per merchant. Included in Offer/SKU responses only when the `include`
+ * query parameter contains `metadata` and/or `sku_metadata`.
+ *
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
+ */
+export interface VioletMetadataResponse {
+  version: number;
+  type: "STRING" | "JSON" | "INTEGER" | "LONG" | "DECIMAL" | "BOOLEAN";
+  external_type: string;
+  key: string;
+  value: string;
+  source: "INTERNAL" | "EXTERNAL";
 }
 
 /**

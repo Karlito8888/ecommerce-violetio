@@ -37,6 +37,7 @@ import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import { createSupabaseClient, formatPrice } from "@ecommerce/shared";
 import type { ShippingMethodsAvailable } from "@ecommerce/shared";
+import { useSetStripeKey } from "./_layout";
 
 /** SecureStore key for the Violet cart ID (set by the cart screen on cart creation). */
 const CART_KEY = "violet_cart_id";
@@ -72,6 +73,7 @@ type CheckoutStep = "address" | "methods" | "guestInfo" | "billing" | "payment";
 export default function CheckoutScreen() {
   const [step, setStep] = useState<CheckoutStep>("address");
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { setStripePublishableKey } = useSetStripeKey();
 
   // ── Address state ───────────────────────────────────────────────────
   const [address, setAddress] = useState<AddressFields>({
@@ -446,8 +448,25 @@ export default function CheckoutScreen() {
         return;
       }
 
+      /**
+       * Use the Stripe publishable key from Violet's cart response.
+       *
+       * In Demo/Test Mode, Violet creates PaymentIntents on their own Stripe account.
+       * The local `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` (our Stripe account) won't work —
+       * PaymentSheet will fail. We extract `stripe_key` from the Violet cart response
+       * (returned by the Edge Function as `stripePublishableKey`) and update the
+       * StripeProvider dynamically so PaymentSheet uses the correct key.
+       *
+       * @see Bug fix — mobile PaymentSheet needs Violet's Stripe key
+       * @see apps/web/src/routes/checkout/index.tsx — getStripePromise() cache
+       */
+      const violetStripeKey = cartJson.data?.stripePublishableKey;
+      if (violetStripeKey) {
+        setStripePublishableKey(violetStripeKey);
+      }
+
       const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: "E-commerce",
+        merchantDisplayName: "Maison Émile",
         paymentIntentClientSecret: clientSecret,
         allowsDelayedPaymentMethods: false,
       });

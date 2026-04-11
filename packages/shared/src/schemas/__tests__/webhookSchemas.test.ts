@@ -5,6 +5,7 @@ import {
   violetRequiredHeadersSchema,
   violetOfferWebhookPayloadSchema,
   violetSyncWebhookPayloadSchema,
+  violetMerchantWebhookPayloadSchema,
 } from "../webhook.schema.js";
 
 // ─── Test fixtures ──────────────────────────────────────────────────
@@ -331,5 +332,68 @@ describe("violetSyncWebhookPayloadSchema", () => {
       violetSyncWebhookPayloadSchema.safeParse({ ...validSyncPayload, total_products: "250" })
         .success,
     ).toBe(false);
+  });
+});
+
+// ─── MERCHANT event types (Connection Health) ────────────────────────
+
+describe("webhookEventTypeSchema — MERCHANT events", () => {
+  it("accepts MERCHANT_CONNECTED", () => {
+    expect(webhookEventTypeSchema.safeParse("MERCHANT_CONNECTED").success).toBe(true);
+  });
+
+  it("accepts MERCHANT_DISCONNECTED", () => {
+    expect(webhookEventTypeSchema.safeParse("MERCHANT_DISCONNECTED").success).toBe(true);
+  });
+
+  it("accepts MERCHANT_ENABLED", () => {
+    expect(webhookEventTypeSchema.safeParse("MERCHANT_ENABLED").success).toBe(true);
+  });
+
+  it("accepts MERCHANT_DISABLED", () => {
+    expect(webhookEventTypeSchema.safeParse("MERCHANT_DISABLED").success).toBe(true);
+  });
+});
+
+// ─── violetMerchantWebhookPayloadSchema ───────────────────────────────
+
+describe("violetMerchantWebhookPayloadSchema", () => {
+  it("validates a complete merchant payload", () => {
+    const result = violetMerchantWebhookPayloadSchema.safeParse({
+      id: 10000,
+      name: "Test Merchant",
+      status: "ACTIVE",
+      connection_status: "CONNECTED",
+      source: "SHOPIFY",
+      date_last_modified: "2026-04-10T12:00:00Z",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.id).toBe(10000);
+      expect(result.data.name).toBe("Test Merchant");
+    }
+  });
+
+  it("validates minimal payload (only id is required)", () => {
+    const result = violetMerchantWebhookPayloadSchema.safeParse({ id: 42 });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing id", () => {
+    const result = violetMerchantWebhookPayloadSchema.safeParse({ name: "No ID" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects string id (must be number)", () => {
+    const result = violetMerchantWebhookPayloadSchema.safeParse({ id: "not-a-number" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts any string status value", () => {
+    const result = violetMerchantWebhookPayloadSchema.safeParse({
+      id: 1,
+      status: "UNKNOWN_STATUS",
+    });
+    expect(result.success).toBe(true);
   });
 });

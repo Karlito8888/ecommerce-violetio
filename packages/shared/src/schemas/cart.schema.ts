@@ -19,10 +19,28 @@
 
 import { z } from "zod";
 
-/** Validates a Violet bag error entry. */
+/**
+ * Validates a Violet bag error entry.
+ *
+ * ## Violet documented error structure
+ * - `type`: error category (EXTERNAL_SUBMISSION_FAILED, INTERNAL_ADD_ITEM, etc.)
+ * - `bag_id`: bag this error belongs to
+ * - `entity_type`: "order_sku" or "bag" — distinguishes item-level vs bag-level errors
+ * - `message`: human-readable description
+ * - `external_platform`: originating platform (SHOPIFY, BIGCOMMERCE, etc.)
+ * - `sku_id`: SKU this error refers to (when entity_type = "order_sku")
+ *
+ * We also accept `code` (used in some Violet responses) for backwards compatibility.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart
+ */
 export const violetBagErrorSchema = z.object({
-  code: z.string().optional().default("UNKNOWN"),
+  type: z.string().optional(),
+  code: z.string().optional(),
   message: z.string().default(""),
+  bag_id: z.number().optional(),
+  entity_type: z.enum(["order_sku", "bag"]).optional(),
+  external_platform: z.string().optional(),
   sku_id: z.number().optional(),
 });
 

@@ -369,6 +369,9 @@ verify_jwt = false
 
 # Violet webhooks are server-to-server calls — no Supabase JWT is present.
 # Authentication is done via HMAC-SHA256 signature (X-Violet-Hmac header).
+[functions.get-product]
+verify_jwt = false
+
 [functions.handle-webhook]
 verify_jwt = false
 

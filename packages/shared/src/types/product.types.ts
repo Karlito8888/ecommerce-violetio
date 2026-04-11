@@ -221,3 +221,76 @@ export interface CategoryItem {
   label: string;
   filter: string | undefined;
 }
+
+// ─── Collection Types ─────────────────────────────────────────────────
+
+/**
+ * Collection type — how the collection was curated.
+ *
+ * - CUSTOM: Manually curated by the merchant (each offer selected individually)
+ * - AUTOMATED: Rule-based selection by the platform (e.g., "all blue products")
+ *
+ * @see https://docs.violet.io/prism/catalog/collections
+ */
+export type CollectionType = "CUSTOM" | "AUTOMATED";
+
+/**
+ * A merchant-curated collection of products.
+ *
+ * Collections are groups of offers (products) organized by merchants
+ * to enhance the shopping experience (e.g., "Summer Sale", "Best Sellers",
+ * "New Arrivals"). Synced daily from Shopify when `sync_collections` flag
+ * is enabled.
+ *
+ * @see https://docs.violet.io/prism/catalog/collections
+ */
+export interface CollectionItem {
+  id: string;
+  merchantId: string;
+  name: string;
+  description: string;
+  type: CollectionType;
+  externalId: string;
+  imageUrl: string | null;
+  sortOrder: number;
+  /** Number of products in this collection. Fetched separately or cached. */
+  productCount: number;
+  dateCreated: string;
+  dateLastModified: string;
+}
+
+// ─── Metadata Types ───────────────────────────────────────────────────
+
+/**
+ * Metadata value type from Violet API.
+ *
+ * Maps to Shopify metafield types.
+ *
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing
+ */
+export type MetadataValueType = "STRING" | "JSON" | "INTEGER" | "LONG" | "DECIMAL" | "BOOLEAN";
+
+/**
+ * A single metadata key-value pair from a merchant's custom product data.
+ *
+ * Merchants can add custom data to their products via Shopify metafields.
+ * Examples: material, color, size_guide, care_instructions, label, origin.
+ *
+ * When `type` is `"JSON"`, the `value` field contains a serialized JSON string
+ * that must be parsed separately.
+ *
+ * Requires `sync_metadata` (for Offer-level) or `sync_sku_metadata` (for SKU-level)
+ * feature flags enabled per merchant, AND the `include=metadata` or
+ * `include=sku_metadata` query parameter on the API call.
+ *
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
+ */
+export interface MetadataItem {
+  version: number;
+  type: MetadataValueType;
+  externalType: string;
+  key: string;
+  value: string;
+  source: "INTERNAL" | "EXTERNAL";
+}

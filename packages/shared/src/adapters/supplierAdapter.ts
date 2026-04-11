@@ -20,6 +20,7 @@ import type {
   SetShippingMethodInput,
   Distribution,
   CategoryItem,
+  CollectionItem,
 } from "../types/index.js";
 
 /**
@@ -56,6 +57,52 @@ export interface SupplierAdapter {
    * @see https://docs.violet.io/api-reference/catalog/categories/get-categories
    */
   getCategories(): Promise<ApiResponse<CategoryItem[]>>;
+
+  /**
+   * Fetches product collections from the supplier.
+   *
+   * Collections are merchant-curated groups of offers (e.g., "Summer Sale",
+   * "Best Sellers"). Types: CUSTOM (manual) and AUTOMATED (rule-based).
+   * Requires `sync_collections` feature flag enabled per merchant.
+   *
+   * @see https://docs.violet.io/prism/catalog/collections
+   */
+  getCollections(merchantId?: string): Promise<ApiResponse<CollectionItem[]>>;
+
+  /**
+   * Fetches offers (products) belonging to a specific collection.
+   *
+   * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers
+   */
+  getCollectionOffers(
+    collectionId: string,
+    page?: number,
+    pageSize?: number,
+  ): Promise<ApiResponse<PaginatedResult<Product>>>;
+
+  /**
+   * Enables the `sync_collections` feature flag for a merchant.
+   *
+   * This triggers an immediate collection sync and subsequent daily re-syncs.
+   * Required for receiving COLLECTION_* webhook events.
+   *
+   * @see https://docs.violet.io/api-reference/merchants/configuration/toggle-merchant-configuration-global-feature-flag
+   */
+  enableCollectionSync(merchantId: string): Promise<ApiResponse<void>>;
+
+  /**
+   * Enables `sync_metadata` feature flag for a merchant (Offer-level metadata).
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing
+   */
+  enableMetadataSync(merchantId: string): Promise<ApiResponse<void>>;
+
+  /**
+   * Enables `sync_sku_metadata` feature flag for a merchant (SKU-level metadata).
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
+   */
+  enableSkuMetadataSync(merchantId: string): Promise<ApiResponse<void>>;
 
   // Search (AI)
   searchProducts(query: string, filters?: SearchFilters): Promise<ApiResponse<SearchResult>>;
@@ -107,6 +154,17 @@ export interface SupplierAdapter {
     violetCartId: string,
     selections: SetShippingMethodInput[],
   ): Promise<ApiResponse<Cart>>;
+
+  /**
+   * Forces cart pricing via GET /checkout/cart/{id}/price.
+   *
+   * Call when `setShippingMethods` returns a cart with `tax_total === 0` on
+   * any bag — Violet's docs state carts are not always priced automatically
+   * after applying shipping methods.
+   *
+   * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-pricing/price-cart
+   */
+  priceCart(violetCartId: string): Promise<ApiResponse<Cart>>;
 
   // Checkout — Customer & Billing (Story 4.4)
 

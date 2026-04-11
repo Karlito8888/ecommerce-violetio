@@ -628,7 +628,43 @@ Deno.serve(async (req: Request) => {
     const [, violetCartId, skuId] = updateSkuMatch;
     const body = await req.json();
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${skuId}`, {
+    /**
+     * Resolve catalog SKU ID → Violet OrderSku ID.
+     *
+     * Mobile sends the catalog sku_id (e.g. 356505) but Violet's
+     * PUT/DELETE /checkout/cart/{id}/skus/{orderSkuId} expects the
+     * OrderSku.id (the per-cart line item ID, e.g. 275930).
+     *
+     * We fetch the cart first and find the matching OrderSku ID
+     * by matching the catalog sku_id in the cart's bag items.
+     *
+     * @see Bug #6 (web fix) — same issue in VioletAdapter on web.
+     */
+    let orderSkuId = skuId; // default: assume caller sent the right ID
+    try {
+      const cartRes = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
+        method: "GET",
+        headers: violetHeaders,
+      });
+      if (cartRes.ok) {
+        const cartRaw = await cartRes.json();
+        const cartBags = Array.isArray(cartRaw.bags) ? cartRaw.bags : [];
+        for (const bag of cartBags) {
+          const bagSkus = Array.isArray(bag.skus) ? bag.skus : [];
+          for (const s of bagSkus) {
+            if (String(s.sku_id) === String(skuId)) {
+              orderSkuId = String(s.id);
+              break;
+            }
+          }
+          if (orderSkuId !== skuId) break;
+        }
+      }
+    } catch {
+      // Fall through — try with the original skuId
+    }
+
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${orderSkuId}`, {
       method: "PUT",
       headers: violetHeaders,
       body: JSON.stringify({ quantity: body.quantity }),
@@ -667,7 +703,35 @@ Deno.serve(async (req: Request) => {
   if (req.method === "DELETE" && updateSkuMatch) {
     const [, violetCartId, skuId] = updateSkuMatch;
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${skuId}`, {
+    /**
+     * Same sku_id → orderSkuId resolution as PUT above.
+     * @see Bug #6 — Violet expects OrderSku.id, not catalog sku_id.
+     */
+    let orderSkuId = skuId;
+    try {
+      const cartRes = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
+        method: "GET",
+        headers: violetHeaders,
+      });
+      if (cartRes.ok) {
+        const cartRaw = await cartRes.json();
+        const cartBags = Array.isArray(cartRaw.bags) ? cartRaw.bags : [];
+        for (const bag of cartBags) {
+          const bagSkus = Array.isArray(bag.skus) ? bag.skus : [];
+          for (const s of bagSkus) {
+            if (String(s.sku_id) === String(skuId)) {
+              orderSkuId = String(s.id);
+              break;
+            }
+          }
+          if (orderSkuId !== skuId) break;
+        }
+      }
+    } catch {
+      // Fall through — try with the original skuId
+    }
+
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${orderSkuId}`, {
       method: "DELETE",
       headers: violetHeaders,
     });
@@ -1193,6 +1257,26 @@ function transformCart(raw: unknown): Record<string, unknown> | null {
   }
   const r = raw as Record<string, unknown>;
 
+  /**
+   * Violet returns HTTP 200 with errors[] when partial failures occur (e.g.,
+   * one SKU out of stock in a multi-SKU cart). Per Channel Docs:
+   * "A cart response can come back with status code 200 and still have errors
+   * in the errors field. Make sure your system is coded to always check for
+   * the presence of the errors field on responses."
+   *
+   * We log a warning but still transform the cart — the client receives the
+   * errors in the transformed bags and can display them appropriately.
+   *
+   * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart
+   */
+  const orderErrors = Array.isArray(r.errors) ? r.errors : [];
+  if (orderErrors.length > 0) {
+    console.warn(
+      `[cart] Violet returned 200 with ${orderErrors.length} order-level error(s). ` +
+        `Cart ${r.id ?? "?"} may have partial issues. Errors: ${JSON.stringify(orderErrors).slice(0, 200)}`,
+    );
+  }
+
   const bags = Array.isArray(r.bags)
     ? (r.bags as Array<Record<string, unknown>>).map((bag) => {
         const items = Array.isArray(bag.skus)
@@ -1242,11 +1326,49 @@ function transformCart(raw: unknown): Record<string, unknown> | null {
      * Stripe PaymentIntent client secret — present when cart was created with
      * `wallet_based_checkout: true`. Mobile uses this to init PaymentSheet.
      *
+     * Extraction order mirrors the web adapter (violetAdapter.ts:1408-1410):
+     * 1. Root-level `payment_intent_client_secret` (Violet legacy / some responses)
+     * 2. `payment_transactions[0].payment_intent_client_secret` (API Reference format)
+     * 3. `payment_transactions[0].metadata.payment_intent_client_secret` (Channel Docs format)
+     *
+     * In Demo Mode, no PI is created — this will be undefined (expected).
+     *
+     * @see https://docs.violet.io/prism/payments/payment-integrations/supported-providers/stripe/stripe-elements
+     * @see https://docs.violet.io/api-reference/orders-and-checkout/carts/create-cart
      * @see Story 4.4 AC#5
      */
-    paymentIntentClientSecret: r.payment_intent_client_secret
-      ? String(r.payment_intent_client_secret)
-      : undefined,
+    paymentIntentClientSecret:
+      r.payment_intent_client_secret
+        ? String(r.payment_intent_client_secret)
+        : r.payment_transactions?.[0]?.payment_intent_client_secret
+          ? String(r.payment_transactions[0].payment_intent_client_secret)
+          : r.payment_transactions?.[0]?.metadata?.payment_intent_client_secret
+            ? String(r.payment_transactions[0].metadata.payment_intent_client_secret)
+            : undefined,
+    /**
+     * Stripe publishable key from Violet — needed by mobile PaymentSheet.
+     *
+     * In Demo/Test Mode, Violet creates PaymentIntents on their own Stripe account.
+     * The local `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` won't match — PaymentSheet
+     * will fail to load or decline the card. The web app handles this via
+     * `getPaymentIntentFn` which returns `stripe_key` from the Violet cart response.
+     *
+     * The mobile checkout screen reads this field to call `initPaymentSheet()`
+     * with the correct key (Bug fix — equivalent to web's `getStripePromise()` cache).
+     *
+     * @see apps/mobile/src/app/checkout.tsx — handleBillingConfirm
+     * @see apps/web/src/server/checkout.ts — getPaymentIntentFn
+     * @see packages/shared/src/adapters/violetAdapter.ts — stripe_key mapping
+     */
+    stripePublishableKey: r.stripe_key ? String(r.stripe_key) : undefined,
+
+    /**
+     * Order-level errors from Violet (200-with-errors pattern).
+     * Empty array when no errors. Non-empty means partial failure.
+     *
+     * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart
+     */
+    errors: orderErrors,
   };
 }
 

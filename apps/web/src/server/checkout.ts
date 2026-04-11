@@ -185,6 +185,44 @@ export const setShippingMethodsFn = createServerFn({ method: "POST" })
     return result;
   });
 
+/**
+ * Forces cart pricing via GET /checkout/cart/{id}/price.
+ *
+ * Called when `setShippingMethods` returns a cart with `tax_total === 0` on any
+ * bag. Violet's docs state: "there are instances where carts are not priced
+ * automatically after applying shipping methods. You will know this is needed
+ * when the response from the apply shipping methods call has a 0 value for
+ * tax_total."
+ *
+ * ## Why this is separate from setShippingMethods
+ * Price Cart makes external e-commerce platform API calls and impacts rate limits.
+ * Only calling when needed avoids unnecessary platform requests.
+ *
+ * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-pricing/price-cart
+ * @see https://docs.violet.io/prism/overview/place-an-order/submit-cart
+ */
+export const priceCartFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<ApiResponse<Cart>> => {
+    const violetCartId = getCookie("violet_cart_id");
+    if (!violetCartId) {
+      return { data: null, error: { code: "NO_CART", message: "No active cart" } };
+    }
+    const adapter = getAdapter();
+    const result = await adapter.priceCart(violetCartId);
+
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: result.error.code,
+        message: result.error.message,
+        context: { violetCartId, step: "priceCart" },
+      });
+    }
+
+    return result;
+  },
+);
+
 // ─── Story 4.4: Customer, Billing, Payment, Submit ──────────────────────
 
 /**

@@ -109,10 +109,18 @@ async function violetRefreshToken(
   config: VioletAuthConfig,
 ): Promise<ApiResponse<VioletTokenData>> {
   try {
+    /**
+     * Violet API Reference: GET /auth/token with X-Violet-Token header.
+     * Previously used POST which returned 405 Method Not Allowed.
+     *
+     * @see https://docs.violet.io/api-reference/auth/refresh-token
+     */
     const res = await fetch(`${config.apiBase}/auth/token`, {
-      method: "POST",
-      headers: appHeaders(config),
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      method: "GET",
+      headers: {
+        ...appHeaders(config),
+        "X-Violet-Token": refreshToken,
+      },
     });
 
     if (!res.ok) {

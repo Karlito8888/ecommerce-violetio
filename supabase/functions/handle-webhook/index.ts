@@ -43,6 +43,14 @@
  * | BAG_COMPLETED       | processBagUpdated        | Update bag status + delivery notification |
  * | BAG_CANCELED        | processBagUpdated        | Update bag status + derive order status   |
  * | BAG_REFUNDED        | processBagRefunded       | Fetch refund details + notification       |
+ * | MERCHANT_CONNECTED  | processMerchantConnected | Log connection + audit trail              |
+ * | MERCHANT_DISCONNECTED | processMerchantDisconnected | Log disconnection                       |
+ * | MERCHANT_ENABLED    | processMerchantStatusChange | Log enable/disable + audit trail        |
+ * | MERCHANT_DISABLED   | processMerchantStatusChange | Log enable/disable + audit trail        |
+ * | COLLECTION_CREATED  | processCollectionCreated   | Insert collection into DB                |
+ * | COLLECTION_UPDATED  | processCollectionUpdated   | Update collection metadata in DB         |
+ * | COLLECTION_REMOVED  | processCollectionRemoved   | Soft-delete collection + clear junction   |
+ * | COLLECTION_OFFERS_UPDATED | processCollectionOffersUpdated | Log offer composition change       |
  *
  * ## ⚠️ KNOWN LIMITATION: Synchronous processing (H1 code review)
  *
@@ -98,6 +106,8 @@ import {
   violetSyncWebhookPayloadSchema,
   violetOrderWebhookPayloadSchema,
   violetBagWebhookPayloadSchema,
+  violetMerchantWebhookPayloadSchema,
+  violetCollectionWebhookPayloadSchema,
 } from "../_shared/schemas.ts";
 import {
   processOfferAdded,
@@ -105,6 +115,13 @@ import {
   processOfferRemoved,
   processOfferDeleted,
   processSyncEvent,
+  processMerchantConnected,
+  processMerchantDisconnected,
+  processMerchantStatusChange,
+  processCollectionCreated,
+  processCollectionUpdated,
+  processCollectionRemoved,
+  processCollectionOffersUpdated,
   updateEventStatus,
 } from "./processors.ts";
 import {
@@ -378,6 +395,115 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processSyncEvent(supabase, eventId, result.data);
+        break;
+      }
+
+      // ─── MERCHANT events ────────────────────────────────────
+      case "MERCHANT_CONNECTED": {
+        const result = violetMerchantWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processMerchantConnected(supabase, eventId, result.data);
+        break;
+      }
+
+      case "MERCHANT_DISCONNECTED": {
+        const result = violetMerchantWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processMerchantDisconnected(supabase, eventId, result.data);
+        break;
+      }
+
+      case "MERCHANT_ENABLED":
+      case "MERCHANT_DISABLED": {
+        const result = violetMerchantWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processMerchantStatusChange(supabase, eventId, eventType, result.data);
+        break;
+      }
+
+      // ─── COLLECTION events ────────────────────────────────────
+      // Requires `sync_collections` feature flag enabled per merchant.
+      case "COLLECTION_CREATED": {
+        const result = violetCollectionWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processCollectionCreated(supabase, eventId, result.data);
+        break;
+      }
+
+      case "COLLECTION_UPDATED": {
+        const result = violetCollectionWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processCollectionUpdated(supabase, eventId, result.data);
+        break;
+      }
+
+      case "COLLECTION_REMOVED": {
+        const result = violetCollectionWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processCollectionRemoved(supabase, eventId, result.data);
+        break;
+      }
+
+      case "COLLECTION_OFFERS_UPDATED": {
+        const result = violetCollectionWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processCollectionOffersUpdated(supabase, eventId, result.data);
         break;
       }
 

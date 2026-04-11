@@ -119,6 +119,23 @@ export const violetSkuDimensionsSchema = z.object({
  * Optional fields use `.optional().default(...)` to handle Violet's null-exclusion.
  * Prices default to 0 (not absent in practice, but defensive).
  */
+/**
+ * Schema for metadata items returned on Offer/SKU responses.
+ *
+ * Included when `?include=metadata` or `?include=sku_metadata` is passed to the
+ * Violet API AND the corresponding feature flag is enabled for the merchant.
+ *
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing
+ */
+export const violetMetadataItemSchema = z.object({
+  version: z.number(),
+  type: z.enum(["STRING", "JSON", "INTEGER", "LONG", "DECIMAL", "BOOLEAN"]),
+  external_type: z.string(),
+  key: z.string(),
+  value: z.string(),
+  source: z.enum(["INTERNAL", "EXTERNAL"]),
+});
+
 export const violetSkuSchema = z.object({
   id: z.number(),
   offer_id: z.number(),
@@ -136,6 +153,13 @@ export const violetSkuSchema = z.object({
   /** Nullable AND optional: may be `null`, or absent entirely. */
   sku_dimensions: violetSkuDimensionsSchema.nullable().optional().default(null),
   albums: z.array(violetAlbumSchema).optional().default([]),
+  /**
+   * SKU metadata from merchant's custom variant data (Shopify metafields).
+   * Present when `?include=sku_metadata` AND `sync_sku_metadata` flag is enabled.
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
+   */
+  metadata: z.array(violetMetadataItemSchema).optional(),
   date_created: z.string().optional().default(""),
   date_last_modified: z.string().optional().default(""),
 });
@@ -212,6 +236,13 @@ export const violetOfferSchema = z.object({
     .nullable()
     .optional()
     .default(null),
+  /**
+   * Offer metadata from merchant's custom product data (Shopify metafields).
+   * Present when `?include=metadata` AND `sync_metadata` flag is enabled.
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing
+   */
+  metadata: z.array(violetMetadataItemSchema).optional(),
 });
 
 /**

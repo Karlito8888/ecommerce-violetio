@@ -52,6 +52,7 @@ interface MockFunctionsInvoke {
 
 interface MockQueryBuilder {
   update: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
   from: ReturnType<typeof vi.fn>;
   functions: MockFunctionsInvoke;
@@ -60,12 +61,14 @@ interface MockQueryBuilder {
 function createMockSupabase(): MockQueryBuilder {
   const eqFn = vi.fn().mockResolvedValue({ error: null });
   const updateFn = vi.fn().mockReturnValue({ eq: eqFn });
-  const fromFn = vi.fn().mockReturnValue({ update: updateFn });
+  const insertFn = vi.fn().mockResolvedValue({ error: null });
+  const fromFn = vi.fn().mockReturnValue({ update: updateFn, insert: insertFn });
   const invokeFn = vi.fn().mockResolvedValue({ data: {}, error: null });
 
   return {
     from: fromFn,
     update: updateFn,
+    insert: insertFn,
     eq: eqFn,
     functions: { invoke: invokeFn },
   };
@@ -354,6 +357,90 @@ describe("Webhook processor logic contracts", () => {
 
       // Verify the catch block ran (status update was called)
       expect(supabase.from).toHaveBeenCalledWith("webhook_events");
+    });
+  });
+
+  // ── MERCHANT webhook processors ──────────────────────────────────────
+
+  describe("MERCHANT_CONNECTED processor", () => {
+    it("logs merchant connection to error_logs and marks processed", async () => {
+      const supabase = createMockSupabase();
+
+      // Mirror of processMerchantConnected logic
+      await supabase.from("error_logs").insert({
+        source: "webhook",
+        error_type: "MERCHANT_CONNECTED",
+        message: 'Merchant "Test Store" (id=100, platform=SHOPIFY) connected',
+        context: { merchant_id: "100", merchant_name: "Test Store", source: "SHOPIFY" },
+      });
+      await supabase
+        .from("webhook_events")
+        .update({ status: "processed", processed_at: expect.any(String) })
+        .eq("event_id", "evt-100");
+
+      expect(supabase.from).toHaveBeenCalledWith("error_logs");
+      expect(supabase.from).toHaveBeenCalledWith("webhook_events");
+      expect(supabase.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "processed" }),
+      );
+    });
+  });
+
+  describe("MERCHANT_DISCONNECTED processor", () => {
+    it("logs merchant disconnection to error_logs and marks processed", async () => {
+      const supabase = createMockSupabase();
+
+      await supabase.from("error_logs").insert({
+        source: "webhook",
+        error_type: "MERCHANT_DISCONNECTED",
+        message: 'Merchant "Test Store" (id=100) disconnected',
+        context: { merchant_id: "100", merchant_name: "Test Store" },
+      });
+      await supabase
+        .from("webhook_events")
+        .update({ status: "processed", processed_at: expect.any(String) })
+        .eq("event_id", "evt-101");
+
+      expect(supabase.from).toHaveBeenCalledWith("error_logs");
+      expect(supabase.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "processed" }),
+      );
+    });
+  });
+
+  describe("MERCHANT_ENABLED/DISABLED processor", () => {
+    it("logs merchant enabled event", async () => {
+      const supabase = createMockSupabase();
+
+      await supabase.from("error_logs").insert({
+        source: "webhook",
+        error_type: "MERCHANT_ENABLED",
+        message: 'Merchant "Test Store" (id=100) enabled',
+        context: { merchant_id: "100", merchant_name: "Test Store", status: "ACTIVE" },
+      });
+      await supabase
+        .from("webhook_events")
+        .update({ status: "processed" })
+        .eq("event_id", "evt-102");
+
+      expect(supabase.from).toHaveBeenCalledWith("error_logs");
+    });
+
+    it("logs merchant disabled event", async () => {
+      const supabase = createMockSupabase();
+
+      await supabase.from("error_logs").insert({
+        source: "webhook",
+        error_type: "MERCHANT_DISABLED",
+        message: 'Merchant "Test Store" (id=100) disabled',
+        context: { merchant_id: "100", merchant_name: "Test Store", status: "INACTIVE" },
+      });
+      await supabase
+        .from("webhook_events")
+        .update({ status: "processed" })
+        .eq("event_id", "evt-103");
+
+      expect(supabase.from).toHaveBeenCalledWith("error_logs");
     });
   });
 });

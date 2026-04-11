@@ -127,7 +127,7 @@ describe("violetRefreshToken", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("calls POST /auth/token with refresh_token body", async () => {
+  it("calls GET /auth/token with X-Violet-Token header", async () => {
     const fetchMock = mockFetchSuccess(MOCK_LOGIN_RESPONSE);
     globalThis.fetch = fetchMock;
 
@@ -136,13 +136,13 @@ describe("violetRefreshToken", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://sandbox-api.violet.io/v1/auth/token",
       expect.objectContaining({
-        method: "POST",
+        method: "GET",
         headers: expect.objectContaining({
           "X-Violet-App-Id": "11371",
           "X-Violet-App-Secret": "test-secret",
+          "X-Violet-Token": "refresh-token-xyz",
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify({ refresh_token: "refresh-token-xyz" }),
       }),
     );
   });

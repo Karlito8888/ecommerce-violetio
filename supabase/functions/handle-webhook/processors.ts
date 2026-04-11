@@ -41,7 +41,12 @@
  */
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import type { VioletOfferPayload, VioletSyncPayload } from "../_shared/schemas.ts";
+import { getVioletHeaders } from "../_shared/violetAuth.ts";
+import type {
+  VioletOfferPayload,
+  VioletSyncPayload,
+  VioletCollectionPayload,
+} from "../_shared/schemas.ts";
 
 /**
  * Marks a webhook event as processed or failed in the database.
@@ -258,4 +263,411 @@ export async function processSyncEvent(
   _payload: VioletSyncPayload,
 ): Promise<void> {
   await updateEventStatus(supabase, eventId, "processed");
+}
+
+/**
+ * Processes MERCHANT_CONNECTED webhook event.
+ *
+ * Fired when a merchant completes Violet Connect onboarding.
+ * Logs the connection for audit trail. The merchant_id is stored in
+ * webhook_events.entity_id for future reference.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
+ */
+export async function processMerchantConnected(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: { id: number; name?: string; source?: string },
+): Promise<void> {
+  const merchantId = String(payload.id);
+  const merchantName = payload.name ?? "Unknown";
+  const source = payload.source ?? "Unknown";
+
+  console.log(
+    `[merchant] Merchant connected: id=${merchantId} name="${merchantName}" source=${source}`,
+  );
+
+  // Store a log entry in error_logs for the admin dashboard
+  await supabase.from("error_logs").insert({
+    source: "webhook",
+    error_type: "MERCHANT_CONNECTED",
+    message: `Merchant "${merchantName}" (id=${merchantId}, platform=${source}) connected`,
+    context: { merchant_id: merchantId, merchant_name: merchantName, source },
+  });
+
+  // ─── Auto-enable feature flags for rich catalog data ───────────
+  // Per Violet docs, these flags must be toggled per-merchant:
+  //   sync_collections  → daily collection sync + COLLECTION_* webhooks
+  //   sync_metadata     → Offer-level metadata (Shopify metafields)
+  //   sync_sku_metadata → SKU-level metadata (variant enrichments)
+  // We enable all three on connection so the catalog is fully enriched.
+  // Failures are logged but non-blocking — the merchant is still connected.
+  // @see https://docs.violet.io/api-reference/merchants/configuration/toggle-merchant-configuration-global-feature-flag
+  await autoEnableMerchantFlags(merchantId);
+
+  // ─── Persist enabled flags in merchant_feature_flags table ─────
+  // Tracks which flags are active for admin visibility.
+  const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata"];
+  await supabase.from("merchant_feature_flags").upsert(
+    flags.map((flag) => ({
+      merchant_id: merchantId,
+      flag_name: flag,
+      enabled: true,
+    })),
+    { onConflict: "merchant_id,flag_name" },
+  );
+
+  await updateEventStatus(supabase, eventId, "processed");
+}
+
+/**
+ * Processes MERCHANT_DISCONNECTED webhook event.
+ *
+ * Fired when a merchant disconnects their store from Violet.
+ * Logs the disconnection. Products from this merchant will stop syncing.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
+ */
+export async function processMerchantDisconnected(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: { id: number; name?: string },
+): Promise<void> {
+  const merchantId = String(payload.id);
+  const merchantName = payload.name ?? "Unknown";
+
+  console.warn(
+    `[merchant] Merchant disconnected: id=${merchantId} name="${merchantName}"`,
+  );
+
+  // Store a log entry for the admin dashboard
+  await supabase.from("error_logs").insert({
+    source: "webhook",
+    error_type: "MERCHANT_DISCONNECTED",
+    message: `Merchant "${merchantName}" (id=${merchantId}) disconnected`,
+    context: { merchant_id: merchantId, merchant_name: merchantName },
+  });
+
+  await updateEventStatus(supabase, eventId, "processed");
+}
+
+/**
+ * Processes MERCHANT_ENABLED/DISABLED webhook events.
+ *
+ * MERCHANT_ENABLED: merchant reactivated (e.g., Shopify plan restored).
+ * MERCHANT_DISABLED: merchant deactivated (e.g., Shopify app uninstalled, plan frozen).
+ *
+ * Both are logged for operational visibility. In the future, this could
+ * trigger product catalog refresh or hide/show merchant products.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
+ */
+export async function processMerchantStatusChange(
+  supabase: SupabaseClient,
+  eventId: string,
+  eventType: string,
+  payload: { id: number; name?: string; status?: string },
+): Promise<void> {
+  const merchantId = String(payload.id);
+  const merchantName = payload.name ?? "Unknown";
+  const status = payload.status ?? "unknown";
+
+  const isEnabled = eventType === "MERCHANT_ENABLED";
+  console.log(
+    `[merchant] Merchant ${isEnabled ? "enabled" : "disabled"}: id=${merchantId} name="${merchantName}" status=${status}`,
+  );
+
+  await supabase.from("error_logs").insert({
+    source: "webhook",
+    error_type: eventType,
+    message: `Merchant "${merchantName}" (id=${merchantId}) ${isEnabled ? "enabled" : "disabled"}`,
+    context: { merchant_id: merchantId, merchant_name: merchantName, status },
+  });
+
+  await updateEventStatus(supabase, eventId, "processed");
+}
+
+// ─── Collection Processors ──────────────────────────────────────────────
+
+/**
+ * Processes COLLECTION_CREATED webhook event.
+ *
+ * Fired when a new collection is created by a merchant.
+ * Note: The collection may have 0 offers initially — use COLLECTION_OFFERS_UPDATED
+ * to track when offers are added.
+ *
+ * Stores the collection in the `collections` table for UI navigation.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ */
+export async function processCollectionCreated(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: VioletCollectionPayload,
+): Promise<void> {
+  try {
+    const collectionId = String(payload.id);
+    const merchantId = String(payload.merchant_id);
+
+    console.log(
+      `[collection] Collection created: id=${collectionId} name="${payload.name ?? "Unknown"}" merchant=${merchantId}`,
+    );
+
+    const { error } = await supabase.from("collections").upsert(
+      {
+        id: collectionId,
+        merchant_id: merchantId,
+        name: payload.name ?? "Untitled Collection",
+        description: payload.description ?? null,
+        type: payload.type ?? "CUSTOM",
+        external_id: payload.external_id ?? null,
+        image_url: payload.image_url ?? null,
+        sort_order: payload.sort_order ?? 0,
+        status: "ACTIVE",
+        date_last_modified: payload.date_last_modified ?? new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+
+    if (error) {
+      await updateEventStatus(
+        supabase,
+        eventId,
+        "failed",
+        `Failed to upsert collection: ${error.message}`,
+      );
+      return;
+    }
+
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error ? err.message : "Unknown error in processCollectionCreated",
+    );
+  }
+}
+
+/**
+ * Processes COLLECTION_UPDATED webhook event.
+ *
+ * Fired when collection metadata changes (name, description, image).
+ * Does NOT fire for offer composition changes — that's COLLECTION_OFFERS_UPDATED.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ */
+export async function processCollectionUpdated(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: VioletCollectionPayload,
+): Promise<void> {
+  try {
+    const collectionId = String(payload.id);
+
+    console.log(
+      `[collection] Collection updated: id=${collectionId} name="${payload.name ?? "Unknown"}"`,
+    );
+
+    const update: Record<string, unknown> = {
+      date_last_modified: payload.date_last_modified ?? new Date().toISOString(),
+    };
+    if (payload.name !== undefined) update.name = payload.name;
+    if (payload.description !== undefined) update.description = payload.description;
+    if (payload.type !== undefined) update.type = payload.type;
+    if (payload.image_url !== undefined) update.image_url = payload.image_url;
+    if (payload.sort_order !== undefined) update.sort_order = payload.sort_order;
+
+    const { error } = await supabase
+      .from("collections")
+      .update(update)
+      .eq("id", collectionId);
+
+    if (error) {
+      await updateEventStatus(
+        supabase,
+        eventId,
+        "failed",
+        `Failed to update collection: ${error.message}`,
+      );
+      return;
+    }
+
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error ? err.message : "Unknown error in processCollectionUpdated",
+    );
+  }
+}
+
+/**
+ * Processes COLLECTION_REMOVED webhook event.
+ *
+ * Fired when a collection is no longer available.
+ * The individual offers within it remain available — they may belong to other collections
+ * or exist as standalone offers.
+ *
+ * Soft-deletes the collection (status = REMOVED) and clears the junction table.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ */
+export async function processCollectionRemoved(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: VioletCollectionPayload,
+): Promise<void> {
+  try {
+    const collectionId = String(payload.id);
+
+    console.log(`[collection] Collection removed: id=${collectionId}`);
+
+    // Soft-delete: mark as REMOVED
+    const { error: updateError } = await supabase
+      .from("collections")
+      .update({ status: "REMOVED", date_last_modified: new Date().toISOString() })
+      .eq("id", collectionId);
+
+    if (updateError) {
+      await updateEventStatus(
+        supabase,
+        eventId,
+        "failed",
+        `Failed to mark collection as removed: ${updateError.message}`,
+      );
+      return;
+    }
+
+    // Clear the junction table entries for this collection
+    const { error: junctionError } = await supabase
+      .from("collection_offers")
+      .delete()
+      .eq("collection_id", collectionId);
+
+    if (junctionError) {
+      // Non-fatal: collection is marked as removed, orphaned junction rows are harmless
+      console.error(
+        `[collection] Failed to clear junction for collection ${collectionId}:`,
+        junctionError.message,
+      );
+    }
+
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error ? err.message : "Unknown error in processCollectionRemoved",
+    );
+  }
+}
+
+/**
+ * Processes COLLECTION_OFFERS_UPDATED webhook event.
+ *
+ * Fired when offers are added to or removed from a collection.
+ * This is the critical event for maintaining accurate collection content.
+ *
+ * The payload may include information about which offers were added/removed.
+ * Since the exact payload shape varies, we log the event and store it for
+ * the application layer to reconcile via API calls if needed.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ */
+export async function processCollectionOffersUpdated(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: VioletCollectionPayload,
+): Promise<void> {
+  try {
+    const collectionId = String(payload.id);
+    const merchantId = String(payload.merchant_id);
+
+    console.log(
+      `[collection] Collection offers updated: id=${collectionId} merchant=${merchantId}`,
+    );
+
+    // Log the event for audit trail — the application layer can reconcile
+    // the exact offer composition by calling GET /catalog/collections/{id}/offers
+    await supabase.from("error_logs").insert({
+      source: "webhook",
+      error_type: "COLLECTION_OFFERS_UPDATED",
+      message: `Collection ${collectionId} (merchant ${merchantId}) offers changed`,
+      context: { collection_id: collectionId, merchant_id: merchantId },
+    });
+
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error ? err.message : "Unknown error in processCollectionOffersUpdated",
+    );
+  }
+}
+
+// ─── Merchant Feature Flag Auto-Enable ──────────────────────────────────
+
+/**
+ * Automatically enables Violet feature flags for a newly connected merchant.
+ *
+ * Per the Violet docs, these flags must be toggled per-merchant via
+ * PUT /merchants/{merchant_id}/configuration/global_feature_flags/{flag_name}
+ *
+ * Flags enabled:
+ * - sync_collections: daily collection sync + COLLECTION_* webhooks (Shopify)
+ * - sync_metadata: Offer-level metadata from Shopify metafields
+ * - sync_sku_metadata: SKU-level metadata (variant enrichments)
+ *
+ * Failures are logged but non-blocking — the merchant connection succeeds
+ * regardless. Flags can be re-toggled manually if needed.
+ *
+ * @see https://docs.violet.io/prism/catalog/collections
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
+ */
+async function autoEnableMerchantFlags(merchantId: string): Promise<void> {
+  const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata"];
+  const headersResult = await getVioletHeaders();
+
+  if (headersResult.error) {
+    console.warn(
+      `[merchant] Cannot auto-enable flags for ${merchantId} — auth failed: ${headersResult.error.message}`,
+    );
+    return;
+  }
+
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+
+  for (const flag of flags) {
+    try {
+      const url = `${apiBase}/merchants/${merchantId}/configuration/global_feature_flags/${flag}`;
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { ...headersResult.data, "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true }),
+      });
+
+      if (res.ok) {
+        console.log(`[merchant] Enabled flag ${flag} for merchant ${merchantId}`);
+      } else {
+        const text = await res.text().catch(() => "");
+        console.warn(
+          `[merchant] Failed to enable ${flag} for merchant ${merchantId}: ${res.status} ${text}`,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[merchant] Error enabling ${flag} for merchant ${merchantId}: ${
+          err instanceof Error ? err.message : "Unknown"
+        }`,
+      );
+    }
+  }
 }

@@ -99,6 +99,14 @@ export const webhookEventTypeSchema = z.enum([
   "PRODUCT_SYNC_STARTED",
   "PRODUCT_SYNC_COMPLETED",
   "PRODUCT_SYNC_FAILED",
+  "MERCHANT_CONNECTED",
+  "MERCHANT_DISCONNECTED",
+  "MERCHANT_ENABLED",
+  "MERCHANT_DISABLED",
+  "COLLECTION_CREATED",
+  "COLLECTION_UPDATED",
+  "COLLECTION_REMOVED",
+  "COLLECTION_OFFERS_UPDATED",
   "ORDER_UPDATED",
   "ORDER_COMPLETED",
   "ORDER_CANCELED",
@@ -152,6 +160,21 @@ export const violetRequiredHeadersSchema = z.object({
  *
  * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
  */
+
+/**
+ * Validates the metadata field on Offer/SKU responses.
+ *
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing
+ */
+export const violetMetadataSchema = z.object({
+  version: z.number(),
+  type: z.enum(["STRING", "JSON", "INTEGER", "LONG", "DECIMAL", "BOOLEAN"]),
+  external_type: z.string(),
+  key: z.string(),
+  value: z.string(),
+  source: z.enum(["INTERNAL", "EXTERNAL"]),
+});
+
 export const violetOfferWebhookPayloadSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -186,6 +209,13 @@ export const violetOfferWebhookPayloadSchema = z.object({
   external_url: z.string().optional(),
   skus: z.array(z.unknown()).optional(),
   albums: z.array(z.unknown()).optional(),
+  /**
+   * Offer metadata from merchant's custom product data.
+   * Present when `sync_metadata` flag is enabled for the merchant.
+   *
+   * @see https://docs.violet.io/prism/catalog/metadata-syncing
+   */
+  metadata: z.array(violetMetadataSchema).optional(),
   date_last_modified: z.string().optional(),
 });
 
@@ -202,6 +232,55 @@ export const violetSyncWebhookPayloadSchema = z.object({
   total_products: z.number(),
   total_products_synced: z.number().optional(),
 });
+
+/**
+ * Validates Violet MERCHANT_* webhook payload.
+ *
+ * Handles: MERCHANT_CONNECTED, MERCHANT_DISCONNECTED, MERCHANT_ENABLED, MERCHANT_DISABLED.
+ * Fired when a merchant connects/disconnects or is enabled/disabled on Violet.
+ * The `x-violet-connect-state` header may carry custom state from the Connect flow.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
+ * @see handle-webhook/index.ts — Merchant event routing
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+ */
+export const violetMerchantWebhookPayloadSchema = z.object({
+  id: z.number(),
+  name: z.string().optional(),
+  status: z.string().optional(),
+  connection_status: z.string().optional(),
+  source: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletMerchantPayload = z.infer<typeof violetMerchantWebhookPayloadSchema>;
+
+// ─── Collection Webhook Schemas ────────────────────────────────────────
+
+/**
+ * Validates Violet COLLECTION_* webhook payload.
+ *
+ * Handles: COLLECTION_CREATED, COLLECTION_UPDATED, COLLECTION_REMOVED, COLLECTION_OFFERS_UPDATED.
+ * Requires `sync_collections` feature flag enabled for the merchant.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+ */
+export const violetCollectionWebhookPayloadSchema = z.object({
+  id: z.number(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  type: z.enum(["CUSTOM", "AUTOMATED"]).optional(),
+  merchant_id: z.number(),
+  external_id: z.string().optional(),
+  image_url: z.string().optional(),
+  sort_order: z.number().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletCollectionPayload = z.infer<typeof violetCollectionWebhookPayloadSchema>;
 
 // ─── Order/Bag Webhook Schemas (Story 5.2) ────────────────────────────
 

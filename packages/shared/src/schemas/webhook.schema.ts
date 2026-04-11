@@ -108,6 +108,14 @@ export const webhookEventTypeSchema = z.enum([
   "PRODUCT_SYNC_STARTED",
   "PRODUCT_SYNC_COMPLETED",
   "PRODUCT_SYNC_FAILED",
+  "MERCHANT_CONNECTED",
+  "MERCHANT_DISCONNECTED",
+  "MERCHANT_ENABLED",
+  "MERCHANT_DISABLED",
+  "COLLECTION_CREATED",
+  "COLLECTION_UPDATED",
+  "COLLECTION_REMOVED",
+  "COLLECTION_OFFERS_UPDATED",
   "ORDER_UPDATED",
   "ORDER_COMPLETED",
   "ORDER_CANCELED",
@@ -166,6 +174,25 @@ export const violetRequiredHeadersSchema = z.object({
  * Validates Violet Offer webhook payload.
  * Prices are in integer cents. Extra fields are stripped by Zod's default behavior.
  */
+
+/**
+ * Validates the metadata field on Offer/SKU responses.
+ *
+ * Metadata is included only when:
+ * 1. `sync_metadata` (Offer-level) or `sync_sku_metadata` (SKU-level) flag is enabled
+ * 2. The request includes `?include=metadata` or `?include=sku_metadata`
+ *
+ * @see https://docs.violet.io/prism/catalog/metadata-syncing
+ */
+export const violetMetadataSchema = z.object({
+  version: z.number(),
+  type: z.enum(["STRING", "JSON", "INTEGER", "LONG", "DECIMAL", "BOOLEAN"]),
+  external_type: z.string(),
+  key: z.string(),
+  value: z.string(),
+  source: z.enum(["INTERNAL", "EXTERNAL"]),
+});
+
 export const violetOfferWebhookPayloadSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -200,6 +227,7 @@ export const violetOfferWebhookPayloadSchema = z.object({
   external_url: z.string().optional(),
   skus: z.array(z.unknown()).optional(),
   albums: z.array(z.unknown()).optional(),
+  metadata: z.array(violetMetadataSchema).optional(),
   date_last_modified: z.string().optional(),
 });
 
@@ -214,6 +242,61 @@ export const violetSyncWebhookPayloadSchema = z.object({
   total_products: z.number(),
   total_products_synced: z.number().optional(),
 });
+
+/**
+ * Validates Violet MERCHANT_* webhook payload.
+ *
+ * Handles: MERCHANT_CONNECTED, MERCHANT_DISCONNECTED, MERCHANT_ENABLED, MERCHANT_DISABLED.
+ * Fired when a merchant connects/disconnects or is enabled/disabled on Violet.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
+ *
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ */
+export const violetMerchantWebhookPayloadSchema = z.object({
+  id: z.number(),
+  name: z.string().optional(),
+  status: z.string().optional(),
+  connection_status: z.string().optional(),
+  source: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletMerchantPayload = z.infer<typeof violetMerchantWebhookPayloadSchema>;
+
+// ─── Collection Webhook Schemas ────────────────────────────────────────
+
+/**
+ * Validates Violet COLLECTION_* webhook payload.
+ *
+ * Handles: COLLECTION_CREATED, COLLECTION_UPDATED, COLLECTION_REMOVED, COLLECTION_OFFERS_UPDATED.
+ * Fired when a merchant's collection data changes. Requires `sync_collections`
+ * feature flag enabled for the merchant.
+ *
+ * COLLECTION_CREATED: New collection created (may have 0 offers initially).
+ * COLLECTION_UPDATED: Collection metadata changed (name, description, image).
+ *   Does NOT fire for offer composition changes — use COLLECTION_OFFERS_UPDATED.
+ * COLLECTION_REMOVED: Collection no longer available. Offers remain available.
+ * COLLECTION_OFFERS_UPDATED: Offers added to or removed from the collection.
+ *   Critical for maintaining accurate collection content.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ *
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ */
+export const violetCollectionWebhookPayloadSchema = z.object({
+  id: z.number(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  type: z.enum(["CUSTOM", "AUTOMATED"]).optional(),
+  merchant_id: z.number(),
+  external_id: z.string().optional(),
+  image_url: z.string().optional(),
+  sort_order: z.number().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletCollectionPayload = z.infer<typeof violetCollectionWebhookPayloadSchema>;
 
 // ─── Order/Bag Webhook Schemas (Story 5.2) ────────────────────────────
 

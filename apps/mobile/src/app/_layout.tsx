@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import Constants from "expo-constants";
-import React, { useCallback, useState } from "react";
+import React, { createContext, useCallback, useContext, useState } from "react";
 import { useColorScheme } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StripeProvider } from "@stripe/stripe-react-native";
@@ -117,6 +117,47 @@ function AppContent() {
 }
 
 /**
+ * Context for dynamically updating the Stripe publishable key.
+ *
+ * In Violet Demo/Test Mode, PaymentIntents are created on Violet's Stripe account.
+ * The local `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` won't match — PaymentSheet fails.
+ * The checkout screen calls `setStripePublishableKey()` with the `stripe_key` from
+ * Violet's cart response, and `StripeProvider` re-initializes with the correct key.
+ *
+ * Falls back to the environment key if never updated.
+ */
+const StripeKeyContext = createContext<{
+  setStripePublishableKey: (key: string) => void;
+}>({ setStripePublishableKey: () => {} });
+
+/** Hook for checkout screen to set the dynamic Stripe key. */
+export const useSetStripeKey = () => useContext(StripeKeyContext);
+
+/**
+ * Wraps `StripeProvider` with a dynamic publishable key.
+ *
+ * When the checkout screen fetches the cart and finds a `stripePublishableKey`
+ * from Violet, it calls `useSetStripeKey().setStripePublishableKey(key)`.
+ * This updates the StripeProvider's `publishableKey` prop, causing it to
+ * re-initialize with the correct key for the PaymentIntent.
+ */
+function DynamicStripeProvider({
+  fallbackKey,
+  children,
+}: {
+  fallbackKey: string;
+  children: React.ReactNode;
+}) {
+  const [dynamicKey, setDynamicKey] = useState(fallbackKey);
+
+  return (
+    <StripeKeyContext.Provider value={{ setStripePublishableKey: setDynamicKey }}>
+      <StripeProvider publishableKey={dynamicKey}>{children as React.ReactElement}</StripeProvider>
+    </StripeKeyContext.Provider>
+  );
+}
+
+/**
  * Root layout — wraps the app with required providers.
  *
  * ## StripeProvider (Story 4.4)
@@ -133,11 +174,11 @@ export default function TabLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <StripeProvider publishableKey={stripeKey}>
+        <DynamicStripeProvider fallbackKey={stripeKey}>
           <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
             <AppContent />
           </ThemeProvider>
-        </StripeProvider>
+        </DynamicStripeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

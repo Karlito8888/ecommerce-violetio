@@ -90,8 +90,18 @@ export async function violetLogin(config: VioletAuthConfig): Promise<ApiResponse
 }
 
 /**
- * Refresh the Violet JWT via POST /auth/token.
- * Returns new token data on success or an ApiResponse error.
+ * Refresh the Violet JWT via GET /auth/token.
+ *
+ * Violet's API Reference specifies:
+ * - Method: GET (not POST)
+ * - Auth: X-Violet-Token header with the refresh token
+ * - Headers: X-Violet-App-Id, X-Violet-App-Secret as usual
+ * - No request body
+ *
+ * Previously used POST which returned 405 Method Not Allowed, causing a
+ * fallback to full re-login on every token expiry.
+ *
+ * @see https://docs.violet.io/api-reference/auth/refresh-token
  */
 export async function violetRefreshToken(
   refreshToken: string,
@@ -99,9 +109,11 @@ export async function violetRefreshToken(
 ): Promise<ApiResponse<VioletTokenData>> {
   try {
     const res = await fetch(`${config.apiBase}/auth/token`, {
-      method: "POST",
-      headers: appHeaders(config),
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      method: "GET",
+      headers: {
+        ...appHeaders(config),
+        "X-Violet-Token": refreshToken,
+      },
     });
 
     if (!res.ok) {
