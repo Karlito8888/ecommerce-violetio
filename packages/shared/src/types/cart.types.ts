@@ -33,6 +33,13 @@ export interface Bag {
   shippingTotal: number;
   /** Per-bag errors from Violet (e.g., "Item X out of stock") */
   errors: BagError[];
+  /**
+   * True when ALL items in this bag are DIGITAL/VIRTUAL/BUNDLED (no shipping needed).
+   * When true, shipping method selection is skipped during checkout.
+   *
+   * @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
+   */
+  isDigital: boolean;
 }
 
 /**
@@ -91,6 +98,14 @@ export interface Cart {
    * @see Story 4.4 AC#5
    */
   paymentIntentClientSecret?: string;
+  /**
+   * True when ALL bags in the cart are digital (no shipping needed for any bag).
+   * When true, the entire shipping method selection step is skipped during checkout.
+   * Derived from `bag.isDigital` on every bag.
+   *
+   * @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
+   */
+  allBagsDigital: boolean;
 }
 
 /** A single line item in a cart bag. */
@@ -109,6 +124,14 @@ export interface CartItem {
   name?: string;
   /** Product thumbnail URL — enriched from Supabase cart_items at get-cart time */
   thumbnailUrl?: string;
+  /**
+   * Product type from Violet (PHYSICAL, DIGITAL, VIRTUAL, BUNDLED).
+   * Used to skip shipping method selection for DIGITAL products.
+   * Defaults to "PHYSICAL" when not provided by Violet.
+   *
+   * @see https://docs.violet.io/prism/catalog/skus — Product Types
+   */
+  type: "PHYSICAL" | "DIGITAL" | "VIRTUAL" | "BUNDLED";
 }
 
 /** Input payload for adding an item to the cart. */

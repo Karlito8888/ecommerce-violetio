@@ -44,12 +44,24 @@ export const violetBagErrorSchema = z.object({
   sku_id: z.number().optional(),
 });
 
-/** Validates a SKU line item within a Violet bag. */
+/**
+ * Validates a SKU line item within a Violet bag (OrderSku in cart response).
+ *
+ * ## product_type field
+ * Violet includes `product_type` on each cart SKU (e.g., "PHYSICAL", "DIGITAL").
+ * This is used to determine if shipping method selection can be skipped during checkout.
+ * When all SKUs in a bag are DIGITAL, no shipping method is required.
+ *
+ * @see https://docs.violet.io/prism/catalog/skus — Product Types
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/add-items-to-cart — Cart SKU response
+ */
 export const violetCartSkuSchema = z.object({
   id: z.number(),
   sku_id: z.number(),
   quantity: z.number().int().min(1),
   price: z.number().nonnegative().default(0),
+  /** Product type from Violet cart response. Used to skip shipping for DIGITAL products. */
+  product_type: z.enum(["PHYSICAL", "DIGITAL", "VIRTUAL", "BUNDLED"]).optional(),
 });
 
 /** Validates a Violet bag (merchant group). */

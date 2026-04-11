@@ -1942,6 +1942,13 @@ export class VioletAdapter implements SupplierAdapter {
         currency: violet.currency,
         status: "active",
         /**
+         * Derived from bags: true when every bag is digital.
+         * When true, the entire shipping flow is skipped during checkout.
+         *
+         * @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
+         */
+        allBagsDigital: bags.length > 0 && bags.every((b) => b.isDigital),
+        /**
          * Maps Violet's `payment_intent_client_secret` (snake_case) to our
          * internal `paymentIntentClientSecret` (camelCase). Only present when
          * cart was created with `wallet_based_checkout: true`.
@@ -1981,6 +1988,15 @@ export class VioletAdapter implements SupplierAdapter {
       tax: raw.tax,
       shippingTotal: raw.shipping_total,
       errors,
+      /**
+       * A bag is digital when ALL its items are non-PHYSICAL.
+       * Per Violet docs: "When all SKUs in a bag are digital, you should skip
+       * the shipping method selection during checkout."
+       * Empty bags default to false (conservative — require shipping).
+       *
+       * @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
+       */
+      isDigital: items.length > 0 && items.every((item) => item.type !== "PHYSICAL"),
     };
   }
 
@@ -1991,6 +2007,7 @@ export class VioletAdapter implements SupplierAdapter {
       productId: "", // Violet doesn't return product_id in cart SKU response
       quantity: raw.quantity,
       unitPrice: raw.price,
+      type: raw.product_type ?? "PHYSICAL",
     };
   }
 

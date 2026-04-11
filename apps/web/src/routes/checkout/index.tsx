@@ -925,6 +925,8 @@ function CheckoutPage() {
     sessionStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(state));
   }, [step, address, selectedMethods, guestInfo, billingSameAsShipping, billingAddress]);
 
+  // Only physical bags need shipping methods — digital bags are excluded.
+  const physicalBags = cart?.bags.filter((b) => !b.isDigital) ?? [];
   const allBagsSelected =
     availableMethods.length > 0 &&
     availableMethods.every((bag) => Boolean(selectedMethods[bag.bagId]));
@@ -953,8 +955,12 @@ function CheckoutPage() {
   async function fetchAvailableShippingMethods() {
     if (!cart) return;
 
+    // Only fetch shipping methods for physical bags — digital bags don't need shipping.
+    const bagsNeedingShipping = cart.bags.filter((b) => !b.isDigital);
+    if (bagsNeedingShipping.length === 0) return;
+
     const loadingMap: Record<string, boolean> = {};
-    cart.bags.forEach((b) => (loadingMap[b.id] = true));
+    bagsNeedingShipping.forEach((b) => (loadingMap[b.id] = true));
     setBagLoadingState(loadingMap);
     setBagErrorState({});
 
@@ -962,7 +968,7 @@ function CheckoutPage() {
 
     if (result.error) {
       const errorMap: Record<string, string> = {};
-      cart.bags.forEach((b) => (errorMap[b.id] = result.error!.message));
+      bagsNeedingShipping.forEach((b) => (errorMap[b.id] = result.error!.message));
       setBagErrorState(errorMap);
       setBagLoadingState({});
       return;
@@ -973,7 +979,7 @@ function CheckoutPage() {
     setBagLoadingState({});
 
     const errorMap: Record<string, string> = {};
-    cart.bags.forEach((b) => {
+    bagsNeedingShipping.forEach((b) => {
       const found = methods.find((m) => m.bagId === b.id);
       if (!found || found.shippingMethods.length === 0) {
         errorMap[b.id] = "No shipping methods available for this merchant.";
@@ -1039,6 +1045,17 @@ function CheckoutPage() {
 
     setStep("methods");
     setIsAddressSubmitting(false);
+
+    // ── Digital product skip-shipping logic ─────────────────────────
+    // Per Violet docs: "When all SKUs in a bag are digital, you should skip
+    // the shipping method selection during checkout."
+    // If ALL bags are digital, skip methods+confirmed and go directly to payment.
+    // @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
+    if (cart?.allBagsDigital) {
+      setStep("guestInfo");
+      return;
+    }
+
     await fetchAvailableShippingMethods();
   }
 
@@ -1560,7 +1577,7 @@ function CheckoutPage() {
                 </h2>
 
                 <div className="checkout__shipping-methods">
-                  {cart.bags.map((bag) => {
+                  {physicalBags.map((bag) => {
                     const isLoading = bagLoadingState[bag.id];
                     const error = bagErrorState[bag.id];
                     const bagMethods = availableMethods.find((m) => m.bagId === bag.id);

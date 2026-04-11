@@ -1286,6 +1286,7 @@ function transformCart(raw: unknown): Record<string, unknown> | null {
               productId: "",
               quantity: Math.max(1, Number(sku.quantity ?? 1)),
               unitPrice: Math.max(0, Number(sku.price ?? 0)),
+              type: String(sku.product_type ?? "PHYSICAL"),
             }))
           : [];
         const errors = Array.isArray(bag.errors)
@@ -1304,6 +1305,7 @@ function transformCart(raw: unknown): Record<string, unknown> | null {
           tax: Math.max(0, Number(bag.tax ?? 0)),
           shippingTotal: Math.max(0, Number(bag.shipping_total ?? 0)),
           errors,
+          isDigital: items.length > 0 && items.every((item) => (item as { type: string }).type !== "PHYSICAL"),
         };
       })
     : [];
@@ -1322,6 +1324,7 @@ function transformCart(raw: unknown): Record<string, unknown> | null {
     total,
     currency: String(r.currency ?? "USD"),
     status: "active",
+    allBagsDigital: bags.length > 0 && bags.every((b) => (b as { isDigital: boolean }).isDigital),
     /**
      * Stripe PaymentIntent client secret — present when cart was created with
      * `wallet_based_checkout: true`. Mobile uses this to init PaymentSheet.
