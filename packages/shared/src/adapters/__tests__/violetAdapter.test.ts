@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { VioletAdapter } from "../violetAdapter.js";
+import { VioletAdapter, _resetCategoriesCache } from "../violetAdapter.js";
 import { createSupplierAdapter } from "../adapterFactory.js";
 import type { VioletTokenManager } from "../../clients/violetAuth.js";
 import type { VioletOfferResponse, VioletSkuResponse } from "../../types/index.js";
@@ -589,5 +589,214 @@ describe("createSupplierAdapter", () => {
 
   it("throws when violet config is missing", () => {
     expect(() => createSupplierAdapter({ supplier: "violet" })).toThrow("Violet adapter requires");
+  });
+});
+
+// ─── getCategories / deriveCategoriesFromOffers ─────────────────────────
+
+describe("VioletAdapter.getCategories", () => {
+  let adapter: VioletAdapter;
+  let tokenManager: VioletTokenManager;
+
+  beforeEach(() => {
+    tokenManager = createMockTokenManager();
+    adapter = new VioletAdapter(tokenManager, "https://test-api.violet.io/v1");
+    // Reset module-level cache between tests
+    _resetCategoriesCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns 'All' + categories derived from source_category_name on offers", async () => {
+    const fetchMock = mockFetchResponse({
+      content: [
+        { source_category_name: "Clothing" },
+        { source_category_name: "Electronics" },
+        { source_category_name: "Clothing" }, // duplicate
+        { source_category_name: "Home" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await adapter.getCategories();
+    expect(result.error).toBeNull();
+    expect(result.data).toBeDefined();
+
+    // First item is always "All"
+    expect(result.data![0]).toEqual({ slug: "all", label: "All", filter: undefined });
+
+    // Categories are deduplicated
+    const labels = result.data!.map((c) => c.label);
+    expect(labels).toContain("Clothing");
+    expect(labels).toContain("Electronics");
+    expect(labels).toContain("Home");
+    expect(labels.filter((l) => l === "Clothing")).toHaveLength(1);
+  });
+
+  it("generates correct slug and filter from source_category_name", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchResponse({ content: [{ source_category_name: "Home & Garden" }] }),
+    );
+
+    const result = await adapter.getCategories();
+    const category = result.data!.find((c) => c.label === "Home & Garden");
+    expect(category).toBeDefined();
+    expect(category!.slug).toBe("home-&-garden");
+    expect(category!.filter).toBe("Home & Garden");
+  });
+
+  it("groups uncategorized products under 'Other'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchResponse({
+        content: [
+          { source_category_name: "Clothing" },
+          { source_category_name: "" }, // empty = uncategorized
+          { source_category_name: undefined }, // missing = uncategorized
+        ],
+      }),
+    );
+
+    const result = await adapter.getCategories();
+    const other = result.data!.find((c) => c.slug === "other");
+    expect(other).toEqual({ slug: "other", label: "Other", filter: "" });
+  });
+
+  it("does not add 'Other' when all products have categories", async () => {
+    vi.stubGlobal("fetch", mockFetchResponse({ content: [{ source_category_name: "Clothing" }] }));
+
+    const result = await adapter.getCategories();
+    const other = result.data!.find((c) => c.slug === "other");
+    expect(other).toBeUndefined();
+  });
+
+  it("caps at 6 categories total (All + 5 derived)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchResponse({
+        content: [
+          { source_category_name: "A" },
+          { source_category_name: "B" },
+          { source_category_name: "C" },
+          { source_category_name: "D" },
+          { source_category_name: "E" },
+          { source_category_name: "F" },
+          { source_category_name: "G" },
+        ],
+      }),
+    );
+
+    const result = await adapter.getCategories();
+    expect(result.data).toHaveLength(6); // All + 5
+  });
+
+  it("uses cache on second call within TTL", async () => {
+    const fetchMock = mockFetchResponse({
+      content: [{ source_category_name: "Shoes" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await adapter.getCategories();
+    const callCount1 = fetchMock.mock.calls.length;
+
+    await adapter.getCategories();
+    // No additional fetch calls — served from cache
+    expect(fetchMock.mock.calls.length).toBe(callCount1);
+  });
+
+  it("falls back to Demo Mode when search returns empty content", async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const asStr = String(url);
+      // Search endpoint — returns empty (triggers Demo Mode fallback)
+      if (asStr.includes("/catalog/offers/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ content: [] }),
+          text: () => Promise.resolve(JSON.stringify({ content: [] })),
+        });
+      }
+      // Merchants list
+      if (asStr.includes("/merchants") && !asStr.includes("/catalog/offers/merchants")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ content: [{ id: 99 }] }),
+          text: () => Promise.resolve(JSON.stringify({ content: [{ id: 99 }] })),
+        });
+      }
+      // Merchant offers
+      if (asStr.includes("/catalog/offers/merchants/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ content: [{ source_category_name: "Demo Category" }] }),
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({ content: [{ source_category_name: "Demo Category" }] }),
+            ),
+        });
+      }
+      // Fallback
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve("{}"),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await adapter.getCategories();
+    expect(result.error).toBeNull();
+    expect(result.data!.some((c) => c.label === "Demo Category")).toBe(true);
+  });
+
+  it("returns only 'All' when search returns error and no merchants", async () => {
+    // Mock fetch returning an HTTP error — fetchWithRetry will retry 3 times
+    // with exponential backoff, so we use fake timers to speed this up.
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const asStr = String(url);
+      if (asStr.includes("/catalog/offers/search")) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ message: "Server error" }),
+          text: () => Promise.resolve('{"message":"Server error"}'),
+        });
+      }
+      // Merchants list — also fails
+      return Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ message: "Server error" }),
+        text: () => Promise.resolve('{"message":"Server error"}'),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = adapter.getCategories();
+    // Advance through fetchWithRetry's exponential backoff retries
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(5000);
+    }
+    const result = await promise;
+
+    expect(result.error).toBeNull();
+    expect(result.data).toEqual([{ slug: "all", label: "All", filter: undefined }]);
+    vi.useRealTimers();
+  });
+
+  it("trims whitespace from source_category_name", async () => {
+    vi.stubGlobal("fetch", mockFetchResponse({ content: [{ source_category_name: "  Shoes  " }] }));
+
+    const result = await adapter.getCategories();
+    const shoes = result.data!.find((c) => c.label === "Shoes");
+    expect(shoes).toBeDefined();
+    expect(shoes!.filter).toBe("Shoes");
   });
 });

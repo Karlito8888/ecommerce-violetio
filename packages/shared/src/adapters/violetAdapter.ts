@@ -118,6 +118,23 @@ interface CategoriesCache {
 let _categoriesCache: CategoriesCache | null = null;
 const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+/**
+ * Resets the categories cache. Test-only utility — allows each test to start
+ * with a clean cache without module-level side effects from previous tests.
+ *
+ * @internal Exported for testing only — do not use in application code.
+ */
+/**
+ * Resets all module-level caches. Test-only utility — allows each test to start
+ * with clean caches without module-level side effects from previous tests.
+ *
+ * @internal Exported for testing only — do not use in application code.
+ */
+export function _resetCategoriesCache(): void {
+  _categoriesCache = null;
+  _demoOffersCache = null;
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
