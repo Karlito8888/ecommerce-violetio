@@ -624,13 +624,25 @@ export async function processCollectionRemoved(
  * Processes COLLECTION_OFFERS_UPDATED webhook event.
  *
  * Fired when offers are added to or removed from a collection.
- * This is the critical event for maintaining accurate collection content.
+ * This is the critical event for maintaining accurate collection content
+ * per Violet docs: "Fired when offers are added to or removed from a collection."
  *
- * The payload may include information about which offers were added/removed.
- * Since the exact payload shape varies, we log the event and store it for
- * the application layer to reconcile via API calls if needed.
+ * ## Strategy: full reconciliation via API
+ * The webhook payload only contains the collection metadata — it does NOT include
+ * which specific offers were added or removed. We must call
+ * `GET /catalog/collections/{id}/offers` to get the current full offer list,
+ * then replace the `collection_offers` junction table rows atomically:
+ *   1. DELETE all existing rows for this collection
+ *   2. INSERT the fresh set of offer IDs
+ *
+ * This is idempotent — duplicate webhook deliveries produce the same DB state.
+ *
+ * ## Pagination
+ * Violet paginates collection offers. We fetch all pages before writing to DB.
+ * Collections rarely exceed a few hundred offers, so this is safe synchronously.
  *
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
+ * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers
  */
 export async function processCollectionOffersUpdated(
   supabase: SupabaseClient,
@@ -645,15 +657,87 @@ export async function processCollectionOffersUpdated(
       `[collection] Collection offers updated: id=${collectionId} merchant=${merchantId}`,
     );
 
-    // Log the event for audit trail — the application layer can reconcile
-    // the exact offer composition by calling GET /catalog/collections/{id}/offers
-    await supabase.from("error_logs").insert({
-      source: "webhook",
-      error_type: "COLLECTION_OFFERS_UPDATED",
-      message: `Collection ${collectionId} (merchant ${merchantId}) offers changed`,
-      context: { collection_id: collectionId, merchant_id: merchantId },
-    });
+    // ─── Fetch current offer IDs from Violet API ─────────────────────────────
+    const headersResult = await getVioletHeaders();
+    if (headersResult.error) {
+      await updateEventStatus(
+        supabase,
+        eventId,
+        "failed",
+        `Auth failed for COLLECTION_OFFERS_UPDATED: ${headersResult.error.message}`,
+      );
+      return;
+    }
 
+    const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+    const offerIds: string[] = [];
+    let page = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const url = `${apiBase}/catalog/collections/${collectionId}/offers?page=${page}&size=100`;
+      const res = await fetch(url, {
+        headers: { ...headersResult.data, Accept: "application/json" },
+      });
+
+      if (!res.ok) {
+        // Non-fatal: if Violet API is temporarily unavailable, log and skip
+        // The next COLLECTION_OFFERS_UPDATED will reconcile.
+        console.warn(
+          `[collection] Violet API returned ${res.status} for collection ${collectionId} offers`,
+        );
+        await updateEventStatus(supabase, eventId, "processed"); // acknowledge, don't retry
+        return;
+      }
+
+      const data = (await res.json()) as {
+        content: Array<{ id: number }>;
+        last: boolean;
+      };
+
+      offerIds.push(...(data.content ?? []).map((o) => String(o.id)));
+      hasMore = !data.last;
+      page++;
+    }
+
+    // ─── Reconcile collection_offers table (delete + insert) ────────────────────
+    // Step 1: Clear existing junction rows for this collection
+    const { error: deleteError } = await supabase
+      .from("collection_offers")
+      .delete()
+      .eq("collection_id", collectionId);
+
+    if (deleteError) {
+      await updateEventStatus(
+        supabase,
+        eventId,
+        "failed",
+        `Failed to clear collection_offers for ${collectionId}: ${deleteError.message}`,
+      );
+      return;
+    }
+
+    // Step 2: Insert fresh offer IDs (if any)
+    if (offerIds.length > 0) {
+      const rows = offerIds.map((offerId) => ({
+        collection_id: collectionId,
+        offer_id: offerId,
+      }));
+      const { error: insertError } = await supabase.from("collection_offers").insert(rows);
+      if (insertError) {
+        await updateEventStatus(
+          supabase,
+          eventId,
+          "failed",
+          `Failed to insert collection_offers for ${collectionId}: ${insertError.message}`,
+        );
+        return;
+      }
+    }
+
+    console.log(
+      `[collection] Reconciled ${offerIds.length} offers for collection ${collectionId}`,
+    );
     await updateEventStatus(supabase, eventId, "processed");
   } catch (err) {
     await updateEventStatus(
