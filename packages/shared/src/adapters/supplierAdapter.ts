@@ -81,6 +81,19 @@ export interface SupplierAdapter {
   ): Promise<ApiResponse<PaginatedResult<Product>>>;
 
   /**
+   * Fetches only the offer IDs for a collection (lightweight).
+   *
+   * Uses `/offers/ids` instead of `/offers` — returns `content: int64[]`.
+   *
+   * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
+   */
+  getCollectionOfferIds(
+    collectionId: string,
+    page?: number,
+    pageSize?: number,
+  ): Promise<ApiResponse<PaginatedResult<string>>>;
+
+  /**
    * Enables the `sync_collections` feature flag for a merchant.
    *
    * This triggers an immediate collection sync and subsequent daily re-syncs.

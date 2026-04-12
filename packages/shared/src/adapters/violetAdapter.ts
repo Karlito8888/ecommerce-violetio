@@ -1702,7 +1702,59 @@ export class VioletAdapter implements SupplierAdapter {
     };
   }
 
-  // ─── Merchant Feature Flags ────────────────────────────────────────
+  /**
+   * Fetches only the offer IDs belonging to a specific collection.
+   *
+   * Uses `GET /catalog/collections/{collection_id}/offers/ids` — much lighter
+   * than `/offers` because it returns `content: int64[]` instead of full objects.
+   *
+   * Useful for:
+   * - Counting products in a collection (via total_elements)
+   * - Building sitemaps
+   * - Junction table reconciliation in webhooks
+   *
+   * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
+   */
+  async getCollectionOfferIds(
+    collectionId: string,
+    page = 1,
+    pageSize = 50,
+  ): Promise<ApiResponse<PaginatedResult<string>>> {
+    const url =
+      `${this.apiBase}/catalog/collections/${collectionId}/offers/ids` +
+      `?page=${page}&size=${pageSize}`;
+
+    const result = await this.fetchWithRetry(url, { method: "GET" });
+
+    if (result.error) {
+      return {
+        data: null,
+        error: {
+          code: "VIOLET.API_ERROR",
+          message: `getCollectionOfferIds failed: ${result.error.message}`,
+        },
+      };
+    }
+
+    const data = result.data as {
+      content: number[];
+      last: boolean;
+      total_elements: number;
+      number: number;
+      size: number;
+    };
+
+    return {
+      data: {
+        data: (data.content ?? []).map(String),
+        total: data.total_elements,
+        page: data.number, // 1-based
+        pageSize: data.size,
+        hasNext: !data.last,
+      },
+      error: null,
+    };
+  }
 
   /**
    * Enables the `sync_collections` feature flag for a merchant.

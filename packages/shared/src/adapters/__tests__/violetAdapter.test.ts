@@ -800,3 +800,277 @@ describe("VioletAdapter.getCategories", () => {
     expect(shoes!.filter).toBe("Shoes");
   });
 });
+
+// ─── Collections Tests ──────────────────────────────────────────────────
+
+describe("VioletAdapter — Collections", () => {
+  let collAdapter: VioletAdapter;
+
+  beforeEach(() => {
+    collAdapter = new VioletAdapter(createMockTokenManager(), "https://api.violet.io/v1");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe("getCollections()", () => {
+    it("fetches and transforms a paginated response", async () => {
+      const page1 = {
+        content: [
+          {
+            id: 10,
+            name: "Summer Collection",
+            description: "Hot weather essentials",
+            type: "CUSTOM",
+            merchant_id: 5,
+            external_id: "shopify-10",
+            parent_id: null,
+            handle: "summer-collection",
+            media: { source_url: "https://cdn.example.com/summer.jpg", alt: "Summer" },
+            sort_order: 1,
+            date_created: "2026-01-01T00:00:00Z",
+            date_last_modified: "2026-03-01T00:00:00Z",
+          },
+        ],
+        last: true,
+        total_elements: 1,
+        number: 1,
+        size: 50,
+      };
+      vi.stubGlobal("fetch", mockFetchResponse(page1));
+
+      const result = await collAdapter.getCollections();
+      expect(result.error).toBeNull();
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0]).toEqual({
+        id: "10",
+        merchantId: "5",
+        name: "Summer Collection",
+        description: "Hot weather essentials",
+        type: "CUSTOM",
+        externalId: "shopify-10",
+        imageUrl: "https://cdn.example.com/summer.jpg",
+        sortOrder: 1,
+        productCount: 0,
+        dateCreated: "2026-01-01T00:00:00Z",
+        dateLastModified: "2026-03-01T00:00:00Z",
+      });
+    });
+
+    it("paginates through all pages", async () => {
+      const p1 = {
+        content: [{ id: 1, name: "A", merchant_id: 1, type: "CUSTOM" }],
+        last: false,
+        total_elements: 2,
+        number: 1,
+        size: 1,
+      };
+      const p2 = {
+        content: [{ id: 2, name: "B", merchant_id: 1, type: "AUTOMATED" }],
+        last: true,
+        total_elements: 2,
+        number: 2,
+        size: 1,
+      };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(p1) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(p2) });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await collAdapter.getCollections();
+      expect(result.data).toHaveLength(2);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining("?page=1&size=50"),
+        expect.anything(),
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("?page=2&size=50"),
+        expect.anything(),
+      );
+    });
+
+    it("uses media.source_url for imageUrl", async () => {
+      const page = {
+        content: [
+          {
+            id: 1,
+            name: "Test",
+            merchant_id: 1,
+            media: { source_url: "https://img.example.com/collection.jpg" },
+          },
+        ],
+        last: true,
+        number: 1,
+        size: 50,
+      };
+      vi.stubGlobal("fetch", mockFetchResponse(page));
+
+      const result = await collAdapter.getCollections();
+      expect(result.data![0].imageUrl).toBe("https://img.example.com/collection.jpg");
+    });
+
+    it("returns null imageUrl when media is absent", async () => {
+      const page = {
+        content: [{ id: 1, name: "No Image", merchant_id: 1 }],
+        last: true,
+        number: 1,
+        size: 50,
+      };
+      vi.stubGlobal("fetch", mockFetchResponse(page));
+
+      const result = await collAdapter.getCollections();
+      expect(result.data![0].imageUrl).toBeNull();
+    });
+
+    it("returns empty array on API error", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("Internal Server Error"),
+        }),
+      );
+
+      const result = await collAdapter.getCollections();
+      expect(result.data).toEqual([]);
+      expect(result.error).toBeNull();
+    });
+
+    it("caches results across calls", async () => {
+      const page = {
+        content: [{ id: 1, name: "Cached", merchant_id: 1 }],
+        last: true,
+        number: 1,
+        size: 50,
+      };
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(page),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const r1 = await collAdapter.getCollections();
+      const r2 = await collAdapter.getCollections();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(r1.data).toEqual(r2.data);
+    });
+
+    it("uses merchant-specific endpoint when merchantId provided", async () => {
+      const page = { content: [], last: true, number: 1, size: 50 };
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(page),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await collAdapter.getCollections("123");
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/catalog/collections/merchants/123"),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe("getCollectionOffers()", () => {
+    it("fetches paginated offers for a collection", async () => {
+      const offer = createMockOffer({ id: 42 });
+      const page = {
+        content: [offer],
+        last: true,
+        total_elements: 1,
+        number: 1,
+        size: 24,
+      };
+      vi.stubGlobal("fetch", mockFetchResponse(page));
+
+      const result = await collAdapter.getCollectionOffers("10", 1, 24);
+      expect(result.error).toBeNull();
+      expect(result.data!.data).toHaveLength(1);
+      expect(result.data!.data[0].id).toBe("42");
+      expect(result.data!.page).toBe(1);
+      expect(result.data!.hasNext).toBe(false);
+    });
+
+    it("passes 1-based page number directly (no offset)", async () => {
+      const page = { content: [], last: true, number: 3, size: 12 };
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(page),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await collAdapter.getCollectionOffers("5", 3, 12);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("?page=3&size=12"),
+        expect.anything(),
+      );
+    });
+
+    it("returns hasNext=true when not last page", async () => {
+      const page = {
+        content: [createMockOffer()],
+        last: false,
+        total_elements: 50,
+        number: 1,
+        size: 24,
+      };
+      vi.stubGlobal("fetch", mockFetchResponse(page));
+
+      const result = await collAdapter.getCollectionOffers("1");
+      expect(result.data!.hasNext).toBe(true);
+    });
+  });
+
+  describe("getCollectionOfferIds()", () => {
+    it("fetches only IDs from /offers/ids endpoint", async () => {
+      const page = {
+        content: [100, 200, 300],
+        last: true,
+        total_elements: 3,
+        number: 1,
+        size: 50,
+      };
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(page),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await collAdapter.getCollectionOfferIds("10");
+      expect(result.error).toBeNull();
+      expect(result.data!.data).toEqual(["100", "200", "300"]);
+      expect(result.data!.total).toBe(3);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/offers/ids?page=1&size=50"),
+        expect.anything(),
+      );
+    });
+
+    it("returns error on API failure", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 403,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("Forbidden"),
+        }),
+      );
+
+      const result = await collAdapter.getCollectionOfferIds("99");
+      expect(result.data).toBeNull();
+      expect(result.error).not.toBeNull();
+    });
+  });
+});

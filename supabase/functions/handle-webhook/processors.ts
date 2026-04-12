@@ -629,25 +629,31 @@ export async function processCollectionRemoved(
  * Processes COLLECTION_OFFERS_UPDATED webhook event.
  *
  * Fired when offers are added to or removed from a collection.
- * This is the critical event for maintaining accurate collection content
- * per Violet docs: "Fired when offers are added to or removed from a collection."
+ * This is the critical event for maintaining accurate collection content.
  *
- * ## Strategy: full reconciliation via API
- * The webhook payload only contains the collection metadata — it does NOT include
- * which specific offers were added or removed. We must call
- * `GET /catalog/collections/{id}/offers` to get the current full offer list,
- * then replace the `collection_offers` junction table rows atomically:
- *   1. DELETE all existing rows for this collection
+ * ## Strategy: full reconciliation via `/offers/ids` endpoint
+ * The webhook payload contains collection metadata but does NOT enumerate
+ * which specific offers changed. We must fetch the current full list of offer
+ * IDs from Violet and reconcile the `collection_offers` junction table.
+ *
+ * We use `GET /catalog/collections/{id}/offers/ids` (not `/offers`) because:
+ * - We only need IDs for the junction table, not full offer objects
+ * - The `/ids` endpoint returns `content: int64[]` — orders of magnitude lighter
+ * - Reduces bandwidth and parsing overhead for large collections
+ *
+ * Reconciliation is atomic (DELETE all + INSERT fresh):
+ *   1. DELETE all existing junction rows for this collection
  *   2. INSERT the fresh set of offer IDs
  *
  * This is idempotent — duplicate webhook deliveries produce the same DB state.
  *
  * ## Pagination
- * Violet paginates collection offers. We fetch all pages before writing to DB.
- * Collections rarely exceed a few hundred offers, so this is safe synchronously.
+ * Both `/offers` and `/offers/ids` use the same pagination envelope:
+ * 1-based (page=1 default), size=20 default, paginated via {content[], last}.
+ * We fetch all pages (size=100) before writing to DB.
  *
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
- * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers
+ * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
  */
 export async function processCollectionOffersUpdated(
   supabase: SupabaseClient,
@@ -662,7 +668,7 @@ export async function processCollectionOffersUpdated(
       `[collection] Collection offers updated: id=${collectionId} merchant=${merchantId}`,
     );
 
-    // ─── Fetch current offer IDs from Violet API ─────────────────────────────
+    // ─── Fetch current offer IDs from Violet API (lightweight /ids endpoint) ────
     const headersResult = await getVioletHeaders();
     if (headersResult.error) {
       await updateEventStatus(
@@ -676,31 +682,34 @@ export async function processCollectionOffersUpdated(
 
     const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
     const offerIds: string[] = [];
-    let page = 1; // Violet pagination is 1-based
+    let page = 1; // Violet pagination is 1-based (default: page=1)
     let hasMore = true;
 
     while (hasMore) {
-      const url = `${apiBase}/catalog/collections/${collectionId}/offers?page=${page}&size=100`;
+      // Using /offers/ids instead of /offers — returns only int64 IDs, not full offer objects.
+      // @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
+      const url =
+        `${apiBase}/catalog/collections/${collectionId}/offers/ids?page=${page}&size=100`;
       const res = await fetch(url, {
         headers: { ...headersResult.data, Accept: "application/json" },
       });
 
       if (!res.ok) {
-        // Non-fatal: if Violet API is temporarily unavailable, log and skip
-        // The next COLLECTION_OFFERS_UPDATED will reconcile.
+        // Non-fatal: if Violet API is temporarily unavailable, acknowledge and skip.
+        // The next COLLECTION_OFFERS_UPDATED webhook will reconcile.
         console.warn(
-          `[collection] Violet API returned ${res.status} for collection ${collectionId} offers`,
+          `[collection] Violet /offers/ids returned ${res.status} for collection ${collectionId}`,
         );
         await updateEventStatus(supabase, eventId, "processed"); // acknowledge, don't retry
         return;
       }
 
       const data = (await res.json()) as {
-        content: Array<{ id: number }>;
+        content: number[]; // int64[] — just the offer IDs
         last: boolean;
       };
 
-      offerIds.push(...(data.content ?? []).map((o) => String(o.id)));
+      offerIds.push(...(data.content ?? []).map(String));
       hasMore = !data.last;
       page++;
     }
@@ -741,7 +750,7 @@ export async function processCollectionOffersUpdated(
     }
 
     console.log(
-      `[collection] Reconciled ${offerIds.length} offers for collection ${collectionId}`,
+      `[collection] Reconciled ${offerIds.length} offer IDs for collection ${collectionId}`,
     );
     await updateEventStatus(supabase, eventId, "processed");
   } catch (err) {
