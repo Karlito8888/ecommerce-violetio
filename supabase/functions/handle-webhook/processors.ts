@@ -466,6 +466,9 @@ export async function processCollectionCreated(
       `[collection] Collection created: id=${collectionId} name="${payload.name ?? "Unknown"}" merchant=${merchantId}`,
     );
 
+    // Prefer media.source_url (API model) over image_url (flat field, may be absent)
+    const imageUrl = payload.media?.source_url ?? payload.image_url ?? null;
+
     const { error } = await supabase.from("collections").upsert(
       {
         id: collectionId,
@@ -474,7 +477,7 @@ export async function processCollectionCreated(
         description: payload.description ?? null,
         type: payload.type ?? "CUSTOM",
         external_id: payload.external_id ?? null,
-        image_url: payload.image_url ?? null,
+        image_url: imageUrl,
         sort_order: payload.sort_order ?? 0,
         status: "ACTIVE",
         date_last_modified: payload.date_last_modified ?? new Date().toISOString(),
@@ -530,6 +533,8 @@ export async function processCollectionUpdated(
     if (payload.description !== undefined) update.description = payload.description;
     if (payload.type !== undefined) update.type = payload.type;
     if (payload.image_url !== undefined) update.image_url = payload.image_url;
+    // Prefer media.source_url (API model) over image_url (flat field)
+    if (payload.media?.source_url !== undefined) update.image_url = payload.media.source_url;
     if (payload.sort_order !== undefined) update.sort_order = payload.sort_order;
 
     const { error } = await supabase
@@ -671,7 +676,7 @@ export async function processCollectionOffersUpdated(
 
     const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
     const offerIds: string[] = [];
-    let page = 0;
+    let page = 1; // Violet pagination is 1-based
     let hasMore = true;
 
     while (hasMore) {

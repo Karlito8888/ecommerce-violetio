@@ -44,9 +44,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
-  // Violet pagination is 0-based
-  const violetPage = page - 1;
-  const apiUrl = `${apiBase}/catalog/collections/${collectionId}/offers?page=${violetPage}&size=${pageSize}&include=shipping,metadata,sku_metadata`;
+  // Violet collection offers pagination is 1-based (default: page=1)
+  // @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers
+  const apiUrl = `${apiBase}/catalog/collections/${collectionId}/offers?page=${page}&size=${pageSize}`;
 
   try {
     const res = await fetch(apiUrl, {
@@ -169,7 +169,7 @@ Deno.serve(async (req: Request) => {
         data: {
           data: products,
           total: raw.total_elements ?? products.length,
-          page: (raw.number ?? violetPage) + 1, // back to 1-based
+          page: raw.number ?? page, // Violet 1-based matches our convention
           pageSize: raw.size ?? pageSize,
           hasNext: !raw.last,
         },

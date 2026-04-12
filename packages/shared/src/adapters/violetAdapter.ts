@@ -1586,50 +1586,72 @@ export class VioletAdapter implements SupplierAdapter {
         url = `${this.apiBase}/catalog/collections`;
       }
 
-      const result = await this.fetchWithRetry(url, { method: "GET" });
+      // Violet's GET /catalog/collections is paginated (1-based page, default size=20).
+      // We fetch all pages to build a complete list.
+      // @see https://docs.violet.io/api-reference/catalog/collections/get-collections
+      const allCollections: CollectionItem[] = [];
+      let page = 1;
+      let hasMore = true;
 
-      if (result.error) {
-        // Collections are optional — failure is non-blocking. Error is already
-        // captured in result.error; callers handle it via the empty return below.
-        void result.error.message;
-        // Return empty — collections are optional
-        return { data: [], error: null };
+      while (hasMore) {
+        const pagedUrl = `${url}?page=${page}&size=50`;
+        const result = await this.fetchWithRetry(pagedUrl, { method: "GET" });
+
+        if (result.error) {
+          // Collections are optional — failure is non-blocking. Error is already
+          // captured in result.error; callers handle it via the empty return below.
+          void result.error.message;
+          // Return empty — collections are optional
+          return { data: [], error: null };
+        }
+
+        const data = result.data as {
+          content: Array<{
+            id: number;
+            name: string;
+            description?: string;
+            type?: "CUSTOM" | "AUTOMATED";
+            merchant_id: number;
+            external_id?: string;
+            parent_id?: number;
+            handle?: string;
+            media?: { source_url?: string; alt?: string; height?: number; width?: number };
+            sort_order?: number;
+            date_created?: string;
+            date_last_modified?: string;
+          }>;
+          last: boolean;
+        };
+
+        for (const c of data.content ?? []) {
+          // API uses media.source_url for the collection image (not image_url)
+          const imageUrl = c.media?.source_url ?? null;
+          allCollections.push({
+            id: String(c.id),
+            merchantId: String(c.merchant_id),
+            name: c.name,
+            description: c.description ?? "",
+            type: c.type ?? "CUSTOM",
+            externalId: c.external_id ?? "",
+            imageUrl,
+            sortOrder: c.sort_order ?? 0,
+            productCount: 0, // Will be populated by getCollectionOffers or a separate count query
+            dateCreated: c.date_created ?? new Date().toISOString(),
+            dateLastModified: c.date_last_modified ?? new Date().toISOString(),
+          });
+        }
+
+        hasMore = !data.last;
+        page++;
       }
-
-      const data = result.data as Array<{
-        id: number;
-        name: string;
-        description?: string;
-        type?: "CUSTOM" | "AUTOMATED";
-        merchant_id: number;
-        external_id?: string;
-        image_url?: string;
-        sort_order?: number;
-        date_created?: string;
-        date_last_modified?: string;
-      }>;
-
-      const collections: CollectionItem[] = data.map((c) => ({
-        id: String(c.id),
-        merchantId: String(c.merchant_id),
-        name: c.name,
-        description: c.description ?? "",
-        type: c.type ?? "CUSTOM",
-        externalId: c.external_id ?? "",
-        imageUrl: c.image_url ?? null,
-        sortOrder: c.sort_order ?? 0,
-        productCount: 0, // Will be populated by getCollectionOffers or a separate count query
-        dateCreated: c.date_created ?? new Date().toISOString(),
-        dateLastModified: c.date_last_modified ?? new Date().toISOString(),
-      }));
 
       // Cache for 10 minutes
       this._collectionsCache = {
-        data: collections,
+        data: allCollections,
         expiresAt: Date.now() + VioletAdapter.COLLECTIONS_CACHE_TTL_MS,
       };
 
-      return { data: collections, error: null };
+      return { data: allCollections, error: null };
     } catch {
       // API unreachable — return empty (collections are optional)
       return { data: [], error: null };
@@ -1649,11 +1671,11 @@ export class VioletAdapter implements SupplierAdapter {
     page = 1,
     pageSize = 24,
   ): Promise<ApiResponse<PaginatedResult<Product>>> {
-    const violetPage = page - 1; // 0-based
-
+    // Violet collection offers pagination is 1-based (default: page=1, size=20)
+    // @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers
     const url =
       `${this.apiBase}/catalog/collections/${collectionId}/offers` +
-      `?page=${violetPage}&size=${pageSize}`;
+      `?page=${page}&size=${pageSize}`;
 
     const result = await this.fetchWithRetry(url, { method: "GET" });
 
@@ -1672,7 +1694,7 @@ export class VioletAdapter implements SupplierAdapter {
       data: {
         data: data.content.map((offer) => this.transformOffer(offer)),
         total: data.total_elements,
-        page: data.number + 1, // Violet 0-based → internal 1-based
+        page: data.number, // Violet 1-based matches our internal convention
         pageSize: data.size,
         hasNext: !data.last,
       },
