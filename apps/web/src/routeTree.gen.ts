@@ -16,6 +16,7 @@ import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
 import { Route as HelpIndexRouteImport } from './routes/help/index'
 import { Route as ContentIndexRouteImport } from './routes/content/index'
+import { Route as CollectionsIndexRouteImport } from './routes/collections/index'
 import { Route as CheckoutIndexRouteImport } from './routes/checkout/index'
 import { Route as CartIndexRouteImport } from './routes/cart/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
@@ -24,6 +25,7 @@ import { Route as OrderLookupRouteImport } from './routes/order/lookup'
 import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
 import { Route as HelpContactRouteImport } from './routes/help/contact'
 import { Route as ContentSlugRouteImport } from './routes/content/$slug'
+import { Route as CollectionsCollectionIdRouteImport } from './routes/collections/$collectionId'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
@@ -71,6 +73,11 @@ const ContentIndexRoute = ContentIndexRouteImport.update({
   path: '/content/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CollectionsIndexRoute = CollectionsIndexRouteImport.update({
+  id: '/collections/',
+  path: '/collections/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutIndexRoute = CheckoutIndexRouteImport.update({
   id: '/checkout/',
   path: '/checkout/',
@@ -109,6 +116,11 @@ const HelpContactRoute = HelpContactRouteImport.update({
 const ContentSlugRoute = ContentSlugRouteImport.update({
   id: '/content/$slug',
   path: '/content/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CollectionsCollectionIdRoute = CollectionsCollectionIdRouteImport.update({
+  id: '/collections/$collectionId',
+  path: '/collections/$collectionId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthVerifyRoute = AuthVerifyRouteImport.update({
@@ -178,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -186,6 +199,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/cart/': typeof CartIndexRoute
   '/checkout/': typeof CheckoutIndexRoute
+  '/collections/': typeof CollectionsIndexRoute
   '/content/': typeof ContentIndexRoute
   '/help/': typeof HelpIndexRoute
   '/products/': typeof ProductsIndexRoute
@@ -206,6 +220,7 @@ export interface FileRoutesByTo {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -214,6 +229,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/cart': typeof CartIndexRoute
   '/checkout': typeof CheckoutIndexRoute
+  '/collections': typeof CollectionsIndexRoute
   '/content': typeof ContentIndexRoute
   '/help': typeof HelpIndexRoute
   '/products': typeof ProductsIndexRoute
@@ -235,6 +251,7 @@ export interface FileRoutesById {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/collections/$collectionId': typeof CollectionsCollectionIdRoute
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -243,6 +260,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/cart/': typeof CartIndexRoute
   '/checkout/': typeof CheckoutIndexRoute
+  '/collections/': typeof CollectionsIndexRoute
   '/content/': typeof ContentIndexRoute
   '/help/': typeof HelpIndexRoute
   '/products/': typeof ProductsIndexRoute
@@ -265,6 +283,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
+    | '/collections/$collectionId'
     | '/content/$slug'
     | '/help/contact'
     | '/legal/$slug'
@@ -273,6 +292,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/cart/'
     | '/checkout/'
+    | '/collections/'
     | '/content/'
     | '/help/'
     | '/products/'
@@ -293,6 +313,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
+    | '/collections/$collectionId'
     | '/content/$slug'
     | '/help/contact'
     | '/legal/$slug'
@@ -301,6 +322,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/cart'
     | '/checkout'
+    | '/collections'
     | '/content'
     | '/help'
     | '/products'
@@ -321,6 +343,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
+    | '/collections/$collectionId'
     | '/content/$slug'
     | '/help/contact'
     | '/legal/$slug'
@@ -329,6 +352,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/cart/'
     | '/checkout/'
+    | '/collections/'
     | '/content/'
     | '/help/'
     | '/products/'
@@ -348,6 +372,7 @@ export interface RootRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
+  CollectionsCollectionIdRoute: typeof CollectionsCollectionIdRoute
   ContentSlugRoute: typeof ContentSlugRoute
   HelpContactRoute: typeof HelpContactRoute
   LegalSlugRoute: typeof LegalSlugRoute
@@ -356,6 +381,7 @@ export interface RootRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   CartIndexRoute: typeof CartIndexRoute
   CheckoutIndexRoute: typeof CheckoutIndexRoute
+  CollectionsIndexRoute: typeof CollectionsIndexRoute
   ContentIndexRoute: typeof ContentIndexRoute
   HelpIndexRoute: typeof HelpIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
@@ -416,6 +442,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContentIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/collections/': {
+      id: '/collections/'
+      path: '/collections'
+      fullPath: '/collections/'
+      preLoaderRoute: typeof CollectionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/checkout/': {
       id: '/checkout/'
       path: '/checkout'
@@ -470,6 +503,13 @@ declare module '@tanstack/react-router' {
       path: '/content/$slug'
       fullPath: '/content/$slug'
       preLoaderRoute: typeof ContentSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/collections/$collectionId': {
+      id: '/collections/$collectionId'
+      path: '/collections/$collectionId'
+      fullPath: '/collections/$collectionId'
+      preLoaderRoute: typeof CollectionsCollectionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/verify': {
@@ -578,6 +618,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,
   AuthVerifyRoute: AuthVerifyRoute,
+  CollectionsCollectionIdRoute: CollectionsCollectionIdRoute,
   ContentSlugRoute: ContentSlugRoute,
   HelpContactRoute: HelpContactRoute,
   LegalSlugRoute: LegalSlugRoute,
@@ -586,6 +627,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   CartIndexRoute: CartIndexRoute,
   CheckoutIndexRoute: CheckoutIndexRoute,
+  CollectionsIndexRoute: CollectionsIndexRoute,
   ContentIndexRoute: ContentIndexRoute,
   HelpIndexRoute: HelpIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,

@@ -34,6 +34,12 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Wishlist", icon: "♡", path: "/wishlist", authRequired: true },
   { label: "My Orders", sublabel: "Track your purchases", icon: "↗", path: "/order/lookup" },
   {
+    label: "Collections",
+    sublabel: "Curated product selections",
+    icon: "◈",
+    path: "/collections",
+  },
+  {
     label: "Guides & Reviews",
     sublabel: "Curated editorial content",
     icon: "✦",
