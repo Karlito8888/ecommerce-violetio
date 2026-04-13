@@ -1,6 +1,6 @@
 import { useState } from "react";
 // Using shared formatPrice to avoid duplication — see packages/shared/src/utils/formatPrice.ts
-import { formatPrice } from "@ecommerce/shared";
+import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
 import type { CartItem as CartItemType } from "@ecommerce/shared";
 
 interface CartItemProps {
@@ -33,7 +33,7 @@ export default function CartItem({ item, onUpdateQty, onRemove, isUpdating }: Ca
     >
       {item.thumbnailUrl && (
         <img
-          src={item.thumbnailUrl}
+          src={optimizeWithPreset(item.thumbnailUrl, "productCard") ?? undefined}
           alt={item.name ?? `SKU ${item.skuId}`}
           className="cart-drawer__item-thumbnail"
           width={40}

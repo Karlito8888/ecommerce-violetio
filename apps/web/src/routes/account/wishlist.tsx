@@ -31,6 +31,7 @@ import {
   useAddToCart,
 } from "@ecommerce/shared";
 import type { Product, ProductDetailFetchFn, AddToCartFn } from "@ecommerce/shared";
+import { optimizeWithPreset } from "@ecommerce/shared";
 import { getProductFn } from "#/server/getProduct";
 import { addToCartFn, createCartFn } from "#/server/cartActions";
 import { getSupabaseSessionClient } from "#/server/supabaseServer";
@@ -214,7 +215,7 @@ function WishlistPage() {
                   <div className="wishlist-item__image-wrap">
                     {product?.thumbnailUrl ? (
                       <img
-                        src={product.thumbnailUrl}
+                        src={optimizeWithPreset(product.thumbnailUrl, "productCard") ?? undefined}
                         alt={product?.name ?? "Product"}
                         className="wishlist-item__image"
                         loading="lazy"

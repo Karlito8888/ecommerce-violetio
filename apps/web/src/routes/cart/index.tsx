@@ -11,6 +11,7 @@ import {
 } from "@ecommerce/shared";
 import { getCartFn, updateCartItemFn, removeFromCartFn } from "../../server/cartActions";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
+import { optimizeWithPreset } from "@ecommerce/shared";
 import CartEmpty from "../../features/cart/CartEmpty";
 
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
@@ -89,7 +90,7 @@ function CartPage() {
                     >
                       {item.thumbnailUrl && (
                         <img
-                          src={item.thumbnailUrl}
+                          src={optimizeWithPreset(item.thumbnailUrl, "productCard") ?? undefined}
                           alt={item.name ?? `SKU ${item.skuId}`}
                           className="cart__item-thumbnail"
                           width={56}
