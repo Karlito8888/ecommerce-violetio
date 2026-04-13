@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import type { Product } from "@ecommerce/shared";
-import { formatPrice } from "@ecommerce/shared";
+import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
@@ -98,7 +98,7 @@ export default function CollectionDetailScreen() {
             {/* Hero image */}
             {collection.imageUrl ? (
               <Image
-                source={{ uri: collection.imageUrl }}
+                source={{ uri: optimizeWithPreset(collection.imageUrl, "collectionHero") ?? undefined }}
                 style={styles.heroImage}
                 resizeMode="cover"
                 accessibilityLabel={collection.name}
@@ -174,7 +174,7 @@ function ProductCard({ product, onPress, theme }: ProductCardProps) {
       <View style={styles.imageWrap}>
         {product.thumbnailUrl ? (
           <Image
-            source={{ uri: product.thumbnailUrl }}
+            source={{ uri: optimizeWithPreset(product.thumbnailUrl, "productCard") ?? undefined }}
             style={styles.productImage}
             resizeMode="cover"
           />

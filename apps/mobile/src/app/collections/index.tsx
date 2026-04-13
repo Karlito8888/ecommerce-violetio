@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import type { CollectionItem } from "@ecommerce/shared";
+import { optimizeWithPreset } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, Spacing } from "@/constants/theme";
@@ -109,7 +110,7 @@ function CollectionCard({ collection, onPress, theme }: CollectionCardProps) {
       <View style={styles.imageWrap}>
         {collection.imageUrl ? (
           <Image
-            source={{ uri: collection.imageUrl }}
+            source={{ uri: optimizeWithPreset(collection.imageUrl, "collectionCard") ?? undefined }}
             style={styles.image}
             resizeMode="cover"
             accessibilityLabel={collection.name}

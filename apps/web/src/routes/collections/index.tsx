@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import type { CollectionItem } from "@ecommerce/shared";
+import { optimizeWithPreset } from "@ecommerce/shared";
 import { getCollectionsFn } from "../../server/getCollections";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
@@ -80,7 +81,7 @@ function CollectionCard({ collection }: { collection: CollectionItem }) {
       <div className="collection-card__image-wrap">
         {collection.imageUrl ? (
           <img
-            src={collection.imageUrl}
+            src={optimizeWithPreset(collection.imageUrl, "collectionCard") ?? undefined}
             alt={collection.imageAlt ?? collection.name}
             className="collection-card__image"
             loading="lazy"

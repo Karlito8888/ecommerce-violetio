@@ -6,6 +6,7 @@ import {
   infiniteQueryOptions,
 } from "@tanstack/react-query";
 import type { Product } from "@ecommerce/shared";
+import { optimizeWithPreset } from "@ecommerce/shared";
 import { getCollectionByIdFn, getCollectionProductsFn } from "../../server/getCollections";
 import ProductGrid from "../../components/product/ProductGrid";
 import ProductGridSkeleton from "../../components/product/ProductGridSkeleton";
@@ -118,7 +119,7 @@ function CollectionDetailPage() {
         {collection.imageUrl ? (
           <div className="collection-detail__hero-image-wrap">
             <img
-              src={collection.imageUrl}
+              src={optimizeWithPreset(collection.imageUrl, "collectionHero") ?? undefined}
               alt={collection.imageAlt ?? collection.name}
               className="collection-detail__hero-image"
             />

@@ -21,6 +21,12 @@ export {
 } from "./orderStatusDerivation.js";
 export { webUrlToMobilePath, mobilePushDataToPath, ROUTE_MAPPINGS } from "./deepLink.js";
 export type { RouteMapping } from "./deepLink.js";
+export {
+  optimizeImageUrl,
+  optimizeWithPreset,
+  IMAGE_PRESETS,
+} from "./imageOptimize.js";
+export type { ImageResizeOptions, ImagePreset } from "./imageOptimize.js";
 export { isValidSlug, CONTENT_TYPE_LABELS, CONTENT_FIELD_GUIDE } from "./contentValidation.js";
 export { stripMarkdownSyntax } from "./stripMarkdown.js";
 export {

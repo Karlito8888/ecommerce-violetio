@@ -78,14 +78,16 @@ Deno.serve(async (req: Request) => {
       const albums = Array.isArray(o.albums) ? (o.albums as Array<Record<string, unknown>>) : [];
 
       // Extract thumbnail from first album primary media
+      // Apply Shopify CDN resize (?width=300&height=400) for listing performance.
+      // @see https://docs.violet.io/prism/catalog/media-transformations
       let thumbnailUrl: string | null = null;
       for (const album of albums) {
         const pm = album.primary_media as Record<string, unknown> | undefined;
-        if (pm?.url) { thumbnailUrl = String(pm.url); break; }
+        if (pm?.url) { thumbnailUrl = resizeShopifyImage(String(pm.url), 300, 400); break; }
         const media = Array.isArray(album.media) ? (album.media as Array<Record<string, unknown>>) : [];
         const primary = media.find((m) => m.primary);
-        if (primary?.url) { thumbnailUrl = String(primary.url); break; }
-        if (media[0]?.url) { thumbnailUrl = String(media[0].url); break; }
+        if (primary?.url) { thumbnailUrl = resizeShopifyImage(String(primary.url), 300, 400); break; }
+        if (media[0]?.url) { thumbnailUrl = resizeShopifyImage(String(media[0].url), 300, 400); break; }
       }
 
       const minPrice = Number(o.min_price ?? 0);
@@ -185,3 +187,25 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+/**
+ * Applies Shopify CDN resize parameters to an image URL.
+ *
+ * For Shopify-sourced images (cdn.shopify.com), appends ?width=W&height=H.
+ * Non-Shopify URLs are returned unchanged.
+ *
+ * @see https://docs.violet.io/prism/catalog/media-transformations
+ */
+function resizeShopifyImage(url: string, width: number, height: number): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("shopify")) {
+      parsed.searchParams.set("width", String(width));
+      parsed.searchParams.set("height", String(height));
+      return parsed.toString();
+    }
+  } catch {
+    // Invalid URL — return as-is
+  }
+  return url;
+}

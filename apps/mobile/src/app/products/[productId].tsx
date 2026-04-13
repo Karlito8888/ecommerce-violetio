@@ -20,6 +20,7 @@ import {
   stripHtml,
   useRecommendations,
   useUser,
+  optimizeWithPreset,
 } from "@ecommerce/shared";
 import type { Product, RecommendationItem } from "@ecommerce/shared";
 
@@ -266,7 +267,7 @@ export default function ProductDetailScreen() {
             {images.map((img, i) => (
               <Image
                 key={img.id}
-                source={{ uri: img.url }}
+                source={{ uri: optimizeWithPreset(img.url, "pdpThumb") ?? undefined }}
                 style={styles.heroImage}
                 accessibilityLabel={`${product.name} - Image ${i + 1} of ${images.length}`}
               />
@@ -383,7 +384,7 @@ function RecommendationsSection({ productId }: { productId: string }) {
       accessibilityLabel={`${item.name}, ${formatPrice(item.minPrice, item.currency)}`}
     >
       {item.thumbnailUrl ? (
-        <Image source={{ uri: item.thumbnailUrl }} style={styles.recImage} />
+        <Image source={{ uri: optimizeWithPreset(item.thumbnailUrl, "recommendation") ?? undefined }} style={styles.recImage} />
       ) : (
         <ThemedView type="backgroundElement" style={styles.recImagePlaceholder}>
           <ThemedText themeColor="textSecondary">No image</ThemedText>

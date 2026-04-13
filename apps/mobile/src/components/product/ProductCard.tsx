@@ -1,7 +1,7 @@
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { Product } from "@ecommerce/shared";
-import { formatPrice } from "@ecommerce/shared";
+import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { Colors, Fonts, Spacing } from "@/constants/theme";
 
@@ -29,7 +29,7 @@ export default function ProductCard({ product }: { product: Product }) {
     >
       {product.thumbnailUrl ? (
         <Image
-          source={{ uri: product.thumbnailUrl }}
+          source={{ uri: optimizeWithPreset(product.thumbnailUrl, "productCard") ?? undefined }}
           style={[styles.image, !product.available && styles.imageOutOfStock]}
           accessibilityLabel={`${product.name} by ${product.seller}`}
           resizeMode="cover"

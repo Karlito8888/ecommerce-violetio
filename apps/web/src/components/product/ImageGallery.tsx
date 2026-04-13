@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { ProductImage } from "@ecommerce/shared";
+import { optimizeWithPreset } from "@ecommerce/shared";
 
 import "./ImageGallery.css";
 
@@ -90,7 +91,7 @@ export default function ImageGallery({
               onClick={() => setActiveIndex(i)}
               aria-label={`View image ${i + 1} of ${total}`}
             >
-              <img src={img.url} alt="" loading="lazy" />
+              <img src={optimizeWithPreset(img.url, "pdpThumb") ?? undefined} alt="" loading="lazy" />
             </button>
           ))}
         </div>

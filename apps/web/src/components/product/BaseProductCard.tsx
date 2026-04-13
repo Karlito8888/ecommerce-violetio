@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { formatPrice } from "@ecommerce/shared";
+import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
 import WishlistButton from "./WishlistButton";
 
 /**
@@ -97,7 +97,7 @@ export default function BaseProductCard({
         <div className="product-card__image-wrap">
           {thumbnailUrl && !imageError ? (
             <img
-              src={thumbnailUrl}
+              src={optimizeWithPreset(thumbnailUrl, "productCard") ?? undefined}
               alt={imageAlt}
               className="product-card__image"
               loading="lazy"
