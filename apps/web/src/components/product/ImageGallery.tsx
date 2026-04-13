@@ -91,7 +91,11 @@ export default function ImageGallery({
               onClick={() => setActiveIndex(i)}
               aria-label={`View image ${i + 1} of ${total}`}
             >
-              <img src={optimizeWithPreset(img.url, "pdpThumb") ?? undefined} alt="" loading="lazy" />
+              <img
+                src={optimizeWithPreset(img.url, "pdpThumb") ?? undefined}
+                alt=""
+                loading="lazy"
+              />
             </button>
           ))}
         </div>

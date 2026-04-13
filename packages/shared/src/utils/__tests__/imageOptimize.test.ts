@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  optimizeImageUrl,
-  optimizeWithPreset,
-  IMAGE_PRESETS,
-} from "../imageOptimize.js";
+import { optimizeImageUrl, optimizeWithPreset, IMAGE_PRESETS } from "../imageOptimize.js";
 
 // ─── optimizeImageUrl ──────────────────────────────────────────────────
 
@@ -35,33 +31,24 @@ describe("optimizeImageUrl", () => {
   // ─── Shopify CDN ─────────────────────────────────────────────────
 
   it("adds width and height to Shopify CDN URL", () => {
-    const result = optimizeImageUrl(
-      "https://cdn.shopify.com/some/image.jpeg",
-      { width: 300, height: 400 },
-    );
-    expect(result).toBe(
-      "https://cdn.shopify.com/some/image.jpeg?width=300&height=400",
-    );
+    const result = optimizeImageUrl("https://cdn.shopify.com/some/image.jpeg", {
+      width: 300,
+      height: 400,
+    });
+    expect(result).toBe("https://cdn.shopify.com/some/image.jpeg?width=300&height=400");
   });
 
   it("adds only width to Shopify CDN URL", () => {
-    const result = optimizeImageUrl(
-      "https://cdn.shopify.com/some/image.jpeg",
-      { width: 300 },
-    );
-    expect(result).toBe(
-      "https://cdn.shopify.com/some/image.jpeg?width=300",
-    );
+    const result = optimizeImageUrl("https://cdn.shopify.com/some/image.jpeg", { width: 300 });
+    expect(result).toBe("https://cdn.shopify.com/some/image.jpeg?width=300");
   });
 
   it("preserves existing query params on Shopify URL", () => {
-    const result = optimizeImageUrl(
-      "https://cdn.shopify.com/some/image.jpeg?v=123",
-      { width: 300, height: 400 },
-    );
-    expect(result).toBe(
-      "https://cdn.shopify.com/some/image.jpeg?v=123&width=300&height=400",
-    );
+    const result = optimizeImageUrl("https://cdn.shopify.com/some/image.jpeg?v=123", {
+      width: 300,
+      height: 400,
+    });
+    expect(result).toBe("https://cdn.shopify.com/some/image.jpeg?v=123&width=300&height=400");
   });
 
   it("overwrites existing width/height params on Shopify URL", () => {
@@ -69,16 +56,11 @@ describe("optimizeImageUrl", () => {
       "https://cdn.shopify.com/some/image.jpeg?width=100&height=100",
       { width: 300, height: 400 },
     );
-    expect(result).toBe(
-      "https://cdn.shopify.com/some/image.jpeg?width=300&height=400",
-    );
+    expect(result).toBe("https://cdn.shopify.com/some/image.jpeg?width=300&height=400");
   });
 
   it("handles cdn2.shopify.io domain", () => {
-    const result = optimizeImageUrl(
-      "https://cdn2.shopify.io/some/image.jpeg",
-      { width: 200 },
-    );
+    const result = optimizeImageUrl("https://cdn2.shopify.io/some/image.jpeg", { width: 200 });
     expect(result).toContain("width=200");
   });
 
@@ -107,13 +89,11 @@ describe("optimizeImageUrl", () => {
   // ─── Swell CDN ───────────────────────────────────────────────────
 
   it("adds width and height to Swell CDN URL", () => {
-    const result = optimizeImageUrl(
-      "https://cdn.schema.io/violet/some/image.jpeg",
-      { width: 100, height: 150 },
-    );
-    expect(result).toBe(
-      "https://cdn.schema.io/violet/some/image.jpeg?width=100&height=150",
-    );
+    const result = optimizeImageUrl("https://cdn.schema.io/violet/some/image.jpeg", {
+      width: 100,
+      height: 150,
+    });
+    expect(result).toBe("https://cdn.schema.io/violet/some/image.jpeg?width=100&height=150");
   });
 
   // ─── Wix CDN ─────────────────────────────────────────────────────
@@ -123,9 +103,7 @@ describe("optimizeImageUrl", () => {
       "https://static.wixstatic.com/media/abc123/v1/fit/w_999,h_999/file.jpg",
       { width: 100, height: 150 },
     );
-    expect(result).toBe(
-      "https://static.wixstatic.com/media/abc123/v1/fit/w_100,h_150/file.jpg",
-    );
+    expect(result).toBe("https://static.wixstatic.com/media/abc123/v1/fit/w_100,h_150/file.jpg");
   });
 
   // ─── Unsupported platforms ────────────────────────────────────────
@@ -152,10 +130,7 @@ describe("optimizeImageUrl", () => {
 
 describe("optimizeWithPreset", () => {
   it("applies productCard preset to Shopify URL", () => {
-    const result = optimizeWithPreset(
-      "https://cdn.shopify.com/some/image.jpeg",
-      "productCard",
-    );
+    const result = optimizeWithPreset("https://cdn.shopify.com/some/image.jpeg", "productCard");
     expect(result).toContain(`width=${IMAGE_PRESETS.productCard.width}`);
     expect(result).toContain(`height=${IMAGE_PRESETS.productCard.height}`);
   });

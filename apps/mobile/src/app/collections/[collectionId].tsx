@@ -98,7 +98,9 @@ export default function CollectionDetailScreen() {
             {/* Hero image */}
             {collection.imageUrl ? (
               <Image
-                source={{ uri: optimizeWithPreset(collection.imageUrl, "collectionHero") ?? undefined }}
+                source={{
+                  uri: optimizeWithPreset(collection.imageUrl, "collectionHero") ?? undefined,
+                }}
                 style={styles.heroImage}
                 resizeMode="cover"
                 accessibilityLabel={collection.name}

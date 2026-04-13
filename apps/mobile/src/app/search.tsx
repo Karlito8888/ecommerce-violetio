@@ -10,7 +10,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useSearch, createSupabaseClient, formatPrice, optimizeWithPreset } from "@ecommerce/shared";
+import {
+  useSearch,
+  createSupabaseClient,
+  formatPrice,
+  optimizeWithPreset,
+} from "@ecommerce/shared";
 import type { ProductMatch } from "@ecommerce/shared";
 import { useMobileTracking } from "@/hooks/useMobileTracking";
 

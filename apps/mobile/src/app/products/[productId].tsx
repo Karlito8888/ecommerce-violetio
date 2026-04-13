@@ -384,7 +384,10 @@ function RecommendationsSection({ productId }: { productId: string }) {
       accessibilityLabel={`${item.name}, ${formatPrice(item.minPrice, item.currency)}`}
     >
       {item.thumbnailUrl ? (
-        <Image source={{ uri: optimizeWithPreset(item.thumbnailUrl, "recommendation") ?? undefined }} style={styles.recImage} />
+        <Image
+          source={{ uri: optimizeWithPreset(item.thumbnailUrl, "recommendation") ?? undefined }}
+          style={styles.recImage}
+        />
       ) : (
         <ThemedView type="backgroundElement" style={styles.recImagePlaceholder}>
           <ThemedText themeColor="textSecondary">No image</ThemedText>
