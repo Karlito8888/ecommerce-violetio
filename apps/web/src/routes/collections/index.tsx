@@ -81,7 +81,7 @@ function CollectionCard({ collection }: { collection: CollectionItem }) {
         {collection.imageUrl ? (
           <img
             src={collection.imageUrl}
-            alt={collection.name}
+            alt={collection.imageAlt ?? collection.name}
             className="collection-card__image"
             loading="lazy"
             width={400}
@@ -101,6 +101,11 @@ function CollectionCard({ collection }: { collection: CollectionItem }) {
         <h2 className="collection-card__name">{collection.name}</h2>
         {collection.description && (
           <p className="collection-card__description">{collection.description}</p>
+        )}
+        {collection.productCount > 0 && (
+          <p className="collection-card__count">
+            {collection.productCount} product{collection.productCount !== 1 ? "s" : ""}
+          </p>
         )}
       </div>
     </Link>

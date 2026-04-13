@@ -291,6 +291,7 @@ export const violetCollectionWebhookPayloadSchema = z.object({
   type: z.enum(["CUSTOM", "AUTOMATED"]).optional(),
   merchant_id: z.number(),
   external_id: z.string().optional(),
+  handle: z.string().optional(),
   // Violet API uses media.source_url, but webhooks may send image_url as a flat field.
   // Accept both to be safe. See: GET /catalog/collections response schema.
   image_url: z.string().optional(),

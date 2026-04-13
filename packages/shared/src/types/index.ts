@@ -16,6 +16,7 @@ export type {
   SkuDimensions,
   CategoryItem,
   CollectionItem,
+  CollectionStatus,
   CollectionType,
   MetadataItem,
   MetadataValueType,

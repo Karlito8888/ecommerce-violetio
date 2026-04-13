@@ -157,6 +157,13 @@
   overflow: hidden;
 }
 
+.collection-card__count {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--color-steel);
+  margin: var(--space-1) 0 0;
+}
+
 /* ── Collection detail page ── */
 
 .collection-detail {

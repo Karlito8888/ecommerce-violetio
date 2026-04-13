@@ -160,6 +160,12 @@ export interface Product {
   thumbnailUrl: string | null;
   /** Geo-filtered shipping info. `null` when no country context is available. */
   shippingInfo: ShippingInfo | null;
+  /**
+   * IDs of collections this product belongs to.
+   * Populated when `?include=collections` is passed to the Violet API.
+   * Empty array when not requested or when product is in no collections.
+   */
+  collectionIds: string[];
 }
 
 /**
@@ -235,6 +241,18 @@ export interface CategoryItem {
 export type CollectionType = "CUSTOM" | "AUTOMATED";
 
 /**
+ * Collection status from Violet API.
+ *
+ * - ACTIVE: Collection is live and visible
+ * - INACTIVE: Collection is not available (soft-deleted or disabled)
+ * - SYNC_IN_PROGRESS: Collection is being synced from the merchant's platform
+ * - FOR_DELETION: Collection is queued for permanent deletion
+ *
+ * @see https://docs.violet.io/api-reference/catalog/collections
+ */
+export type CollectionStatus = "ACTIVE" | "INACTIVE" | "SYNC_IN_PROGRESS" | "FOR_DELETION";
+
+/**
  * A merchant-curated collection of products.
  *
  * Collections are groups of offers (products) organized by merchants
@@ -248,10 +266,15 @@ export interface CollectionItem {
   id: string;
   merchantId: string;
   name: string;
+  /** URL-friendly slug from the e-commerce platform (e.g., "summer-sale"). */
+  handle: string;
   description: string;
   type: CollectionType;
+  status: CollectionStatus;
   externalId: string;
   imageUrl: string | null;
+  /** Alt text for the collection image (from Violet media.alt). */
+  imageAlt: string | null;
   sortOrder: number;
   /** Number of products in this collection. Fetched separately or cached. */
   productCount: number;

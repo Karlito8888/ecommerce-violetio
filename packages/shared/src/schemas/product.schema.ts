@@ -237,6 +237,22 @@ export const violetOfferSchema = z.object({
     .optional()
     .default(null),
   /**
+   * Collections this offer belongs to.
+   * Present when `?include=collections` is passed to Violet API
+   * AND `sync_collections` flag is enabled for the merchant.
+   *
+   * @see https://docs.violet.io/api-reference/catalog/collections
+   */
+  collections: z
+    .array(
+      z.object({
+        collection_id: z.number(),
+        name: z.string().optional(),
+      }),
+    )
+    .optional()
+    .default([]),
+  /**
    * Offer metadata from merchant's custom product data (Shopify metafields).
    * Present when `?include=metadata` AND `sync_metadata` flag is enabled.
    *

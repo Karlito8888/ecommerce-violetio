@@ -187,7 +187,7 @@ async function getProductsFromMerchants(
   const offerArrays = await Promise.all(
     merchantIds.map(async (id) => {
       const res = await fetch(
-        `${VIOLET_API_BASE}/catalog/offers/merchants/${id}?page=1&size=100&include=shipping`,
+        `${VIOLET_API_BASE}/catalog/offers/merchants/${id}?page=1&size=100&include=shipping,metadata,sku_metadata,collections`,
         { headers: authHeaders },
       );
       if (!res.ok) return [];

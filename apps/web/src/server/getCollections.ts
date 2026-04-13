@@ -21,7 +21,7 @@ export const getCollectionsFn = createServerFn({ method: "GET" }).handler(
       const { data, error } = await supabase
         .from("collections")
         .select(
-          "id, merchant_id, name, description, type, external_id, image_url, sort_order, date_created, date_last_modified",
+          "id, merchant_id, name, handle, description, type, status, external_id, image_url, image_alt, sort_order, date_created, date_last_modified",
         )
         .eq("status", "ACTIVE")
         .order("sort_order", { ascending: true })
@@ -31,16 +31,40 @@ export const getCollectionsFn = createServerFn({ method: "GET" }).handler(
         return { data: null, error: { code: "COLLECTIONS.DB_ERROR", message: error.message } };
       }
 
+      // Fetch product counts per collection from the junction table
+      const collectionIds = (data ?? []).map((r) => r.id);
+      const countsMap = new Map<string, number>();
+
+      if (collectionIds.length > 0) {
+        const { data: countRows } = await supabase
+          .from("collection_offers")
+          .select("collection_id")
+          .in("collection_id", collectionIds);
+
+        if (countRows) {
+          for (const row of countRows) {
+            countsMap.set(row.collection_id, (countsMap.get(row.collection_id) ?? 0) + 1);
+          }
+        }
+      }
+
       const collections: CollectionItem[] = (data ?? []).map((row) => ({
         id: row.id,
         merchantId: row.merchant_id,
         name: row.name,
+        handle: ((row as Record<string, unknown>).handle as string) ?? "",
         description: row.description ?? "",
         type: (row.type ?? "CUSTOM") as "CUSTOM" | "AUTOMATED",
+        status: (row.status ?? "ACTIVE") as
+          | "ACTIVE"
+          | "INACTIVE"
+          | "SYNC_IN_PROGRESS"
+          | "FOR_DELETION",
         externalId: row.external_id ?? "",
         imageUrl: row.image_url ?? null,
+        imageAlt: ((row as Record<string, unknown>).image_alt as string | null) ?? null,
         sortOrder: row.sort_order ?? 0,
-        productCount: 0, // Not stored — fetched separately on demand
+        productCount: countsMap.get(row.id) ?? 0,
         dateCreated: row.date_created ?? new Date().toISOString(),
         dateLastModified: row.date_last_modified ?? new Date().toISOString(),
       }));
@@ -69,9 +93,10 @@ export const getCollectionByIdFn = createServerFn({ method: "GET" })
       const { data, error } = await supabase
         .from("collections")
         .select(
-          "id, merchant_id, name, description, type, external_id, image_url, sort_order, date_created, date_last_modified",
+          "id, merchant_id, name, handle, description, type, status, external_id, image_url, image_alt, sort_order, date_created, date_last_modified",
         )
         .eq("id", id)
+        .eq("status", "ACTIVE")
         .single();
 
       if (error || !data) {
@@ -89,10 +114,17 @@ export const getCollectionByIdFn = createServerFn({ method: "GET" })
           id: data.id,
           merchantId: data.merchant_id,
           name: data.name,
+          handle: ((data as Record<string, unknown>).handle as string) ?? "",
           description: data.description ?? "",
           type: (data.type ?? "CUSTOM") as "CUSTOM" | "AUTOMATED",
+          status: (data.status ?? "ACTIVE") as
+            | "ACTIVE"
+            | "INACTIVE"
+            | "SYNC_IN_PROGRESS"
+            | "FOR_DELETION",
           externalId: data.external_id ?? "",
           imageUrl: data.image_url ?? null,
+          imageAlt: ((data as Record<string, unknown>).image_alt as string | null) ?? null,
           sortOrder: data.sort_order ?? 0,
           productCount: 0,
           dateCreated: data.date_created ?? new Date().toISOString(),

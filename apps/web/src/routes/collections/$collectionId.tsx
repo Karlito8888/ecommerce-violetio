@@ -119,7 +119,7 @@ function CollectionDetailPage() {
           <div className="collection-detail__hero-image-wrap">
             <img
               src={collection.imageUrl}
-              alt={collection.name}
+              alt={collection.imageAlt ?? collection.name}
               className="collection-detail__hero-image"
             />
           </div>

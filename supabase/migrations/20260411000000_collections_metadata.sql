@@ -8,11 +8,13 @@ CREATE TABLE public.collections (
   id           VARCHAR     PRIMARY KEY,   -- Violet collection ID (string cast from number)
   merchant_id  VARCHAR     NOT NULL,
   name         TEXT        NOT NULL,
+  handle       VARCHAR,    -- URL-friendly slug from the e-commerce platform (e.g., 'summer-sale')
   description  TEXT,
   type         VARCHAR     NOT NULL DEFAULT 'CUSTOM',  -- CUSTOM | AUTOMATED
   external_id  VARCHAR,    -- ID from the e-commerce platform
-  status       VARCHAR     NOT NULL DEFAULT 'ACTIVE',  -- ACTIVE | REMOVED
+  status       VARCHAR     NOT NULL DEFAULT 'ACTIVE',  -- ACTIVE | INACTIVE | SYNC_IN_PROGRESS | FOR_DELETION
   image_url    TEXT,
+  image_alt    TEXT,       -- Alt text from collection media
   sort_order   INT         NOT NULL DEFAULT 0,
   date_created   TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_last_modified TIMESTAMPTZ NOT NULL DEFAULT now()

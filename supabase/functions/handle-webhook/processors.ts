@@ -474,10 +474,12 @@ export async function processCollectionCreated(
         id: collectionId,
         merchant_id: merchantId,
         name: payload.name ?? "Untitled Collection",
+        handle: (payload as Record<string, unknown>).handle as string | undefined ?? null,
         description: payload.description ?? null,
         type: payload.type ?? "CUSTOM",
         external_id: payload.external_id ?? null,
         image_url: imageUrl,
+        image_alt: payload.media?.alt ?? null,
         sort_order: payload.sort_order ?? 0,
         status: "ACTIVE",
         date_last_modified: payload.date_last_modified ?? new Date().toISOString(),
@@ -530,11 +532,13 @@ export async function processCollectionUpdated(
       date_last_modified: payload.date_last_modified ?? new Date().toISOString(),
     };
     if (payload.name !== undefined) update.name = payload.name;
+    if ((payload as Record<string, unknown>).handle !== undefined) update.handle = (payload as Record<string, unknown>).handle;
     if (payload.description !== undefined) update.description = payload.description;
     if (payload.type !== undefined) update.type = payload.type;
     if (payload.image_url !== undefined) update.image_url = payload.image_url;
     // Prefer media.source_url (API model) over image_url (flat field)
     if (payload.media?.source_url !== undefined) update.image_url = payload.media.source_url;
+    if (payload.media?.alt !== undefined) update.image_alt = payload.media.alt;
     if (payload.sort_order !== undefined) update.sort_order = payload.sort_order;
 
     const { error } = await supabase
@@ -584,10 +588,11 @@ export async function processCollectionRemoved(
 
     console.log(`[collection] Collection removed: id=${collectionId}`);
 
-    // Soft-delete: mark as REMOVED
+    // Soft-delete: mark as INACTIVE (matches Violet Collection status enum)
+    // Violet statuses: INACTIVE | ACTIVE | SYNC_IN_PROGRESS | FOR_DELETION
     const { error: updateError } = await supabase
       .from("collections")
-      .update({ status: "REMOVED", date_last_modified: new Date().toISOString() })
+      .update({ status: "INACTIVE", date_last_modified: new Date().toISOString() })
       .eq("id", collectionId);
 
     if (updateError) {
@@ -689,7 +694,7 @@ export async function processCollectionOffersUpdated(
       // Using /offers/ids instead of /offers — returns only int64 IDs, not full offer objects.
       // @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
       const url =
-        `${apiBase}/catalog/collections/${collectionId}/offers/ids?page=${page}&size=100`;
+        `${apiBase}/catalog/collections/${collectionId}/offers/ids?page=${page}&size=100&exclude_hidden=true`;
       const res = await fetch(url, {
         headers: { ...headersResult.data, Accept: "application/json" },
       });

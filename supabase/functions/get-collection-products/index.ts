@@ -45,8 +45,9 @@ Deno.serve(async (req: Request) => {
 
   const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
   // Violet collection offers pagination is 1-based (default: page=1)
+  // exclude_hidden=true filters out hidden offers from the response
   // @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers
-  const apiUrl = `${apiBase}/catalog/collections/${collectionId}/offers?page=${page}&size=${pageSize}`;
+  const apiUrl = `${apiBase}/catalog/collections/${collectionId}/offers?page=${page}&size=${pageSize}&exclude_hidden=true`;
 
   try {
     const res = await fetch(apiUrl, {

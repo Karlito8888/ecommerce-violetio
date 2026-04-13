@@ -847,10 +847,13 @@ describe("VioletAdapter — Collections", () => {
         id: "10",
         merchantId: "5",
         name: "Summer Collection",
+        handle: "summer-collection",
         description: "Hot weather essentials",
         type: "CUSTOM",
+        status: "ACTIVE",
         externalId: "shopify-10",
         imageUrl: "https://cdn.example.com/summer.jpg",
+        imageAlt: "Summer",
         sortOrder: 1,
         productCount: 0,
         dateCreated: "2026-01-01T00:00:00Z",
@@ -884,12 +887,12 @@ describe("VioletAdapter — Collections", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
-        expect.stringContaining("?page=1&size=50"),
+        expect.stringContaining("?page=1&size=50&exclude_hidden=true"),
         expect.anything(),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        expect.stringContaining("?page=2&size=50"),
+        expect.stringContaining("?page=2&size=50&exclude_hidden=true"),
         expect.anything(),
       );
     });
@@ -1011,7 +1014,7 @@ describe("VioletAdapter — Collections", () => {
 
       await collAdapter.getCollectionOffers("5", 3, 12);
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("?page=3&size=12"),
+        expect.stringContaining("?page=3&size=12&exclude_hidden=true"),
         expect.anything(),
       );
     });
@@ -1052,7 +1055,7 @@ describe("VioletAdapter — Collections", () => {
       expect(result.data!.data).toEqual(["100", "200", "300"]);
       expect(result.data!.total).toBe(3);
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/offers/ids?page=1&size=50"),
+        expect.stringContaining("/offers/ids?page=1&size=50&exclude_hidden=true"),
         expect.anything(),
       );
     });

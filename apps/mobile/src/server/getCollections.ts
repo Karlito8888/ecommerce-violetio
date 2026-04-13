@@ -28,7 +28,7 @@ export async function fetchCollectionsMobile(): Promise<ApiResponse<CollectionIt
 
   const url =
     `${supabaseUrl}/rest/v1/collections` +
-    `?status=eq.ACTIVE&select=id,merchant_id,name,description,type,external_id,image_url,sort_order,date_created,date_last_modified` +
+    `?status=eq.ACTIVE&select=id,merchant_id,name,handle,description,type,status,external_id,image_url,image_alt,sort_order,date_created,date_last_modified` +
     `&order=sort_order.asc,name.asc`;
 
   try {
@@ -53,10 +53,17 @@ export async function fetchCollectionsMobile(): Promise<ApiResponse<CollectionIt
       id: String(row.id ?? ""),
       merchantId: String(row.merchant_id ?? ""),
       name: String(row.name ?? ""),
+      handle: String(row.handle ?? ""),
       description: String(row.description ?? ""),
       type: String(row.type ?? "CUSTOM") as "CUSTOM" | "AUTOMATED",
+      status: String(row.status ?? "ACTIVE") as
+        | "ACTIVE"
+        | "INACTIVE"
+        | "SYNC_IN_PROGRESS"
+        | "FOR_DELETION",
       externalId: String(row.external_id ?? ""),
       imageUrl: row.image_url ? String(row.image_url) : null,
+      imageAlt: row.image_alt ? String(row.image_alt) : null,
       sortOrder: Number(row.sort_order ?? 0),
       productCount: 0,
       dateCreated: String(row.date_created ?? ""),
@@ -82,7 +89,7 @@ export async function fetchCollectionByIdMobile(id: string): Promise<ApiResponse
 
   const url =
     `${supabaseUrl}/rest/v1/collections` +
-    `?id=eq.${encodeURIComponent(id)}&select=id,merchant_id,name,description,type,external_id,image_url,sort_order,date_created,date_last_modified` +
+    `?id=eq.${encodeURIComponent(id)}&status=eq.ACTIVE&select=id,merchant_id,name,handle,description,type,status,external_id,image_url,image_alt,sort_order,date_created,date_last_modified` +
     `&limit=1`;
 
   try {
@@ -115,10 +122,17 @@ export async function fetchCollectionByIdMobile(id: string): Promise<ApiResponse
         id: String(row.id ?? ""),
         merchantId: String(row.merchant_id ?? ""),
         name: String(row.name ?? ""),
+        handle: String(row.handle ?? ""),
         description: String(row.description ?? ""),
         type: String(row.type ?? "CUSTOM") as "CUSTOM" | "AUTOMATED",
+        status: String(row.status ?? "ACTIVE") as
+          | "ACTIVE"
+          | "INACTIVE"
+          | "SYNC_IN_PROGRESS"
+          | "FOR_DELETION",
         externalId: String(row.external_id ?? ""),
         imageUrl: row.image_url ? String(row.image_url) : null,
+        imageAlt: row.image_alt ? String(row.image_alt) : null,
         sortOrder: Number(row.sort_order ?? 0),
         productCount: 0,
         dateCreated: String(row.date_created ?? ""),

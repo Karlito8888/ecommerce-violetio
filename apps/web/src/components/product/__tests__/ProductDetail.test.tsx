@@ -101,6 +101,7 @@ function createMockProduct(overrides: Partial<Product> = {}): Product {
     images: [],
     thumbnailUrl: null,
     shippingInfo: null,
+    collectionIds: [],
     ...overrides,
   };
 }
