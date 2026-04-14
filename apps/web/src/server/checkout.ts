@@ -594,6 +594,33 @@ export const persistAndConfirmOrderFn = createServerFn({ method: "POST" })
         });
       }
 
+      /**
+       * Mark the Supabase cart row as 'completed' so the pg_cron cleanup job
+       * doesn't flag it as abandoned. Without this, all carts stay 'active'
+       * forever because only the cookie is cleared — the DB row is never updated.
+       *
+       * Uses the RPC function `mark_cart_completed` from migration 20260414125612.
+       * Fire-and-forget: failure here doesn't block the user (cleanup job will
+       * eventually handle orphaned 'active' carts via the 30-day abandonment window).
+       *
+       * @see supabase/migrations/20260414125612_cleanup_abandoned_carts.sql
+       */
+      const { error: completeError } = await supabase.rpc("mark_cart_completed", {
+        p_violet_cart_id: data.violetOrderId,
+      });
+
+      if (completeError) {
+        logError(supabase, {
+          source: "web",
+          error_type: "CART.MARK_COMPLETED_FAILED",
+          message: `Failed to mark cart as completed: ${completeError.message}`,
+          context: {
+            violetOrderId: data.violetOrderId,
+            operation: "markCartCompleted",
+          },
+        });
+      }
+
       return {
         data: {
           orderId: persistResult?.orderId ?? null,
