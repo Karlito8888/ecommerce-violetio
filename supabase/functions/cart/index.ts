@@ -818,6 +818,21 @@ Deno.serve(async (req: Request) => {
         { violetCartId, route: "POST /cart/{id}/shipping_address", httpStatus: res.status },
         userId,
       );
+
+      // Translate Violet's blocked_address error (code 4236) into a user-friendly message.
+      // @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers — Blocked Addresses
+      if (
+        text.includes("blocked_address") ||
+        text.includes("blocked due to a history") ||
+        text.includes('"code":4236')
+      ) {
+        return errorResponse(
+          "VIOLET.BLOCKED_ADDRESS",
+          "This address cannot be used for delivery. Please provide a different address.",
+          res.status,
+        );
+      }
+
       return errorResponse(
         "VIOLET.API_ERROR",
         `Set shipping address failed (${res.status}): ${text}`,

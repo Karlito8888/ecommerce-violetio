@@ -33,6 +33,7 @@ import {
   logClientErrorFn,
 } from "../../server/checkout";
 import { useAuthSession } from "../../hooks/useAuthSession";
+import { COUNTRIES_WITHOUT_POSTAL_CODE } from "@ecommerce/shared";
 import { CheckoutErrorBoundary } from "../../components/checkout/CheckoutErrorBoundary";
 import { BagErrors } from "../../components/checkout/BagErrors";
 import { InventoryAlert } from "../../components/checkout/InventoryAlert";
@@ -166,6 +167,8 @@ interface AddressFormState {
   state: string;
   postalCode: string;
   country: string;
+  /** Contact phone for carrier delivery notifications — optional per Violet docs. */
+  phone: string;
 }
 
 interface AddressFormErrors {
@@ -174,6 +177,7 @@ interface AddressFormErrors {
   state?: string;
   postalCode?: string;
   country?: string;
+  phone?: string;
 }
 
 // ─── PaymentForm ──────────────────────────────────────────────────────────
@@ -1189,6 +1193,7 @@ function CheckoutPage() {
         state: "",
         postalCode: "",
         country: "US",
+        phone: "",
       }
     );
   });
@@ -1234,6 +1239,7 @@ function CheckoutPage() {
         state: "",
         postalCode: "",
         country: "US",
+        phone: "",
       }
     );
   });
@@ -1288,7 +1294,11 @@ function CheckoutPage() {
     if (!address.address1.trim()) errors.address1 = "Street address is required";
     if (!address.city.trim()) errors.city = "City is required";
     if (!address.state.trim()) errors.state = "State / province is required";
-    if (!address.postalCode.trim()) errors.postalCode = "Postal code is required";
+    // Postal code is required for most countries but exempt for ~60 countries.
+    // @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers — Postal Code Requirements
+    if (!address.postalCode.trim() && !COUNTRIES_WITHOUT_POSTAL_CODE.has(address.country)) {
+      errors.postalCode = "Postal code is required";
+    }
     if (!address.country) errors.country = "Country is required";
     setAddressErrors(errors);
     return Object.keys(errors).length === 0;
@@ -1365,6 +1375,7 @@ function CheckoutPage() {
       state: address.state,
       postalCode: address.postalCode,
       country: address.country,
+      ...(address.phone.trim() ? { phone: address.phone.trim() } : {}),
     };
 
     /**
@@ -1533,7 +1544,8 @@ function CheckoutPage() {
         !billingAddress.address1.trim() ||
         !billingAddress.city.trim() ||
         !billingAddress.state.trim() ||
-        !billingAddress.postalCode.trim() ||
+        (!billingAddress.postalCode.trim() &&
+          !COUNTRIES_WITHOUT_POSTAL_CODE.has(billingAddress.country)) ||
         !billingAddress.country
       ) {
         setBillingError("All billing address fields are required.");
@@ -1866,6 +1878,28 @@ function CheckoutPage() {
                   )}
                 </div>
 
+                {/* Phone — optional, for carrier delivery notifications */}
+                <div className="checkout__field">
+                  <label className="checkout__field-label" htmlFor="phone">
+                    Phone{" "}
+                    <span
+                      style={{ fontWeight: 400, fontSize: "0.8em", color: "var(--color-steel)" }}
+                    >
+                      (optional)
+                    </span>
+                  </label>
+                  <input
+                    id="phone"
+                    className="checkout__field-input"
+                    type="tel"
+                    value={address.phone}
+                    onChange={(e) => handleAddressChange("phone", e.target.value)}
+                    placeholder="+1 555 123 4567"
+                    autoComplete="tel"
+                    disabled={step !== "address"}
+                  />
+                </div>
+
                 {addressError && (
                   <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
                     {addressError}
@@ -1887,6 +1921,7 @@ function CheckoutPage() {
                 <p style={{ fontSize: "0.875rem", color: "var(--color-steel)", marginTop: "1rem" }}>
                   {address.address1}, {address.city}, {address.state} {address.postalCode},{" "}
                   {EU_COUNTRY_LABELS[address.country] ?? address.country}
+                  {address.phone ? <> · {address.phone}</> : null}
                   {" · "}
                   <button
                     type="button"

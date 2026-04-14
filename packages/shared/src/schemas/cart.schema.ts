@@ -18,6 +18,7 @@
  */
 
 import { z } from "zod";
+import { COUNTRIES_WITHOUT_POSTAL_CODE } from "../adapters/violetConstants.js";
 
 /**
  * Validates a Violet bag error entry.
@@ -278,19 +279,38 @@ export type CustomerInputValidated = z.infer<typeof customerInputSchema>;
  * (`violetShippingAddressSchema`) which makes them optional because Violet validates
  * server-side. This schema catches missing fields before the API call, providing
  * faster feedback to the user.
+ *
+ * ## Postal code exemption
+ * Some countries (AO, AG, AW, etc.) do not use postal codes. The schema uses a
+ * `.refine()` to make `postalCode` optional when `country` is in the exempt list.
+ * For all other countries, `postalCode` is required (1–20 chars).
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers — Postal Code Requirements
  */
-export const shippingAddressInputSchema = z.object({
-  /** Street address line 1 — 1 to 200 characters */
-  address1: z.string().min(1, "Address is required").max(200, "Address is too long"),
-  /** City — 1 to 100 characters */
-  city: z.string().min(1, "City is required").max(100, "City is too long"),
-  /** State/province — 1 to 50 characters */
-  state: z.string().min(1, "State is required").max(50, "State is too long"),
-  /** Postal/ZIP code — 1 to 20 characters */
-  postalCode: z.string().min(1, "Postal code is required").max(20, "Postal code is too long"),
-  /** ISO 3166-1 alpha-2 country code (exactly 2 characters, e.g., "US", "GB") */
-  country: z.string().length(2, "Country must be a 2-letter ISO code"),
-});
+export const shippingAddressInputSchema = z
+  .object({
+    /** Street address line 1 — 1 to 200 characters */
+    address1: z.string().min(1, "Address is required").max(200, "Address is too long"),
+    /** City — 1 to 100 characters */
+    city: z.string().min(1, "City is required").max(100, "City is too long"),
+    /** State/province — 1 to 50 characters */
+    state: z.string().min(1, "State is required").max(50, "State is too long"),
+    /** Postal/ZIP code — required for most countries, exempt for ~60 countries */
+    postalCode: z.string().max(20, "Postal code is too long"),
+    /** ISO 3166-1 alpha-2 country code (exactly 2 characters, e.g., "US", "GB") */
+    country: z.string().length(2, "Country must be a 2-letter ISO code"),
+  })
+  .refine(
+    (data) => {
+      // Postal code is optional for countries that don't use them
+      if (COUNTRIES_WITHOUT_POSTAL_CODE.has(data.country)) return true;
+      return data.postalCode.trim().length >= 1;
+    },
+    {
+      message: "Postal code is required",
+      path: ["postalCode"],
+    },
+  );
 
 /** Inferred type for validated shipping address input. */
 export type ShippingAddressInputValidated = z.infer<typeof shippingAddressInputSchema>;

@@ -35,7 +35,12 @@ import { useStripe } from "@stripe/stripe-react-native";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import { createSupabaseClient, formatPrice } from "@ecommerce/shared";
+import {
+  createSupabaseClient,
+  formatPrice,
+  COUNTRIES_WITHOUT_POSTAL_CODE,
+  BLOCKED_ADDRESS_USER_MESSAGE,
+} from "@ecommerce/shared";
 import type { ShippingMethodsAvailable } from "@ecommerce/shared";
 import { useSetStripeKey } from "./_layout";
 
@@ -66,6 +71,8 @@ interface AddressFields {
   state: string;
   postalCode: string;
   country: string;
+  /** Contact phone for carrier delivery notifications — optional per Violet docs. */
+  phone: string;
 }
 
 type CheckoutStep = "address" | "methods" | "guestInfo" | "billing" | "payment";
@@ -82,6 +89,7 @@ export default function CheckoutScreen() {
     state: "",
     postalCode: "",
     country: "US",
+    phone: "",
   });
   const [isAddressSubmitting, setIsAddressSubmitting] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
@@ -113,6 +121,7 @@ export default function CheckoutScreen() {
     state: "",
     postalCode: "",
     country: "US",
+    phone: "",
   });
   const [billingError, setBillingError] = useState<string | null>(null);
   const [isBillingSubmitting, setIsBillingSubmitting] = useState(false);
@@ -187,11 +196,14 @@ export default function CheckoutScreen() {
 
   // ── Address submit ──────────────────────────────────────────────────
   const handleAddressSubmit = useCallback(async () => {
+    // Postal code is required for most countries but exempt for ~60 countries.
+    // @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers — Postal Code Requirements
+    const postalCodeRequired = !COUNTRIES_WITHOUT_POSTAL_CODE.has(address.country);
     if (
       !address.address1.trim() ||
       !address.city.trim() ||
       !address.state.trim() ||
-      !address.postalCode.trim() ||
+      (postalCodeRequired && !address.postalCode.trim()) ||
       !address.country.trim()
     ) {
       setAddressError("All address fields are required.");
@@ -219,21 +231,36 @@ export default function CheckoutScreen() {
     setAddressError(null);
 
     try {
+      const body: Record<string, string> = {
+        address_1: address.address1,
+        city: address.city,
+        state: address.state,
+        postal_code: address.postalCode,
+        country: address.country,
+      };
+      if (address.phone.trim()) {
+        body.phone = address.phone.trim();
+      }
+
       const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping_address`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address_1: address.address1,
-          city: address.city,
-          state: address.state,
-          postal_code: address.postalCode,
-          country: address.country,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        setAddressError(`Address not accepted (${res.status}): ${text}`);
+        // Detect Violet's blocked address error (code 4236) and show a user-friendly message.
+        // @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers — Blocked Addresses
+        if (
+          text.includes("blocked_address") ||
+          text.includes("blocked due to a history") ||
+          text.includes('"code":4236')
+        ) {
+          setAddressError(BLOCKED_ADDRESS_USER_MESSAGE);
+        } else {
+          setAddressError(`Address not accepted (${res.status}): ${text}`);
+        }
         return;
       }
 
@@ -399,7 +426,8 @@ export default function CheckoutScreen() {
           !billingAddress.address1.trim() ||
           !billingAddress.city.trim() ||
           !billingAddress.state.trim() ||
-          !billingAddress.postalCode.trim() ||
+          (!billingAddress.postalCode.trim() &&
+            !COUNTRIES_WITHOUT_POSTAL_CODE.has(billingAddress.country)) ||
           !billingAddress.country.trim()
         ) {
           setBillingError("All billing address fields are required.");
@@ -660,6 +688,17 @@ export default function CheckoutScreen() {
             placeholder="US"
             autoCapitalize="characters"
             maxLength={2}
+            editable={step === "address"}
+          />
+
+          <ThemedText style={styles.fieldLabel}>Phone (optional)</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={address.phone}
+            onChangeText={(v) => setAddress((p) => ({ ...p, phone: v }))}
+            placeholder="+1 555 123 4567"
+            autoComplete="tel"
+            keyboardType="phone-pad"
             editable={step === "address"}
           />
 

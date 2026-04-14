@@ -107,6 +107,109 @@ export function delay(ms: number): Promise<void> {
  *
  * @see https://docs.violet.io/concepts/rate-limits
  */
+/**
+ * Countries that do not use postal codes and are exempt from the postal_code
+ * requirement in Violet's OrderAddress model.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers
+ */
+export const COUNTRIES_WITHOUT_POSTAL_CODE: ReadonlySet<string> = new Set([
+  "AO",
+  "AG",
+  "AW",
+  "BH",
+  "BS",
+  "BZ",
+  "BJ",
+  "BM",
+  "BO",
+  "BQ",
+  "BW",
+  "BF",
+  "BI",
+  "CM",
+  "CF",
+  "TD",
+  "KM",
+  "CG",
+  "CD",
+  "CK",
+  "CI",
+  "CW",
+  "DJ",
+  "DM",
+  "GQ",
+  "ER",
+  "FJ",
+  "TF",
+  "GA",
+  "GM",
+  "GH",
+  "GD",
+  "GY",
+  "HM",
+  "HK",
+  "KI",
+  "KP",
+  "LY",
+  "MO",
+  "MW",
+  "ML",
+  "MR",
+  "NR",
+  "AN",
+  "NU",
+  "QA",
+  "RW",
+  "KN",
+  "SA",
+  "ST",
+  "SC",
+  "SL",
+  "SX",
+  "SB",
+  "SO",
+  "SR",
+  "SY",
+  "TL",
+  "TG",
+  "TK",
+  "TO",
+  "TT",
+  "TV",
+  "UG",
+  "AE",
+  "VU",
+  "YE",
+  "ZW",
+]);
+
+/**
+ * User-friendly error message for Violet's blocked address error (code 4236).
+ * Violet maintains a list of addresses historically used for fraudulent orders.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers
+ */
+export const BLOCKED_ADDRESS_USER_MESSAGE =
+  "This address cannot be used for delivery. Please provide a different address.";
+
+/**
+ * Detects Violet's blocked address error from the API response body or error message.
+ *
+ * Violet returns: `{ "error": "blocked_address", "code": 4236, "message": "..." }`
+ * We also match on the error message text as a fallback.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers
+ */
+export function isBlockedAddressError(error: { code?: string; message?: string }): boolean {
+  const msg = (error.message ?? "").toLowerCase();
+  return (
+    error.code === "4236" ||
+    msg.includes("blocked_address") ||
+    msg.includes("blocked due to a history")
+  );
+}
+
 export function mapHttpError(status: number): string {
   switch (status) {
     case 429:

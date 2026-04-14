@@ -39,7 +39,13 @@ import type {
   SetShippingMethodInput,
   PersistOrderResult,
 } from "@ecommerce/shared";
-import { logError, shippingAddressInputSchema, customerInputSchema } from "@ecommerce/shared";
+import {
+  logError,
+  shippingAddressInputSchema,
+  customerInputSchema,
+  isBlockedAddressError,
+  BLOCKED_ADDRESS_USER_MESSAGE,
+} from "@ecommerce/shared";
 import { persistOrder } from "@ecommerce/shared/server/utils";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
@@ -96,6 +102,15 @@ export const setShippingAddressFn = createServerFn({ method: "POST" })
         message: result.error.message,
         context: { violetCartId, step: "setShippingAddress" },
       });
+
+      // Translate Violet's blocked_address error (code 4236) into a user-friendly message.
+      // @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers — Blocked Addresses
+      if (isBlockedAddressError(result.error)) {
+        return {
+          data: null,
+          error: { code: "VIOLET.BLOCKED_ADDRESS", message: BLOCKED_ADDRESS_USER_MESSAGE },
+        };
+      }
     }
 
     return result;
@@ -329,6 +344,14 @@ export const setBillingAddressFn = createServerFn({ method: "POST" })
         message: result.error.message,
         context: { violetCartId, step: "setBillingAddress" },
       });
+
+      // Translate Violet's blocked_address error (code 4236) into a user-friendly message.
+      if (isBlockedAddressError(result.error)) {
+        return {
+          data: null,
+          error: { code: "VIOLET.BLOCKED_ADDRESS", message: BLOCKED_ADDRESS_USER_MESSAGE },
+        };
+      }
     }
 
     return result;
