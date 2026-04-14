@@ -568,6 +568,7 @@ export const persistAndConfirmOrderFn = createServerFn({ method: "POST" })
             merchantName: bag.merchantName,
             status: bag.status,
             financialStatus: bag.financialStatus,
+            fulfillmentStatus: bag.fulfillmentStatus,
             subtotal: bag.subtotal,
             shippingTotal: bag.shippingTotal,
             taxTotal: bag.taxTotal,

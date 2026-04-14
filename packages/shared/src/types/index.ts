@@ -45,6 +45,7 @@ export type {
   OrderSubmitResult,
   BagStatus,
   BagFinancialStatus,
+  FulfillmentStatus,
   WebhookEvent,
   WebhookEventType,
   OfferWebhookPayload,

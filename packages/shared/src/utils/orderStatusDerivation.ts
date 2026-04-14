@@ -50,6 +50,23 @@ export const BAG_STATUS_LABELS: Record<string, string> = {
 };
 
 /**
+ * Maps fulfillment statuses (delivery progress) to user-friendly display labels.
+ *
+ * These are distinct from `BAG_STATUS_LABELS` — fulfillment status tracks
+ * the physical delivery progress independently from the bag's overall lifecycle.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag
+ */
+export const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
+  PROCESSING: "Preparing",
+  SHIPPED: "Shipped",
+  PARTIALLY_SHIPPED: "Partially Shipped",
+  DELIVERED: "Delivered",
+  COULD_NOT_DELIVER: "Delivery Failed",
+  RETURNED: "Returned",
+};
+
+/**
  * Maps derived order statuses to user-friendly display labels.
  *
  * Includes both Violet-native statuses (IN_PROGRESS, COMPLETED, etc.) and

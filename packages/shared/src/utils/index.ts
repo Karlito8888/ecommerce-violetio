@@ -17,6 +17,7 @@ export {
   deriveOrderStatusFromBags,
   getBagStatusSummary,
   BAG_STATUS_LABELS,
+  FULFILLMENT_STATUS_LABELS,
   ORDER_STATUS_LABELS,
 } from "./orderStatusDerivation.js";
 export { webUrlToMobilePath, mobilePushDataToPath, ROUTE_MAPPINGS } from "./deepLink.js";

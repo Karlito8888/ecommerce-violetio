@@ -179,6 +179,38 @@ export type BagStatus =
   | "BACKORDERED";
 
 /**
+ * Violet bag fulfillment status — tracks delivery state independently from bag status and payment.
+ *
+ * ## State machine transitions
+ * ```
+ * PROCESSING → PARTIALLY_SHIPPED → SHIPPED (standard fulfillment)
+ * SHIPPED → DELIVERED (delivery confirmed)
+ * SHIPPED → COULD_NOT_DELIVER (delivery failed)
+ * Any → RETURNED (all items returned to merchant)
+ * ```
+ *
+ * - `PROCESSING`: bag not yet fulfilled — items being prepared by merchant
+ * - `SHIPPED`: all items in the bag have been fulfilled (shipped)
+ * - `PARTIALLY_SHIPPED`: some items fulfilled, others still processing
+ * - `DELIVERED`: all items delivered to the shopper (if supported by platform)
+ * - `COULD_NOT_DELIVER`: delivery failed (if supported by platform)
+ * - `RETURNED`: all items returned to the merchant
+ *
+ * This status is independent from `BagStatus` (overall lifecycle) and
+ * `BagFinancialStatus` (payment state). A bag can be SHIPPED (fulfillment)
+ * while still ACCEPTED (bag status) and PAID (financial).
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag
+ */
+export type FulfillmentStatus =
+  | "PROCESSING"
+  | "SHIPPED"
+  | "PARTIALLY_SHIPPED"
+  | "DELIVERED"
+  | "COULD_NOT_DELIVER"
+  | "RETURNED";
+
+/**
  * Financial status of a merchant bag — tracks payment state independently from fulfillment.
  *
  * ## State machine transitions
@@ -287,6 +319,13 @@ export interface OrderBag {
   status: BagStatus;
   /** Financial/payment status — tracks payment capture and refund state */
   financialStatus: BagFinancialStatus;
+  /**
+   * Fulfillment/delivery status — tracks shipping progress independently.
+   * PROCESSING → PARTIALLY_SHIPPED → SHIPPED → DELIVERED
+   *
+   * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/bags/states-of-a-bag
+   */
+  fulfillmentStatus: FulfillmentStatus;
   items: OrderBagItem[];
   /** Subtotal in integer cents (sum of all item line prices) */
   subtotal: number;

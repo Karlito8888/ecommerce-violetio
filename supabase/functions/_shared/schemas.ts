@@ -333,6 +333,7 @@ export const violetBagWebhookPayloadSchema = z.object({
   order_id: z.number(),
   status: z.string(),
   financial_status: z.string().optional(),
+  fulfillment_status: z.string().optional(),
   merchant_id: z.number(),
   merchant_name: z.string().optional(),
   tracking_number: z.string().optional(),

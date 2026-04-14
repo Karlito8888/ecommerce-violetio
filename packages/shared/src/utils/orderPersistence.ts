@@ -81,6 +81,7 @@ export async function persistOrder(
           merchant_name: bag.merchantName,
           status: bag.status,
           financial_status: bag.financialStatus,
+          fulfillment_status: bag.fulfillmentStatus ?? "PROCESSING",
           subtotal: bag.subtotal,
           shipping_total: bag.shippingTotal,
           tax_total: bag.taxTotal,

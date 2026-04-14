@@ -120,6 +120,12 @@ export interface OrderBagRow {
   status: string;
   /** Bag financial/payment status — updated via BAG_* webhooks */
   financial_status: string;
+  /**
+   * Bag fulfillment/delivery status — tracks shipping progress independently.
+   * PROCESSING → SHIPPED → DELIVERED (standard flow).
+   * Updated via BAG_* webhooks.
+   */
+  fulfillment_status: string;
   /** Subtotal in integer cents */
   subtotal: number;
   /** Shipping cost in integer cents */
@@ -258,6 +264,11 @@ export interface PersistOrderBagInput {
   status: string;
   /** Bag financial status from Violet */
   financialStatus: string;
+  /**
+   * Bag fulfillment/delivery status — tracks shipping progress independently.
+   * PROCESSING → SHIPPED → DELIVERED (standard flow).
+   */
+  fulfillmentStatus: string;
   /** Subtotal in integer cents */
   subtotal: number;
   /** Shipping cost in integer cents */

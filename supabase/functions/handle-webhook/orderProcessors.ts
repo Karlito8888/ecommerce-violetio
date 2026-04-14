@@ -291,6 +291,9 @@ export async function processBagUpdated(
     if (payload.financial_status) {
       updateData.financial_status = payload.financial_status;
     }
+    if (payload.fulfillment_status) {
+      updateData.fulfillment_status = payload.fulfillment_status;
+    }
 
     const { error } = await supabase
       .from("order_bags")
@@ -371,6 +374,7 @@ export async function processBagShipped(
       status: payload.status,
     };
     if (payload.financial_status) updateData.financial_status = payload.financial_status;
+    if (payload.fulfillment_status) updateData.fulfillment_status = payload.fulfillment_status;
     if (payload.tracking_number) updateData.tracking_number = payload.tracking_number;
     if (payload.tracking_url) updateData.tracking_url = payload.tracking_url;
     if (payload.carrier) updateData.carrier = payload.carrier;
@@ -627,6 +631,7 @@ export async function processBagRefunded(
     // Step 1: Update bag status (critical — must complete before returning)
     const updateData: Record<string, unknown> = { status: payload.status };
     if (payload.financial_status) updateData.financial_status = payload.financial_status;
+    if (payload.fulfillment_status) updateData.fulfillment_status = payload.fulfillment_status;
     const { error: bagError } = await supabase
       .from("order_bags")
       .update(updateData)
