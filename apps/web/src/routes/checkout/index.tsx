@@ -26,6 +26,8 @@ import {
   priceCartFn,
   setCustomerFn,
   setBillingAddressFn,
+  addDiscountFn,
+  removeDiscountFn,
   getPaymentIntentFn,
   submitOrderFn,
   clearCartCookieFn,
@@ -1246,6 +1248,11 @@ function CheckoutPage() {
   const [billingError, setBillingError] = useState<string | null>(null);
   const [isBillingSubmitting, setIsBillingSubmitting] = useState(false);
 
+  // ── Discount / Promo code ───────────────────────────────────────────
+  const [promoCode, setPromoCode] = useState("");
+  const [isPromoSubmitting, setIsPromoSubmitting] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
   // ── Stripe payment (Story 4.4) ──────────────────────────────────────
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
@@ -1588,6 +1595,56 @@ function CheckoutPage() {
     setIsBillingSubmitting(false);
   }
 
+  // ── Discount / Promo code ────────────────────────────────────────────
+  async function handleApplyPromo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!promoCode.trim() || !cart || isPromoSubmitting) return;
+
+    // Auto-detect merchant_id from bags
+    // For single-bag carts, use that bag's merchant. For multi-bag, use the first.
+    const targetBag = cart.bags[0];
+    if (!targetBag) return;
+
+    setIsPromoSubmitting(true);
+    setPromoError(null);
+
+    // Use guest email if available (for customer-restricted discounts)
+    const email = guestInfo.email.trim() || undefined;
+
+    const result = await addDiscountFn({
+      data: {
+        code: promoCode.trim(),
+        merchantId: targetBag.merchantId,
+        ...(email ? { email } : {}),
+      },
+    });
+
+    if (result.error) {
+      setPromoError(result.error.message);
+      setIsPromoSubmitting(false);
+      return;
+    }
+
+    setPromoCode("");
+    setIsPromoSubmitting(false);
+    if (violetCartId) {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cart.detail(violetCartId) });
+    }
+  }
+
+  async function handleRemoveDiscount(discountId: string) {
+    if (!violetCartId) return;
+
+    const result = await removeDiscountFn({ data: { discountId } });
+    if (result.error) {
+      setPromoError(result.error.message);
+      return;
+    }
+
+    setPromoError(null);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.cart.detail(violetCartId) });
+  }
+
   // ── Order success handler ───────────────────────────────────────────
 
   /**
@@ -1649,7 +1706,10 @@ function CheckoutPage() {
   const subtotalAll = cart?.bags.reduce((sum, b) => sum + b.subtotal, 0) ?? 0;
   const taxAll = cart?.bags.reduce((sum, b) => sum + b.tax, 0) ?? 0;
   const shippingAll = cart?.bags.reduce((sum, b) => sum + b.shippingTotal, 0) ?? 0;
-  const totalAll = subtotalAll + taxAll + shippingAll;
+  const discountAll = cart?.bags.reduce((sum, b) => sum + b.discountTotal, 0) ?? 0;
+  // All discounts applied to bags across all merchants
+  const allDiscounts = cart?.bags.flatMap((b) => b.discounts) ?? [];
+  const totalAll = subtotalAll + taxAll + shippingAll - discountAll;
 
   // ── Loading / empty states ──────────────────────────────────────────
   if (isCartLoading) {
@@ -2450,6 +2510,12 @@ function CheckoutPage() {
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotalAll)}</span>
               </div>
+              {discountAll > 0 && (
+                <div className="checkout__summary-line checkout__summary-line--discount">
+                  <span>Discount</span>
+                  <span>-{formatPrice(discountAll)}</span>
+                </div>
+              )}
               <div className="checkout__summary-line">
                 <span>Est. Shipping</span>
                 <span>{shippingAll > 0 ? formatPrice(shippingAll) : "—"}</span>
@@ -2463,6 +2529,72 @@ function CheckoutPage() {
                 <span>{formatPrice(totalAll)}</span>
               </div>
             </div>
+
+            {/* Promo code input */}
+            <form onSubmit={handleApplyPromo} className="checkout__promo">
+              <label className="checkout__promo-label" htmlFor="promo-code">
+                Promo Code
+              </label>
+              <div className="checkout__promo-row">
+                <input
+                  id="promo-code"
+                  className="checkout__promo-input"
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value);
+                    if (promoError) setPromoError(null);
+                  }}
+                  placeholder="Enter code"
+                  autoComplete="off"
+                  disabled={isPromoSubmitting}
+                />
+                <button
+                  type="submit"
+                  className="checkout__promo-btn"
+                  disabled={!promoCode.trim() || isPromoSubmitting}
+                >
+                  {isPromoSubmitting ? "Applying…" : "Apply"}
+                </button>
+              </div>
+              {promoError && (
+                <p className="checkout__field-error" role="alert" style={{ marginTop: "0.5rem" }}>
+                  {promoError}
+                </p>
+              )}
+            </form>
+
+            {/* Applied discounts */}
+            {allDiscounts.length > 0 && (
+              <div className="checkout__discounts">
+                {allDiscounts.map((d) => (
+                  <div key={d.id} className="checkout__discount-tag">
+                    <span className="checkout__discount-code">{d.code}</span>
+                    {d.status === "APPLIED" && d.amountTotal != null && (
+                      <span className="checkout__discount-amount">
+                        -{formatPrice(d.amountTotal)}
+                      </span>
+                    )}
+                    {d.status === "PENDING" && (
+                      <span className="checkout__discount-status">(pending)</span>
+                    )}
+                    {(d.status === "INVALID" || d.status === "EXPIRED" || d.status === "ERROR") && (
+                      <span className="checkout__discount-status checkout__discount-status--invalid">
+                        ({d.status.toLowerCase()})
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="checkout__discount-remove"
+                      onClick={() => handleRemoveDiscount(d.id)}
+                      aria-label={`Remove discount ${d.code}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <p className="checkout__affiliate">
               We earn a commission on purchases — this doesn&apos;t affect your price.

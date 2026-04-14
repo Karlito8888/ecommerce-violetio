@@ -25,14 +25,18 @@ export interface Bag {
   merchantId: string;
   merchantName: string;
   items: CartItem[];
-  /** Subtotal in integer cents */
+  /** Subtotal in integer cents (before discount) */
   subtotal: number;
   /** Tax in integer cents */
   tax: number;
   /** Shipping total in integer cents */
   shippingTotal: number;
+  /** Discount total in integer cents — sum of all APPLIED discounts after pricing */
+  discountTotal: number;
   /** Per-bag errors from Violet (e.g., "Item X out of stock") */
   errors: BagError[];
+  /** Discount codes applied to this bag — only APPLIED are used at submit */
+  discounts: DiscountItem[];
   /**
    * True when ALL items in this bag are DIGITAL/VIRTUAL/BUNDLED (no shipping needed).
    * When true, shipping method selection is skipped during checkout.
@@ -210,6 +214,78 @@ export interface CustomerInput {
   lastName: string;
   /** Per-merchant marketing opt-in (FR20). false by default. */
   marketingConsent?: boolean;
+}
+
+// ─── Discounts ──────────────────────────────────────────────────────────────
+
+/**
+ * Discount status as defined by Violet.
+ *
+ * - `PENDING`: Discount added, not yet validated by merchant platform (WooCommerce, ECWID)
+ * - `APPLIED`: Validated and applied by merchant platform — will be used at submit
+ * - `INVALID`: Code not recognized by platform — auto-removed at submit
+ * - `NOT_SUPPORTED`: Platform does not support discount codes
+ * - `ERROR`: Unexpected error — auto-removed at submit
+ * - `EXPIRED`: Previously applied but no longer valid — auto-removed at submit
+ *
+ * Discounts are **non-blocking**: only `APPLIED` discounts are considered at
+ * order submission. All other statuses are silently removed.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts
+ */
+export type DiscountStatus =
+  | "PENDING"
+  | "APPLIED"
+  | "INVALID"
+  | "NOT_SUPPORTED"
+  | "ERROR"
+  | "EXPIRED";
+
+/**
+ * A discount code applied to a merchant bag within the cart.
+ *
+ * Violet validates each code against the merchant's e-commerce platform.
+ * `amountTotal` and `valueType` are only populated after the cart is priced.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export interface DiscountItem {
+  /** Violet discount ID */
+  id: string;
+  /** Bag this discount belongs to */
+  bagId: string;
+  /** Current status — only APPLIED discounts are used at submit */
+  status: DiscountStatus;
+  /** Discount type: "CODE" for promo codes */
+  type: string;
+  /** The promo code entered by the shopper */
+  code: string;
+  /** "PERCENTAGE" or "FIXED" — only available after pricing */
+  valueType?: string;
+  /** Discount amount in integer cents — only available after pricing */
+  amountTotal?: number;
+  /** ISO 8601 creation date */
+  dateCreated?: string;
+}
+
+/**
+ * Input for applying a discount code to a cart.
+ *
+ * `merchantId` must match a merchant that has SKUs in the cart, otherwise
+ * the discount is silently ignored by Violet.
+ *
+ * `email` is optional and used for customer-restricted discounts (e.g.,
+ * "Once Per Customer"). Takes priority over the cart-level customer email.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export interface DiscountInput {
+  /** The discount/promo code */
+  code: string;
+  /** Merchant ID that this code applies to */
+  merchantId: string;
+  /** Optional email for customer-restricted discounts */
+  email?: string;
 }
 
 // ─── Shipping (Story 4.3) ──────────────────────────────────────────────────

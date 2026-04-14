@@ -21,6 +21,7 @@ import type {
   CountryOption,
   Distribution,
   CollectionItem,
+  DiscountInput,
 } from "../types/index.js";
 import type { SupplierAdapter } from "./supplierAdapter.js";
 import { VioletTokenManager } from "../clients/violetAuth.js";
@@ -45,6 +46,8 @@ import {
 import {
   setCustomer as setCustomerFn,
   setBillingAddress as setBillingAddressFn,
+  addDiscount as addDiscountFn,
+  removeDiscount as removeDiscountFn,
   getPaymentIntent as getPaymentIntentFn,
   submitOrder as submitOrderFn,
 } from "./violetCheckout.js";
@@ -176,6 +179,16 @@ export class VioletAdapter implements SupplierAdapter {
     address: ShippingAddressInput,
   ): Promise<ApiResponse<void>> {
     return setBillingAddressFn(this.getCtx(), violetCartId, address);
+  }
+
+  // ─── Checkout — Discounts ───────────────────────────────────────────
+
+  async addDiscount(violetCartId: string, input: DiscountInput): Promise<ApiResponse<Cart>> {
+    return addDiscountFn(this.getCtx(), violetCartId, input);
+  }
+
+  async removeDiscount(violetCartId: string, discountId: string): Promise<ApiResponse<Cart>> {
+    return removeDiscountFn(this.getCtx(), violetCartId, discountId);
   }
 
   // ─── Checkout — Payment (Story 4.4) ─────────────────────────────

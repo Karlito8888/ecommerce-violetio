@@ -46,6 +46,29 @@ export const violetBagErrorSchema = z.object({
 });
 
 /**
+ * Validates a discount entry within a Violet bag response.
+ *
+ * After pricing, `value_type` and `amount_total` are populated.
+ * Before pricing, only `id`, `bag_id`, `status`, `type`, and `code` are present.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export const violetDiscountSchema = z.object({
+  id: z.number(),
+  bag_id: z.number(),
+  status: z
+    .enum(["PENDING", "APPLIED", "INVALID", "NOT_SUPPORTED", "ERROR", "EXPIRED"])
+    .optional()
+    .default("PENDING"),
+  type: z.string().optional().default("CODE"),
+  code: z.string(),
+  value_type: z.string().optional(),
+  amount_total: z.number().nonnegative().optional(),
+  date_created: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+/**
  * Validates a SKU line item within a Violet bag (OrderSku in cart response).
  *
  * ## product_type field
@@ -74,7 +97,11 @@ export const violetBagSchema = z.object({
   subtotal: z.number().nonnegative().default(0),
   tax: z.number().nonnegative().default(0),
   shipping_total: z.number().nonnegative().default(0),
+  /** Sum of all APPLIED discounts in integer cents — populated after pricing */
+  discount_total: z.number().nonnegative().default(0),
   errors: z.array(violetBagErrorSchema).optional().default([]),
+  /** Discount codes applied to this bag */
+  discounts: z.array(violetDiscountSchema).optional().default([]),
 });
 
 /**

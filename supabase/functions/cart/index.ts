@@ -918,6 +918,75 @@ Deno.serve(async (req: Request) => {
     return json({ data: transformed, error: null });
   }
 
+  // ── Route: POST /cart/{id}/discounts — add discount code ───────────
+  const discountsMatch = path.match(/^\/([^/]+)\/discounts$/);
+  if (req.method === "POST" && discountsMatch) {
+    const violetCartId = discountsMatch[1];
+    const body = await req.json();
+
+    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/discounts`, {
+      method: "POST",
+      headers: violetHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Add discount failed (${res.status}): ${text}`,
+        { violetCartId, route: "POST /cart/{id}/discounts", httpStatus: res.status },
+        userId,
+      );
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Add discount failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    const cartData = await res.json();
+    const transformed = transformCart(cartData);
+    if (!transformed) {
+      return errorResponse("CART.INVALID_RESPONSE", "Violet returned invalid cart data", 502);
+    }
+    return json({ data: transformed, error: null });
+  }
+
+  // ── Route: DELETE /cart/{id}/discounts/{discountId} — remove discount ──
+  const discountDeleteMatch = path.match(/^\/([^/]+)\/discounts\/([^/]+)$/);
+  if (req.method === "DELETE" && discountDeleteMatch) {
+    const violetCartId = discountDeleteMatch[1];
+    const discountId = discountDeleteMatch[2];
+
+    const res = await fetch(
+      `${VIOLET_API_BASE}/checkout/cart/${violetCartId}/discounts/${discountId}`,
+      { method: "DELETE", headers: violetHeaders },
+    );
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      logEdgeFunctionError(
+        "VIOLET.API_ERROR",
+        `Remove discount failed (${res.status}): ${text}`,
+        { violetCartId, route: "DELETE /cart/{id}/discounts/{discountId}", httpStatus: res.status },
+        userId,
+      );
+      return errorResponse(
+        "VIOLET.API_ERROR",
+        `Remove discount failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+
+    const cartData = await res.json();
+    const transformed = transformCart(cartData);
+    if (!transformed) {
+      return errorResponse("CART.INVALID_RESPONSE", "Violet returned invalid cart data", 502);
+    }
+    return json({ data: transformed, error: null });
+  }
+
   // ── Route: POST /cart/{id}/customer — set customer info (Story 4.4) ──
   // MUST be checked before /submit to avoid path conflict.
   const customerMatch = path.match(/^\/([^/]+)\/customer$/);

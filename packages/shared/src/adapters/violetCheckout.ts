@@ -13,10 +13,13 @@ import type {
   BagStatus,
   BagFinancialStatus,
   OrderSubmitInput,
+  DiscountInput,
+  Cart,
 } from "../types/index.js";
 import { violetCartResponseSchema } from "../schemas/index.js";
 import { fetchWithRetry } from "./violetFetch.js";
 import type { CatalogContext } from "./violetCatalog.js";
+import { parseAndTransformCart } from "./violetCartTransforms.js";
 
 /**
  * Sets guest customer info on the cart via POST /checkout/cart/{id}/customer.
@@ -76,6 +79,71 @@ export async function setBillingAddress(
   );
   if (result.error) return { data: null, error: result.error };
   return { data: undefined, error: null };
+}
+
+/**
+ * Applies a discount/promo code to a cart.
+ *
+ * Returns the full cart with discounts applied to the correct bags.
+ * `merchantId` must match a merchant with SKUs in the cart, otherwise
+ * the discount is silently ignored.
+ *
+ * ## Discount statuses
+ * - `APPLIED`: validated and active — will be used at submit
+ * - `INVALID` / `ERROR` / `EXPIRED`: non-blocking, auto-removed at submit
+ *
+ * ## Customer-restricted discounts
+ * If the code requires an email (e.g., "Once Per Customer"), provide it
+ * via `input.email`. This takes priority over the cart-level customer email.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export async function addDiscount(
+  ctx: CatalogContext,
+  violetCartId: string,
+  input: DiscountInput,
+): Promise<ApiResponse<Cart>> {
+  const body: Record<string, unknown> = {
+    code: input.code,
+    merchant_id: Number(input.merchantId),
+  };
+  if (input.email) {
+    body.email = input.email;
+  }
+
+  const result = await fetchWithRetry(
+    `${ctx.apiBase}/checkout/cart/${violetCartId}/discounts`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+    ctx.tokenManager,
+  );
+  if (result.error) return { data: null, error: result.error };
+
+  return parseAndTransformCart(result.data);
+}
+
+/**
+ * Removes a discount from a cart.
+ *
+ * Returns the full cart without the removed discount.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export async function removeDiscount(
+  ctx: CatalogContext,
+  violetCartId: string,
+  discountId: string,
+): Promise<ApiResponse<Cart>> {
+  const result = await fetchWithRetry(
+    `${ctx.apiBase}/checkout/cart/${violetCartId}/discounts/${discountId}`,
+    { method: "DELETE" },
+    ctx.tokenManager,
+  );
+  if (result.error) return { data: null, error: result.error };
+
+  return parseAndTransformCart(result.data);
 }
 
 /**

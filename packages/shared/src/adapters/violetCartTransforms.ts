@@ -7,7 +7,7 @@
  * Extracted from VioletAdapter for testability and reuse.
  */
 
-import type { Cart, Bag, BagError, CartItem } from "../types/index.js";
+import type { Cart, Bag, BagError, CartItem, DiscountItem } from "../types/index.js";
 import { violetCartResponseSchema } from "../schemas/index.js";
 import type { VioletBagResponse, VioletCartSkuResponse } from "../schemas/index.js";
 
@@ -32,8 +32,11 @@ export function parseAndTransformCart(
   const violet = parsed.data;
   const bags = violet.bags.map((bag) => transformBag(bag));
 
-  // Total = sum of (subtotal + tax + shippingTotal) per bag.
-  const total = bags.reduce((sum, b) => sum + b.subtotal + b.tax + b.shippingTotal, 0);
+  // Total = sum of (subtotal + tax + shippingTotal - discountTotal) per bag.
+  const total = bags.reduce(
+    (sum, b) => sum + b.subtotal + b.tax + b.shippingTotal - b.discountTotal,
+    0,
+  );
 
   // Build a partial Cart — id and userId are set by the Server Function
   // after persisting to Supabase. violetCartId is the Violet integer ID.
@@ -76,6 +79,17 @@ export function transformBag(raw: VioletBagResponse): Bag {
     externalPlatform: e.external_platform,
   }));
 
+  const discounts: DiscountItem[] = raw.discounts.map((d) => ({
+    id: String(d.id),
+    bagId: String(d.bag_id),
+    status: d.status,
+    type: d.type,
+    code: d.code,
+    valueType: d.value_type,
+    amountTotal: d.amount_total,
+    dateCreated: d.date_created,
+  }));
+
   // Violet returns subtotal=0 before checkout steps (shipping, tax).
   // Compute from items when Violet hasn't calculated yet.
   const computedSubtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
@@ -89,7 +103,9 @@ export function transformBag(raw: VioletBagResponse): Bag {
     subtotal,
     tax: raw.tax,
     shippingTotal: raw.shipping_total,
+    discountTotal: raw.discount_total,
     errors,
+    discounts,
     /**
      * A bag is digital when ALL its items are non-PHYSICAL.
      * Per Violet docs: "When all SKUs in a bag are digital, you should skip

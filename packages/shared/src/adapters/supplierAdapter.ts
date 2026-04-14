@@ -21,6 +21,7 @@ import type {
   Distribution,
   CategoryItem,
   CollectionItem,
+  DiscountInput,
 } from "../types/index.js";
 
 /**
@@ -204,6 +205,27 @@ export interface SupplierAdapter {
     violetCartId: string,
     address: ShippingAddressInput,
   ): Promise<ApiResponse<void>>;
+
+  // Checkout — Discounts
+
+  /**
+   * Applies a discount/promo code to a cart.
+   *
+   * Returns the full cart with discounts applied to the correct bags.
+   * `merchantId` must match a merchant with SKUs in the cart.
+   *
+   * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+   */
+  addDiscount(violetCartId: string, input: DiscountInput): Promise<ApiResponse<Cart>>;
+
+  /**
+   * Removes a discount from a cart.
+   *
+   * Returns the full cart without the removed discount.
+   *
+   * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+   */
+  removeDiscount(violetCartId: string, discountId: string): Promise<ApiResponse<Cart>>;
 
   // Checkout — Payment (Story 4.4)
 

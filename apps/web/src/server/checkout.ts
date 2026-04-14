@@ -38,6 +38,7 @@ import type {
   ShippingMethodsAvailable,
   SetShippingMethodInput,
   PersistOrderResult,
+  DiscountInput,
 } from "@ecommerce/shared";
 import {
   logError,
@@ -352,6 +353,84 @@ export const setBillingAddressFn = createServerFn({ method: "POST" })
           error: { code: "VIOLET.BLOCKED_ADDRESS", message: BLOCKED_ADDRESS_USER_MESSAGE },
         };
       }
+    }
+
+    return result;
+  });
+
+// ─── Checkout — Discounts ─────────────────────────────────────────────────
+
+/**
+ * Applies a discount/promo code to the active cart.
+ *
+ * ## Flow
+ * 1. Read `violet_cart_id` from HttpOnly cookie
+ * 2. POST /checkout/cart/{id}/discounts with code + merchant_id
+ * 3. Return updated Cart with discounts applied to correct bags
+ *
+ * ## Discount behavior
+ * - Violet validates the code against the merchant's platform
+ * - Only `APPLIED` discounts are used at order submission
+ * - `INVALID` / `ERROR` / `EXPIRED` are non-blocking, auto-removed at submit
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export const addDiscountFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    const schema = z.object({
+      code: z.string().min(1, "Discount code is required").max(100, "Code too long"),
+      merchantId: z.string().min(1, "Merchant ID is required"),
+      email: z.string().email().optional(),
+    });
+    return schema.parse(input) as DiscountInput;
+  })
+  .handler(async ({ data }): Promise<ApiResponse<Cart>> => {
+    const violetCartId = getCookie("violet_cart_id");
+    if (!violetCartId) {
+      return { data: null, error: { code: "NO_CART", message: "No active cart" } };
+    }
+    const adapter = getAdapter();
+    const result = await adapter.addDiscount(violetCartId, data);
+
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "CHECKOUT.ADD_DISCOUNT_FAILED",
+        message: result.error.message,
+        context: { violetCartId, step: "addDiscount", code: data.code },
+      });
+    }
+
+    return result;
+  });
+
+/**
+ * Removes a discount from the active cart.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export const removeDiscountFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    const schema = z.object({
+      discountId: z.string().min(1, "Discount ID is required"),
+    });
+    return schema.parse(input);
+  })
+  .handler(async ({ data }): Promise<ApiResponse<Cart>> => {
+    const violetCartId = getCookie("violet_cart_id");
+    if (!violetCartId) {
+      return { data: null, error: { code: "NO_CART", message: "No active cart" } };
+    }
+    const adapter = getAdapter();
+    const result = await adapter.removeDiscount(violetCartId, data.discountId);
+
+    if (result.error) {
+      logError(getSupabaseServer(), {
+        source: "web",
+        error_type: "CHECKOUT.REMOVE_DISCOUNT_FAILED",
+        message: result.error.message,
+        context: { violetCartId, step: "removeDiscount", discountId: data.discountId },
+      });
     }
 
     return result;

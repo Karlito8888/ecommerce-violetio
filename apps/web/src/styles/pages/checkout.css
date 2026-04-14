@@ -488,3 +488,124 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Promo Code ─────────────────────────────────────────────────────────── */
+
+.checkout__promo {
+  margin-top: 1.25rem;
+}
+
+.checkout__promo-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-steel);
+  margin-bottom: 0.375rem;
+}
+
+.checkout__promo-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.checkout__promo-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.checkout__promo-input:focus {
+  outline: none;
+  border-color: var(--color-sienna);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-sienna) 20%, transparent);
+}
+
+.checkout__promo-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-sienna);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.checkout__promo-btn:hover:not(:disabled) {
+  background: var(--color-sienna);
+  color: #fff;
+  border-color: var(--color-sienna);
+}
+
+.checkout__promo-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ─── Applied Discounts ──────────────────────────────────────────────────── */
+
+.checkout__discounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.checkout__discount-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-success, #22c55e);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-success, #22c55e) 8%, transparent);
+  font-size: 0.8125rem;
+}
+
+.checkout__discount-code {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.checkout__discount-amount {
+  color: var(--color-success, #22c55e);
+  font-weight: 600;
+}
+
+.checkout__discount-status {
+  font-size: 0.75rem;
+  color: var(--color-steel);
+}
+
+.checkout__discount-status--invalid {
+  color: var(--color-danger, #ef4444);
+}
+
+.checkout__discount-remove {
+  background: none;
+  border: none;
+  color: var(--color-steel);
+  cursor: pointer;
+  font-size: 1.125rem;
+  line-height: 1;
+  padding: 0 0.125rem;
+  transition: color 0.15s;
+}
+
+.checkout__discount-remove:hover {
+  color: var(--color-danger, #ef4444);
+}
+
+.checkout__summary-line--discount {
+  color: var(--color-success, #22c55e);
+  font-weight: 500;
+}
