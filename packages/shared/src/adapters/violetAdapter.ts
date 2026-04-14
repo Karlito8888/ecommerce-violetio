@@ -55,6 +55,7 @@ import {
   enableCollectionSync as enableCollectionSyncFn,
   enableMetadataSync as enableMetadataSyncFn,
   enableSkuMetadataSync as enableSkuMetadataSyncFn,
+  enableContextualPricing as enableContextualPricingFn,
 } from "./violetCollections.js";
 import type { CollectionsCacheState } from "./violetCollections.js";
 import {
@@ -186,8 +187,9 @@ export class VioletAdapter implements SupplierAdapter {
   async submitOrder(
     violetCartId: string,
     appOrderId: string,
+    orderCustomer?: import("../types/order.types.js").OrderSubmitInput["orderCustomer"],
   ): Promise<ApiResponse<OrderSubmitResult>> {
-    return submitOrderFn(this.getCtx(), violetCartId, appOrderId);
+    return submitOrderFn(this.getCtx(), violetCartId, appOrderId, orderCustomer);
   }
 
   // ─── Collections (sync_collections feature) ────────────────────────
@@ -208,8 +210,9 @@ export class VioletAdapter implements SupplierAdapter {
     collectionId: string,
     page = 1,
     pageSize = 24,
+    countryCode?: string,
   ): Promise<ApiResponse<PaginatedResult<Product>>> {
-    return getCollectionOffersFn(this.getCtx(), collectionId, page, pageSize);
+    return getCollectionOffersFn(this.getCtx(), collectionId, page, pageSize, countryCode);
   }
 
   async getCollectionOfferIds(
@@ -230,6 +233,10 @@ export class VioletAdapter implements SupplierAdapter {
 
   async enableSkuMetadataSync(merchantId: string): Promise<ApiResponse<void>> {
     return enableSkuMetadataSyncFn(this.getCtx(), merchantId);
+  }
+
+  async enableContextualPricing(merchantId: string): Promise<ApiResponse<void>> {
+    return enableContextualPricingFn(this.getCtx(), merchantId);
   }
 
   // ─── Not implemented (future stories) ─────────────────────────────

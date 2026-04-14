@@ -168,6 +168,22 @@ export interface CreateCartInput {
   userId: string | null;
   /** Anonymous session ID for guest carts */
   sessionId: string | null;
+
+  // ─── Quick Checkout fields (optional) ───────────────────────────────
+  // When provided, Violet processes SKUs + customer + address in a single
+  // call, reducing e-commerce API requests from ~8 to ~4.
+  // @see https://docs.violet.io/prism/checkout-guides/guides/utilizing-quick-checkout
+
+  /** SKU(s) to add at cart creation time (Quick Checkout). */
+  skus?: Array<{ skuId: string; quantity: number }>;
+
+  /** Customer info + shipping address (Quick Checkout). */
+  customer?: CustomerInput & {
+    shippingAddress: ShippingAddressInput;
+    /** If true, billing address = shipping address (default: true) */
+    sameAddress?: boolean;
+    billingAddress?: ShippingAddressInput;
+  };
 }
 
 // ─── Customer (Story 4.4) ──────────────────────────────────────────────────

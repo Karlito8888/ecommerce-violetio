@@ -12,6 +12,7 @@ import type {
   OrderSubmitResult,
   BagStatus,
   BagFinancialStatus,
+  OrderSubmitInput,
 } from "../types/index.js";
 import { violetCartResponseSchema } from "../schemas/index.js";
 import { fetchWithRetry } from "./violetFetch.js";
@@ -133,12 +134,49 @@ export async function submitOrder(
   ctx: CatalogContext,
   violetCartId: string,
   appOrderId: string,
+  orderCustomer?: OrderSubmitInput["orderCustomer"],
 ): Promise<ApiResponse<OrderSubmitResult>> {
+  // Build submit body — always includes app_order_id for idempotency
+  const body: Record<string, unknown> = {
+    app_order_id: appOrderId,
+  };
+
+  // Apple Pay / Google Pay Checkout: include order_customer with the full
+  // (unredacted) address that Apple provides after payment confirmation.
+  // @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-apple-pay
+  if (orderCustomer) {
+    const customerBody: Record<string, unknown> = {
+      first_name: orderCustomer.firstName,
+      last_name: orderCustomer.lastName,
+      email: orderCustomer.email,
+      shipping_address: {
+        address_1: orderCustomer.shippingAddress.address1,
+        city: orderCustomer.shippingAddress.city,
+        state: orderCustomer.shippingAddress.state,
+        postal_code: orderCustomer.shippingAddress.postalCode,
+        country: orderCustomer.shippingAddress.country,
+        type: "SHIPPING",
+      },
+      same_address: orderCustomer.sameAddress !== false,
+    };
+    if (orderCustomer.billingAddress && orderCustomer.sameAddress === false) {
+      customerBody.billing_address = {
+        address_1: orderCustomer.billingAddress.address1,
+        city: orderCustomer.billingAddress.city,
+        state: orderCustomer.billingAddress.state,
+        postal_code: orderCustomer.billingAddress.postalCode,
+        country: orderCustomer.billingAddress.country,
+        type: "BILLING",
+      };
+    }
+    body.order_customer = customerBody;
+  }
+
   const result = await fetchWithRetry(
     `${ctx.apiBase}/checkout/cart/${violetCartId}/submit`,
     {
       method: "POST",
-      body: JSON.stringify({ app_order_id: appOrderId }),
+      body: JSON.stringify(body),
     },
     ctx.tokenManager,
   );

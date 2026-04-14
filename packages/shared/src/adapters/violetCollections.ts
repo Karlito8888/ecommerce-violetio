@@ -9,6 +9,7 @@ import type { VioletPaginatedResponse, VioletOfferResponse } from "../types/inde
 import { transformOffer } from "./violetTransforms.js";
 import { fetchWithRetry } from "./violetFetch.js";
 import type { CatalogContext } from "./violetCatalog.js";
+import { getCurrencyForCountry } from "../utils/currency.js";
 
 /** TTL for the instance-level collections cache. */
 const COLLECTIONS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -127,10 +128,13 @@ export async function getCollectionOffers(
   collectionId: string,
   page = 1,
   pageSize = 24,
+  countryCode?: string,
 ): Promise<ApiResponse<PaginatedResult<Product>>> {
+  const baseCurrency = countryCode ? getCurrencyForCountry(countryCode) : undefined;
+  const currencyQs = baseCurrency && baseCurrency !== "USD" ? `&base_currency=${baseCurrency}` : "";
   const url =
     `${ctx.apiBase}/catalog/collections/${collectionId}/offers` +
-    `?page=${page}&size=${pageSize}&exclude_hidden=true`;
+    `?page=${page}&size=${pageSize}&exclude_hidden=true${currencyQs}`;
 
   const result = await fetchWithRetry(url, { method: "GET" }, ctx.tokenManager);
 
@@ -232,6 +236,20 @@ export async function enableSkuMetadataSync(
   merchantId: string,
 ): Promise<ApiResponse<void>> {
   return toggleFeatureFlag(ctx, merchantId, "sync_sku_metadata", true);
+}
+
+/**
+ * Enables the `contextual_pricing` feature flag for a merchant.
+ * When enabled, Violet syncs presentment currencies from Shopify
+ * and returns contextual prices when `base_currency` is provided.
+ *
+ * @see https://docs.violet.io/prism/catalog/contextual-pricing
+ */
+export async function enableContextualPricing(
+  ctx: CatalogContext,
+  merchantId: string,
+): Promise<ApiResponse<void>> {
+  return toggleFeatureFlag(ctx, merchantId, "contextual_pricing", true);
 }
 
 /**

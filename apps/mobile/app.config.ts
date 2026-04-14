@@ -91,9 +91,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-router",
     "expo-secure-store",
     "expo-notifications",
-    // Required for native Stripe SDK linking during expo prebuild / EAS Build
-    // merchantIdentifier is iOS-only (Apple Pay) — empty string is fine for Android dev
-    ["@stripe/stripe-react-native", { merchantIdentifier: "" }],
+    "expo-localization",
+    // Required for native Stripe SDK linking during expo prebuild / EAS Build.
+    // merchantIdentifier = your Apple Merchant ID (from Apple Developer portal).
+    // Required for Apple Pay on iOS. Leave empty for Android / card-only flows.
+    // Set EXPO_PUBLIC_APPLE_MERCHANT_ID env var for production.
+    // @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-apple-pay
+    [
+      "@stripe/stripe-react-native",
+      { merchantIdentifier: process.env.EXPO_PUBLIC_APPLE_MERCHANT_ID ?? "" },
+    ],
     [
       "expo-local-authentication",
       {

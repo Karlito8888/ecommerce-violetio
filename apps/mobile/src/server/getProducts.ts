@@ -7,6 +7,8 @@
  */
 import Constants from "expo-constants";
 import type { ProductsFetchFn } from "@ecommerce/shared";
+import { getCurrencyForCountry } from "@ecommerce/shared";
+import * as Localization from "expo-localization";
 
 function getSupabaseUrl(): string {
   return (
@@ -22,9 +24,23 @@ function getAnonKey(): string {
   );
 }
 
+/**
+ * Derives the user's base currency from device locale region.
+ * Falls back to null (Violet will use merchant default currency = USD).
+ *
+ * @see https://docs.violet.io/prism/catalog/contextual-pricing
+ */
+function getDeviceCurrency(): string | null {
+  const region = Localization.getLocales()[0]?.regionCode;
+  if (!region) return null;
+  const currency = getCurrencyForCountry(region);
+  return currency !== "USD" ? currency : null;
+}
+
 export const fetchProductsMobile: ProductsFetchFn = async (params) => {
   const supabaseUrl = getSupabaseUrl();
   const anonKey = getAnonKey();
+  const baseCurrency = getDeviceCurrency();
 
   const qs = new URLSearchParams();
   if (params.page) qs.set("page", String(params.page));
@@ -35,6 +51,7 @@ export const fetchProductsMobile: ProductsFetchFn = async (params) => {
   if (params.inStock === true) qs.set("inStock", "true");
   if (params.sortBy) qs.set("sortBy", params.sortBy);
   if (params.sortDirection) qs.set("sortDirection", params.sortDirection);
+  if (baseCurrency) qs.set("baseCurrency", baseCurrency);
 
   const url = `${supabaseUrl}/functions/v1/get-products?${qs}`;
 

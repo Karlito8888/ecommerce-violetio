@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { ApiResponse, CollectionItem, PaginatedResult, Product } from "@ecommerce/shared";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
+import { getCountryCookieFn } from "./geoip";
 
 /**
  * Server Function — fetch all active collections from Supabase.
@@ -154,6 +155,12 @@ export const getCollectionByIdFn = createServerFn({ method: "GET" })
 export const getCollectionProductsFn = createServerFn({ method: "GET" })
   .inputValidator((input: { collectionId: string; page?: number; pageSize?: number }) => input)
   .handler(async ({ data }): Promise<ApiResponse<PaginatedResult<Product>>> => {
+    const { countryCode } = await getCountryCookieFn();
     const adapter = getAdapter();
-    return adapter.getCollectionOffers(data.collectionId, data.page ?? 1, data.pageSize ?? 12);
+    return adapter.getCollectionOffers(
+      data.collectionId,
+      data.page ?? 1,
+      data.pageSize ?? 12,
+      countryCode ?? undefined,
+    );
   });

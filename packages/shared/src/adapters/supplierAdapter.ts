@@ -78,6 +78,7 @@ export interface SupplierAdapter {
     collectionId: string,
     page?: number,
     pageSize?: number,
+    countryCode?: string,
   ): Promise<ApiResponse<PaginatedResult<Product>>>;
 
   /**
@@ -225,7 +226,11 @@ export interface SupplierAdapter {
    *
    * @see https://docs.violet.io/api-reference/checkout-cart/submit-cart
    */
-  submitOrder(violetCartId: string, appOrderId: string): Promise<ApiResponse<OrderSubmitResult>>;
+  submitOrder(
+    violetCartId: string,
+    appOrderId: string,
+    orderCustomer?: import("../types/order.types.js").OrderSubmitInput["orderCustomer"],
+  ): Promise<ApiResponse<OrderSubmitResult>>;
 
   // Orders
 

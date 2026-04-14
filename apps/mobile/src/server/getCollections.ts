@@ -6,6 +6,8 @@
  */
 import Constants from "expo-constants";
 import type { ApiResponse, CollectionItem, PaginatedResult, Product } from "@ecommerce/shared";
+import { getCurrencyForCountry } from "@ecommerce/shared";
+import * as Localization from "expo-localization";
 
 function getSupabaseUrl(): string {
   return (
@@ -160,13 +162,18 @@ export async function fetchCollectionProductsMobile(
   const supabaseUrl = getSupabaseUrl();
   const anonKey = getAnonKey();
 
+  // Contextual pricing: derive base currency from device locale
+  const region = Localization.getLocales()[0]?.regionCode;
+  const baseCurrency = region ? getCurrencyForCountry(region) : "USD";
+  const currencyQs = baseCurrency && baseCurrency !== "USD" ? `&baseCurrency=${baseCurrency}` : "";
+
   const qs = new URLSearchParams({
     collection_id: collectionId,
     page: String(page),
     pageSize: String(pageSize),
   });
 
-  const url = `${supabaseUrl}/functions/v1/get-collection-products?${qs}`;
+  const url = `${supabaseUrl}/functions/v1/get-collection-products?${qs}${currencyQs}`;
 
   try {
     const res = await fetch(url, {

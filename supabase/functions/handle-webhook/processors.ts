@@ -324,17 +324,18 @@ export async function processMerchantConnected(
 
   // ─── Auto-enable feature flags for rich catalog data ───────────
   // Per Violet docs, these flags must be toggled per-merchant:
-  //   sync_collections  → daily collection sync + COLLECTION_* webhooks
-  //   sync_metadata     → Offer-level metadata (Shopify metafields)
-  //   sync_sku_metadata → SKU-level metadata (variant enrichments)
-  // We enable all three on connection so the catalog is fully enriched.
+  //   sync_collections     → daily collection sync + COLLECTION_* webhooks
+  //   sync_metadata        → Offer-level metadata (Shopify metafields)
+  //   sync_sku_metadata    → SKU-level metadata (variant enrichments)
+  //   contextual_pricing   → Presentment currencies (prices per currency)
+  // We enable all four on connection so the catalog is fully enriched.
   // Failures are logged but non-blocking — the merchant is still connected.
   // @see https://docs.violet.io/api-reference/merchants/configuration/toggle-merchant-configuration-global-feature-flag
   await autoEnableMerchantFlags(merchantId);
 
   // ─── Persist enabled flags in merchant_feature_flags table ─────
   // Tracks which flags are active for admin visibility.
-  const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata"];
+  const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata", "contextual_pricing"];
   await supabase.from("merchant_feature_flags").upsert(
     flags.map((flag) => ({
       merchant_id: merchantId,
@@ -789,7 +790,7 @@ export async function processCollectionOffersUpdated(
  * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
  */
 async function autoEnableMerchantFlags(merchantId: string): Promise<void> {
-  const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata"];
+  const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata", "contextual_pricing"];
   const headersResult = await getVioletHeaders();
 
   if (headersResult.error) {

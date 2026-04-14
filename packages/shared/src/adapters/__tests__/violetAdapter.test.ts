@@ -243,6 +243,18 @@ describe("VioletAdapter", () => {
       const result = await adapter.getProduct("1");
       expect(result.data!.skus[0]!.variantValues).toEqual([{ variant: "Size", value: "Large" }]);
     });
+
+    // Contextual pricing
+    it("appends base_currency to single offer URL when countryCode resolves to non-USD", async () => {
+      const offer = createMockOffer();
+      const fetchMock = mockFetchResponse(offer);
+      vi.stubGlobal("fetch", fetchMock);
+
+      await adapter.getProduct("1", "GB"); // GB → GBP
+
+      const calledUrl = fetchMock.mock.calls[0]![0] as string;
+      expect(calledUrl).toContain("base_currency=GBP");
+    });
   });
 
   describe("transformSku (via getProduct)", () => {
@@ -339,6 +351,43 @@ describe("VioletAdapter", () => {
       expect(body.query).toBe("red shoes");
       expect(body.category).toBe("footwear");
       expect(body.merchant_id).toBe(42); // converted to number
+    });
+
+    // ─── Contextual Pricing ───────────────────────────────────────
+    // @see https://docs.violet.io/prism/catalog/contextual-pricing
+
+    it("appends base_currency to search URL when countryCode resolves to non-USD currency", async () => {
+      const paginated = createPaginatedResponse([createMockOffer()], 0, 1);
+      const fetchMock = mockFetchResponse(paginated);
+      vi.stubGlobal("fetch", fetchMock);
+
+      // countryCode "FR" → currency "EUR" → should add base_currency=EUR
+      await adapter.getProducts({ page: 1, pageSize: 10 }, "FR");
+
+      const calledUrl = fetchMock.mock.calls[0]![0] as string;
+      expect(calledUrl).toContain("base_currency=EUR");
+    });
+
+    it("does not append base_currency when countryCode resolves to USD", async () => {
+      const paginated = createPaginatedResponse([createMockOffer()], 0, 1);
+      const fetchMock = mockFetchResponse(paginated);
+      vi.stubGlobal("fetch", fetchMock);
+
+      await adapter.getProducts({ page: 1, pageSize: 10 }, "US");
+
+      const calledUrl = fetchMock.mock.calls[0]![0] as string;
+      expect(calledUrl).not.toContain("base_currency");
+    });
+
+    it("does not append base_currency when no countryCode is provided", async () => {
+      const paginated = createPaginatedResponse([createMockOffer()], 0, 1);
+      const fetchMock = mockFetchResponse(paginated);
+      vi.stubGlobal("fetch", fetchMock);
+
+      await adapter.getProducts({ page: 1, pageSize: 10 });
+
+      const calledUrl = fetchMock.mock.calls[0]![0] as string;
+      expect(calledUrl).not.toContain("base_currency");
     });
   });
 
@@ -1031,6 +1080,24 @@ describe("VioletAdapter — Collections", () => {
 
       const result = await collAdapter.getCollectionOffers("1");
       expect(result.data!.hasNext).toBe(true);
+    });
+
+    // Contextual pricing
+    it("appends base_currency when countryCode resolves to non-USD", async () => {
+      const page = {
+        content: [createMockOffer()],
+        last: true,
+        number: 1,
+        size: 24,
+        total_elements: 1,
+      };
+      const fetchMock = mockFetchResponse(page);
+      vi.stubGlobal("fetch", fetchMock);
+
+      await collAdapter.getCollectionOffers("10", 1, 24, "DE");
+
+      const calledUrl = fetchMock.mock.calls[0]![0] as string;
+      expect(calledUrl).toContain("base_currency=EUR");
     });
   });
 

@@ -49,10 +49,42 @@ export type OrderStatus =
  * and reused across retries (after 3DS) for idempotency. Violet uses this to detect
  * duplicate submissions.
  *
+ * `orderCustomer` is optional and used for Apple Pay / Google Pay Checkout flows where
+ * the full customer address is only available after payment confirmation. When provided,
+ * it's sent as `order_customer` in the submit body so Violet can finalize the address.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-apple-pay
  * @see Story 4.4 AC#13 — idempotency via appOrderId
  */
 export interface OrderSubmitInput {
   appOrderId: string;
+  /**
+   * Customer info provided by Apple Pay / Google Pay after payment confirmation.
+   * Contains the full (unredacted) shipping address that Apple withholds during
+   * the shippingaddresschange event.
+   *
+   * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-apple-pay
+   */
+  orderCustomer?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    shippingAddress: {
+      address1: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    };
+    sameAddress?: boolean;
+    billingAddress?: {
+      address1: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    };
+  };
 }
 
 /**

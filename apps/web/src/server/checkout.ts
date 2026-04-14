@@ -408,6 +408,35 @@ export const submitOrderFn = createServerFn({ method: "POST" })
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
           "App order ID must be a valid UUID",
         ),
+      /**
+       * Optional customer info from Apple Pay / Google Pay Checkout.
+       * Contains the full (unredacted) address that Apple provides after payment confirmation.
+       * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-apple-pay
+       */
+      orderCustomer: z
+        .object({
+          firstName: z.string(),
+          lastName: z.string(),
+          email: z.string().email(),
+          shippingAddress: z.object({
+            address1: z.string(),
+            city: z.string(),
+            state: z.string(),
+            postalCode: z.string(),
+            country: z.string(),
+          }),
+          sameAddress: z.boolean().optional(),
+          billingAddress: z
+            .object({
+              address1: z.string(),
+              city: z.string(),
+              state: z.string(),
+              postalCode: z.string(),
+              country: z.string(),
+            })
+            .optional(),
+        })
+        .optional(),
     });
     return schema.parse(input);
   })
@@ -417,7 +446,7 @@ export const submitOrderFn = createServerFn({ method: "POST" })
       return { data: null, error: { code: "NO_CART", message: "No active cart" } };
     }
     const adapter = getAdapter();
-    const result = await adapter.submitOrder(violetCartId, data.appOrderId);
+    const result = await adapter.submitOrder(violetCartId, data.appOrderId, data.orderCustomer);
 
     // Story 4.7: Log submission errors for debugging
     if (result.error) {

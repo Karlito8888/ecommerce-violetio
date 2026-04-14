@@ -125,6 +125,7 @@ async function searchOffers(
     inStock?: boolean;
     sortBy?: string;
     sortDirection?: string;
+    baseCurrency?: string;
   },
 ): Promise<{
   content: VioletOffer[];
@@ -136,8 +137,15 @@ async function searchOffers(
   const qs = new URLSearchParams({
     page: String(page),
     size: String(size),
-    include: "shipping",
+    include: "shipping,metadata,sku_metadata",
   });
+
+  // Contextual pricing: pass base_currency for presentment prices
+  // @see https://docs.violet.io/prism/catalog/contextual-pricing
+  const baseCurrency = params.baseCurrency;
+  if (baseCurrency && baseCurrency !== "USD") {
+    qs.set("base_currency", baseCurrency);
+  }
 
   const body: Record<string, unknown> = {};
   if (params.category) body.category = params.category;
@@ -171,6 +179,14 @@ async function getProductsFromMerchants(
     inStock?: boolean;
     sortBy?: string;
     sortDirection?: string;
+    baseCurrency?: string;
+  }, {
+    category?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    inStock?: boolean;
+    sortBy?: string;
+    sortDirection?: string;
   },
 ): Promise<{ data: ProductResult[]; total: number; hasNext: boolean }> {
   // Get merchants
@@ -183,11 +199,14 @@ async function getProductsFromMerchants(
 
   if (merchantIds.length === 0) return { data: [], total: 0, hasNext: false };
 
+  // Contextual pricing for merchant offers fallback
+  const currencyQs = params.baseCurrency && params.baseCurrency !== "USD" ? `&base_currency=${params.baseCurrency}` : "";
+
   // Fetch all offers in parallel
   const offerArrays = await Promise.all(
     merchantIds.map(async (id) => {
       const res = await fetch(
-        `${VIOLET_API_BASE}/catalog/offers/merchants/${id}?page=1&size=100&include=shipping,metadata,sku_metadata,collections`,
+        `${VIOLET_API_BASE}/catalog/offers/merchants/${id}?page=1&size=100&include=shipping,metadata,sku_metadata,collections${currencyQs}`,
         { headers: authHeaders },
       );
       if (!res.ok) return [];
@@ -247,6 +266,7 @@ Deno.serve(async (req: Request) => {
     const inStock = p.get("inStock") === "true" ? true : undefined;
     const sortBy = p.get("sortBy") ?? undefined;
     const sortDirection = p.get("sortDirection") ?? undefined;
+    const baseCurrency = p.get("baseCurrency") ?? undefined;
 
     const authResult = await getVioletHeaders();
     if (authResult.error) {
@@ -263,6 +283,7 @@ Deno.serve(async (req: Request) => {
       inStock,
       sortBy,
       sortDirection,
+      baseCurrency,
     });
 
     // Demo mode fallback
@@ -274,6 +295,7 @@ Deno.serve(async (req: Request) => {
         inStock,
         sortBy,
         sortDirection,
+        baseCurrency,
       });
       return jsonResponse({
         data: {

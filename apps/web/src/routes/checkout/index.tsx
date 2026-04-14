@@ -2,7 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  PaymentRequestButtonElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import { useCartContext } from "../../contexts/CartContext";
 import { useCartQuery, queryKeys, formatPrice, buildPageMeta } from "@ecommerce/shared";
 import type {
@@ -519,9 +525,346 @@ function PaymentForm({
   );
 }
 
-// ─── Checkout Form Persistence ───────────────────────────────────────────
-// Persists form state to sessionStorage so navigating away and back
-// does not lose the user's progress (Bug #10 fix).
+// ─── WalletCheckoutForm (Apple Pay / Google Pay Checkout) ────────────────
+// Renders a PaymentRequestButtonElement that handles the full checkout flow
+// through the Apple Pay / Google Pay sheet: address, shipping, payment.
+//
+// ## Flow (per Violet docs)
+// 1. User taps Apple Pay / Google Pay button
+// 2. `shippingaddresschange`: apply customer address to cart, fetch shipping methods
+// 3. `shippingoptionchange`: apply selected shipping method to cart
+// 4. `paymentmethod`: confirm payment via Stripe, then submit to Violet
+//    with `order_customer` containing the full (unredacted) address
+//
+// ## Multi-merchant limitation
+// Apple Pay sheet cannot show different shipping methods per merchant.
+// For multi-bag carts, only the first bag's shipping methods are shown.
+// The doc recommends using the payment-only flow for multi-merchant carts.
+//
+// @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-apple-pay
+
+function WalletCheckoutForm({
+  clientSecret,
+  appOrderId,
+  violetCartId: _violetCartId,
+  cartTotal,
+  currency,
+  onSuccess,
+}: {
+  clientSecret: string;
+  appOrderId: string;
+  violetCartId: string;
+  cartTotal: number;
+  currency: string;
+  onSuccess: (orderId: string) => void;
+}) {
+  const stripe = useStripe();
+  const [paymentRequest, setPaymentRequest] = useState<
+    import("@stripe/stripe-js").PaymentRequest | null
+  >(null);
+  const [canMakePayment, setCanMakePayment] = useState(false);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!stripe || !clientSecret) return;
+
+    const pr = stripe.paymentRequest({
+      country: "US",
+      currency: currency.toLowerCase(),
+      total: {
+        label: "Order Total",
+        amount: cartTotal,
+      },
+      requestPayerName: true,
+      requestPayerEmail: true,
+      requestShipping: true,
+    });
+
+    pr.canMakePayment().then((result) => {
+      if (result) {
+        setPaymentRequest(pr);
+        setCanMakePayment(true);
+      }
+    });
+
+    return () => {
+      // Cleanup listeners
+      pr.off("shippingaddresschange");
+      pr.off("shippingoptionchange");
+      pr.off("paymentmethod");
+    };
+  }, [stripe, clientSecret, cartTotal, currency]);
+
+  // ── shippingaddresschange ──────────────────────────────────────────
+  // Apple Pay returns the shipping address but omits address_1 for privacy.
+  // Violet allows empty string for address_1 on wallet-based carts at this stage.
+  // The real address is provided after payment confirmation in the submit step.
+  useEffect(() => {
+    if (!paymentRequest) return;
+
+    paymentRequest.on("shippingaddresschange", async (event) => {
+      const addr = event.shippingAddress;
+
+      try {
+        // Step 1: Apply customer info with partial address (empty address_1)
+        await setShippingAddressFn({
+          data: {
+            address1: "", // Apple redacts this until payment confirmed
+            city: addr.city ?? "",
+            state: addr.region ?? "",
+            postalCode: addr.postalCode ?? "",
+            country: addr.country ?? "US",
+          },
+        });
+
+        // Step 2: Fetch available shipping methods
+        const methodsResult = await getAvailableShippingMethodsFn();
+
+        if (methodsResult.error || !methodsResult.data) {
+          event.updateWith({ status: "invalid_shipping_address" });
+          return;
+        }
+
+        // Collect all shipping methods across all bags
+        const allMethods = methodsResult.data.flatMap((b) => b.shippingMethods);
+
+        if (allMethods.length === 0) {
+          event.updateWith({ status: "invalid_shipping_address" });
+          return;
+        }
+
+        const shippingOptions = allMethods.map((m, i) => ({
+          id: m.id || String(i),
+          label: m.label,
+          detail: m.carrier ?? "",
+          amount: m.price,
+        }));
+
+        // Update total with first shipping method price
+        const shippingCost = allMethods[0]?.price ?? 0;
+        event.updateWith({
+          status: "success",
+          shippingOptions,
+          total: { label: "Order Total", amount: cartTotal + shippingCost },
+        });
+      } catch {
+        event.updateWith({ status: "invalid_shipping_address" });
+      }
+    });
+  }, [paymentRequest, cartTotal]);
+
+  // ── shippingoptionchange ──────────────────────────────────────────
+  useEffect(() => {
+    if (!paymentRequest) return;
+
+    paymentRequest.on("shippingoptionchange", async (event) => {
+      try {
+        // Get available methods to find the matching one
+        const methodsResult = await getAvailableShippingMethodsFn();
+        if (methodsResult.error || !methodsResult.data) {
+          event.updateWith({ status: "fail" });
+          return;
+        }
+
+        // Find the method matching the selected option
+        const allMethods = methodsResult.data.flatMap((b) => b.shippingMethods);
+        const selected = allMethods.find(
+          (m) => m.id === event.shippingOption.id || m.label === event.shippingOption.label,
+        );
+
+        if (!selected) {
+          event.updateWith({ status: "fail" });
+          return;
+        }
+
+        // Apply shipping method to all bags
+        const selections = methodsResult.data.map((bag) => ({
+          bagId: bag.bagId,
+          shippingMethodId: selected.id,
+        }));
+
+        await setShippingMethodsFn({ data: { selections } });
+
+        event.updateWith({
+          status: "success",
+          total: { label: "Order Total", amount: cartTotal + selected.price },
+        });
+      } catch {
+        event.updateWith({ status: "fail" });
+      }
+    });
+  }, [paymentRequest, cartTotal]);
+
+  // ── paymentmethod (confirm + submit) ──────────────────────────────
+  useEffect(() => {
+    if (!paymentRequest) return;
+
+    paymentRequest.on("paymentmethod", async (ev) => {
+      setSubmitting(true);
+      setError(null);
+
+      if (!stripe) {
+        ev.complete("fail");
+        setError("Stripe not loaded");
+        setSubmitting(false);
+        return;
+      }
+
+      try {
+        // Step 1: Confirm the payment intent with the wallet payment method
+        const { paymentIntent, error: confirmError } = await stripe.confirmCardPayment(
+          clientSecret,
+          { payment_method: ev.paymentMethod.id },
+          { handleActions: false },
+        );
+
+        if (confirmError) {
+          ev.complete("fail");
+          setError(confirmError.message ?? "Payment failed");
+          setSubmitting(false);
+          return;
+        }
+
+        // Report success to close the Apple Pay / Google Pay sheet
+        ev.complete("success");
+
+        // Step 2: Handle 3D Secure if required
+        if (paymentIntent?.status === "requires_action") {
+          const { error: actionError } = await stripe.confirmCardPayment(clientSecret);
+          if (actionError) {
+            setError(actionError.message ?? "3D Secure authentication failed");
+            setSubmitting(false);
+            return;
+          }
+        }
+
+        // Step 3: Submit to Violet with order_customer containing the full address
+        // Apple now provides the unredacted address (including address_1)
+        const walletName = ev.paymentMethod.billing_details?.name ?? "";
+        const nameParts = walletName.split(" ");
+        const firstName = nameParts[0] || ev.payerName?.split(" ")[0] || "";
+        const lastName =
+          nameParts.slice(1).join(" ") || ev.payerName?.split(" ").slice(1).join(" ") || "";
+
+        // ev.shippingAddress is PaymentRequestShippingAddress (addressLine, region, city...)
+        // ev.paymentMethod.billing_details.address is Stripe Address (line1, state, postal_code...)
+        const shippingAddr = ev.shippingAddress;
+        const billingAddr = ev.paymentMethod.billing_details?.address;
+
+        // Build order_customer with the full address from the wallet
+        const hasShippingAddress =
+          shippingAddr && (shippingAddr.addressLine?.[0] || shippingAddr.city);
+
+        const result = await submitOrderFn({
+          data: {
+            appOrderId,
+            orderCustomer: hasShippingAddress
+              ? {
+                  firstName,
+                  lastName,
+                  email: ev.payerEmail ?? "",
+                  shippingAddress: {
+                    address1: shippingAddr!.addressLine?.[0] ?? "",
+                    city: shippingAddr!.city ?? "",
+                    state: shippingAddr!.region ?? "",
+                    postalCode: shippingAddr!.postalCode ?? "",
+                    country: shippingAddr!.country ?? "US",
+                  },
+                  sameAddress: true,
+                  // Include billing address if different
+                  ...(billingAddr && billingAddr.line1
+                    ? {
+                        sameAddress: false as const,
+                        billingAddress: {
+                          address1: billingAddr.line1,
+                          city: billingAddr.city ?? "",
+                          state: billingAddr.state ?? "",
+                          postalCode: billingAddr.postal_code ?? "",
+                          country: billingAddr.country ?? "US",
+                        },
+                      }
+                    : {}),
+                }
+              : undefined,
+          },
+        });
+
+        if (result.error) {
+          setError(result.error.message);
+          setSubmitting(false);
+          return;
+        }
+
+        // Handle partial success / 3DS
+        if (result.data?.status === "REQUIRES_ACTION") {
+          const secret = result.data.paymentIntentClientSecret;
+          if (secret) {
+            const { error: actionError } = await stripe!.handleNextAction({ clientSecret: secret });
+            if (!actionError) {
+              const retryResult = await submitOrderFn({ data: { appOrderId } });
+              if (!retryResult.error && retryResult.data?.status !== "REJECTED") {
+                onSuccess(retryResult.data?.id ?? "");
+                return;
+              }
+            }
+          }
+          setError("Payment verification failed. Please try again.");
+          setSubmitting(false);
+          return;
+        }
+
+        if (result.data?.status === "REJECTED" || result.data?.status === "CANCELED") {
+          setError("Your order could not be completed. Your card was not charged.");
+          setSubmitting(false);
+          return;
+        }
+
+        onSuccess(result.data?.id ?? "");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An unexpected error occurred");
+        setSubmitting(false);
+      }
+    });
+  }, [paymentRequest, clientSecret, appOrderId, stripe, onSuccess]);
+
+  if (!canMakePayment || !paymentRequest) {
+    return null;
+  }
+
+  return (
+    <div className="checkout__wallet">
+      <PaymentRequestButtonElement
+        options={{
+          paymentRequest,
+          style: {
+            paymentRequestButton: {
+              type: "default",
+              theme: "dark",
+              height: "48px",
+            },
+          },
+        }}
+      />
+      {isSubmitting && (
+        <p
+          className="checkout__wallet-status"
+          style={{ marginTop: "0.75rem", fontSize: "0.875rem", color: "var(--color-steel)" }}
+        >
+          Processing your order…
+        </p>
+      )}
+      {error && (
+        <p
+          className="checkout__wallet-error"
+          style={{ marginTop: "0.75rem", fontSize: "0.875rem", color: "var(--color-danger)" }}
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const CHECKOUT_STORAGE_KEY = "checkout-form";
 
@@ -1959,7 +2302,7 @@ function CheckoutPage() {
               </section>
             )}
 
-            {/* ── Section 5: Stripe payment (Story 4.4) ── */}
+            {/* ── Section 5: Stripe payment (Story 4.4 + Apple/Google Pay Checkout) ── */}
             {step === "payment" && clientSecret && stripePromise && (
               <section
                 className="checkout__section checkout__payment"
@@ -1976,6 +2319,47 @@ function CheckoutPage() {
                     appearance: { theme: "flat" },
                   }}
                 >
+                  {/* Apple Pay / Google Pay Checkout — full sheet with address/shipping/payment */}
+                  {/* Only renders if wallet payment is available on this device/browser */}
+                  <WalletCheckoutForm
+                    clientSecret={clientSecret}
+                    appOrderId={appOrderIdRef.current}
+                    violetCartId={violetCartId!}
+                    cartTotal={cart?.total ?? 0}
+                    currency={cart?.currency ?? "usd"}
+                    onSuccess={handleOrderSuccess}
+                  />
+
+                  {/* Divider — only shown when wallet button is present */}
+                  <div
+                    className="checkout__wallet-divider"
+                    role="separator"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      margin: "1.5rem 0",
+                      color: "var(--color-steel, #999)",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: 1,
+                        height: "1px",
+                        background: "var(--color-border, #ddd)",
+                      }}
+                    />
+                    <span style={{ padding: "0 1rem" }}>or pay with card</span>
+                    <span
+                      style={{
+                        flex: 1,
+                        height: "1px",
+                        background: "var(--color-border, #ddd)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Standard card payment form */}
                   <PaymentForm
                     appOrderId={appOrderIdRef.current}
                     violetCartId={violetCartId!}

@@ -303,6 +303,7 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
     const offerId = url.searchParams.get("id");
+    const baseCurrency = url.searchParams.get("baseCurrency") ?? undefined;
 
     if (!offerId) {
       return jsonResponse(
@@ -318,13 +319,17 @@ Deno.serve(async (req: Request) => {
 
     const violetHeaders = authResult.data as Record<string, string>;
 
+    // Contextual pricing: append base_currency query param
+    // @see https://docs.violet.io/prism/catalog/contextual-pricing
+    const currencyQs = baseCurrency && baseCurrency !== "USD" ? `?base_currency=${baseCurrency}` : "";
+
     /**
      * Fetches a single offer from Violet's catalog API.
      * Returns the full offer with albums (images), SKUs, and variants.
      *
      * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
      */
-    const res = await fetch(`${VIOLET_API_BASE}/catalog/offers/${offerId}`, {
+    const res = await fetch(`${VIOLET_API_BASE}/catalog/offers/${offerId}${currencyQs}`, {
       headers: violetHeaders,
     });
 

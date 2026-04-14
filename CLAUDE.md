@@ -86,29 +86,16 @@ BEM convention: `.block__element--modifier` (e.g., `.site-header__nav`, `.hero__
 
 ## Documentation Access
 
+### Priorité de consultation (ordre obligatoire)
+
+1. **`/home/charles/Documents/Documentations Officielles`** — dossier local de docs officielles. **Toujours consulter en premier** avant toute autre source.
+2. **Skill `find-docs`** (`/home/charles/.agents/skills/find-docs/SKILL.md`) — utiliser ce skill pour localiser et récupérer des docs externes si la doc locale est absente ou insuffisante.
+
 ### Violet.io (API principale)
 
-**Index de la documentation** : `/home/charles/Documents/Obsidian Vault/External Docs/Violet.io - API Reference Index.md`
+**Documentation locale** : `/home/charles/Documents/Documentations Officielles/violet-io.md`
 
-Ce fichier contient la table des matières complète de la doc Violet.io avec les URLs directes. Workflow :
-
-1. **Lire l'index** dans le vault Obsidian pour identifier les pages pertinentes
-2. **Fetch la page** via `WebFetch("https://docs.violet.io/{path}")` pour obtenir la doc à jour
-3. Ne jamais coder contre l'API Violet sans avoir consulté la doc officielle
-
-Sections clés :
-
-- Auth : `concepts/overview.md` (tokens, refresh, environments)
-- Catalog : `prism/catalog/offers.md`, `skus.md`, `collections.md`
-- Checkout : `prism/checkout-guides/` (cart lifecycle, bags, shipping, payment)
-- Payments : `prism/payments/` (Stripe integration, transfers, payouts)
-- Webhooks : `prism/webhooks/` (events, simulation, headers)
-- API Reference : `api-reference/` (endpoints détaillés)
-
-### Autres docs
-
-- **Supabase, Expo, TanStack, React** : utiliser le MCP **Context7** (`resolve-library-id` → `query-docs`)
-- **Docs niche non couvertes** : `WebFetch` / `WebSearch` en dernier recours
+Ne jamais coder contre l'API Violet sans avoir consulté ce fichier.
 
 ### BMAD Framework
 

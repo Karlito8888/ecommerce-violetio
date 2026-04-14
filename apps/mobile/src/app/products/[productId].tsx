@@ -21,7 +21,9 @@ import {
   useRecommendations,
   useUser,
   optimizeWithPreset,
+  getCurrencyForCountry,
 } from "@ecommerce/shared";
+import * as Localization from "expo-localization";
 import type { Product, RecommendationItem } from "@ecommerce/shared";
 
 import { ThemedText } from "@/components/themed-text";
@@ -51,17 +53,31 @@ async function getSessionToken(): Promise<string | null> {
 }
 
 /**
+ * Derives the user's base currency from device locale region.
+ * Falls back to null (Violet will use merchant default currency = USD).
+ */
+function getDeviceCurrency(): string | null {
+  const region = Localization.getLocales()[0]?.regionCode;
+  if (!region) return null;
+  const currency = getCurrencyForCountry(region);
+  return currency !== "USD" ? currency : null;
+}
+
+/**
  * Fetches full product data from the get-product Edge Function.
  *
  * The Edge Function calls Violet's GET /catalog/offers/{id} server-side
  * and transforms the response to our internal camelCase Product shape.
+ * Includes base_currency for contextual pricing when available.
  *
  * @see supabase/functions/get-product/index.ts
  */
 async function fetchProduct(offerId: string): Promise<Product | null> {
   if (!GET_PRODUCT_URL) return null;
   try {
-    const res = await fetch(`${GET_PRODUCT_URL}?id=${offerId}`);
+    const baseCurrency = getDeviceCurrency();
+    const currencyQs = baseCurrency ? `&baseCurrency=${baseCurrency}` : "";
+    const res = await fetch(`${GET_PRODUCT_URL}?id=${offerId}${currencyQs}`);
     if (!res.ok) return null;
     const json = await res.json();
     return json.data ?? null;

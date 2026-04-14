@@ -104,6 +104,120 @@ describe("VioletAdapter — cart methods", () => {
     });
   });
 
+  // ── Quick Checkout ────────────────────────────────────────────────
+  // @see https://docs.violet.io/prism/checkout-guides/guides/utilizing-quick-checkout
+
+  describe("createCart — Quick Checkout", () => {
+    it("sends SKUs inline when provided", async () => {
+      const violetResponse = makeVioletCartResponse({
+        bags: [
+          {
+            id: 100,
+            merchant_id: 50,
+            merchant_name: "Test",
+            skus: [{ id: 200, sku_id: 300, quantity: 1, price: 1999 }],
+            subtotal: 1999,
+            tax: 0,
+            shipping_total: 0,
+            errors: [],
+          },
+        ],
+      });
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(violetResponse), { status: 200 }));
+
+      await adapter.createCart({
+        userId: null,
+        sessionId: "session-1",
+        skus: [{ skuId: "300", quantity: 1 }],
+      });
+
+      const callArgs = fetchSpy.mock.calls[0]!;
+      const body = JSON.parse((callArgs[1] as RequestInit).body as string);
+      expect(body.skus).toEqual([{ sku_id: 300, quantity: 1 }]);
+    });
+
+    it("sends customer + shipping address inline when provided", async () => {
+      const violetResponse = makeVioletCartResponse({ bags: [], errors: [] });
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(violetResponse), { status: 200 }));
+
+      await adapter.createCart({
+        userId: null,
+        sessionId: "session-1",
+        customer: {
+          firstName: "Jean",
+          lastName: "Dupont",
+          email: "jean@example.com",
+          shippingAddress: {
+            address1: "1 Rue de Paris",
+            city: "Paris",
+            state: "",
+            postalCode: "75001",
+            country: "FR",
+          },
+        },
+      });
+
+      const callArgs = fetchSpy.mock.calls[0]!;
+      const body = JSON.parse((callArgs[1] as RequestInit).body as string);
+      expect(body.customer).toBeDefined();
+      expect(body.customer.first_name).toBe("Jean");
+      expect(body.customer.last_name).toBe("Dupont");
+      expect(body.customer.email).toBe("jean@example.com");
+      expect(body.customer.shipping_address.country).toBe("FR");
+      expect(body.customer.same_address).toBe(true); // default
+    });
+
+    it("sends billing address when sameAddress is false", async () => {
+      const violetResponse = makeVioletCartResponse({ bags: [], errors: [] });
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(violetResponse), { status: 200 }));
+
+      await adapter.createCart({
+        userId: null,
+        sessionId: "session-1",
+        customer: {
+          firstName: "Jean",
+          lastName: "Dupont",
+          email: "jean@example.com",
+          sameAddress: false,
+          shippingAddress: {
+            address1: "1 Rue de Paris",
+            city: "Paris",
+            state: "",
+            postalCode: "75001",
+            country: "FR",
+          },
+          billingAddress: {
+            address1: "2 Ave des Champs",
+            city: "Lyon",
+            state: "",
+            postalCode: "69001",
+            country: "FR",
+          },
+        },
+      });
+
+      const callArgs = fetchSpy.mock.calls[0]!;
+      const body = JSON.parse((callArgs[1] as RequestInit).body as string);
+      expect(body.customer.same_address).toBe(false);
+      expect(body.customer.billing_address).toBeDefined();
+      expect(body.customer.billing_address.city).toBe("Lyon");
+    });
+
+    it("omits skus and customer when not provided (standard flow)", async () => {
+      const violetResponse = makeVioletCartResponse({ bags: [], errors: [] });
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(violetResponse), { status: 200 }));
+
+      await adapter.createCart({ userId: null, sessionId: "session-1" });
+
+      const callArgs = fetchSpy.mock.calls[0]!;
+      const body = JSON.parse((callArgs[1] as RequestInit).body as string);
+      expect(body.skus).toBeUndefined();
+      expect(body.customer).toBeUndefined();
+      expect(body.channel_id).toBe(12345);
+      expect(body.wallet_based_checkout).toBe(true);
+    });
+  });
+
   // ── addToCart ─────────────────────────────────────────────────────
 
   describe("addToCart", () => {

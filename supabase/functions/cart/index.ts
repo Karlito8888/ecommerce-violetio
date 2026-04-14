@@ -282,26 +282,51 @@ Deno.serve(async (req: Request) => {
   const path = url.pathname.replace(/.*\/cart/, "");
   const appId = Deno.env.get("VIOLET_APP_ID");
 
-  // ── Route: POST /cart — create cart ───────────────────────────────
+  // ── Route: POST /cart — create cart (supports Quick Checkout) ──────
   if (req.method === "POST" && (path === "" || path === "/")) {
     if (!appId) return errorResponse("VIOLET.CONFIG_MISSING", "VIOLET_APP_ID not configured", 500);
+
+    // Parse request body for Quick Checkout fields
+    let requestBody: Record<string, unknown> = {};
+    try {
+      requestBody = await req.json();
+    } catch {
+      // Empty body — standard cart creation
+    }
 
     /**
      * `wallet_based_checkout: true` — Violet creates a Stripe PaymentIntent at cart
      * creation time. Without this, `payment_intent_client_secret` is absent from
      * cart responses, breaking the Stripe PaymentElement/PaymentSheet flow.
      *
+     * ## Quick Checkout
+     * When `skus` and/or `customer` are provided in the request body, Violet processes
+     * everything in a single call, reducing e-commerce API requests from ~8 to ~4.
+     *
      * @see https://docs.violet.io/guides/checkout/payments — wallet-based checkout
+     * @see https://docs.violet.io/prism/checkout-guides/guides/utilizing-quick-checkout
      * @see Story 4.4 AC#5, AC#12
      */
+    const violetBody: Record<string, unknown> = {
+      channel_id: Number(appId),
+      currency: "USD",
+      wallet_based_checkout: true,
+    };
+
+    // Quick Checkout: pass through SKUs
+    if (requestBody.skus && Array.isArray(requestBody.skus) && requestBody.skus.length > 0) {
+      violetBody.skus = requestBody.skus;
+    }
+
+    // Quick Checkout: pass through customer + address
+    if (requestBody.customer) {
+      violetBody.customer = requestBody.customer;
+    }
+
     const res = await fetch(`${VIOLET_API_BASE}/checkout/cart`, {
       method: "POST",
       headers: violetHeaders,
-      body: JSON.stringify({
-        channel_id: Number(appId),
-        currency: "USD",
-        wallet_based_checkout: true,
-      }),
+      body: JSON.stringify(violetBody),
     });
 
     if (!res.ok) {

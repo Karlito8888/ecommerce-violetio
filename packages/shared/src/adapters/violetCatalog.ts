@@ -17,6 +17,7 @@ import { transformOffer, aggregateCountries } from "./violetTransforms.js";
 import { fetchWithRetry } from "./violetFetch.js";
 import { _demoOffersCache, DEMO_CACHE_TTL_MS, setDemoOffersCache } from "./violetConstants.js";
 import type { VioletTokenManager } from "../clients/violetAuth.js";
+import { getCurrencyForCountry } from "../utils/currency.js";
 
 /** Shared context for all catalog operations. */
 export interface CatalogContext {
@@ -61,6 +62,14 @@ export async function getProducts(
   if (params.sortBy === "price") {
     body.sort_by = "minPrice";
     body.sort_direction = params.sortDirection ?? "ASC";
+  }
+
+  // Contextual pricing: pass base_currency so Violet returns presentment prices
+  // when the merchant has defined them for the requested currency.
+  // @see https://docs.violet.io/prism/catalog/contextual-pricing
+  const baseCurrency = countryCode ? getCurrencyForCountry(countryCode) : undefined;
+  if (baseCurrency && baseCurrency !== "USD") {
+    queryParams.set("base_currency", baseCurrency);
   }
 
   const result = await fetchWithRetry(
@@ -112,6 +121,7 @@ async function getProductsFromMerchants(
 ): Promise<ApiResponse<PaginatedResult<Product>>> {
   const page = params.page ?? 1;
   const size = params.pageSize ?? 20;
+  const baseCurrency = countryCode ? getCurrencyForCountry(countryCode) : undefined;
 
   let allRawOffers: unknown[];
   const now = Date.now();
@@ -137,8 +147,10 @@ async function getProductsFromMerchants(
     }
 
     const offerPromises = merchantIds.map(async (merchantId) => {
+      const currencyQs =
+        baseCurrency && baseCurrency !== "USD" ? `&base_currency=${baseCurrency}` : "";
       const res = await fetchWithRetry(
-        `${ctx.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100&include=shipping,metadata,sku_metadata,collections`,
+        `${ctx.apiBase}/catalog/offers/merchants/${merchantId}?page=1&size=100&include=shipping,metadata,sku_metadata,collections${currencyQs}`,
         { method: "GET" },
         ctx.tokenManager,
       );
@@ -219,8 +231,10 @@ export async function getProduct(
   id: string,
   countryCode?: string,
 ): Promise<ApiResponse<Product>> {
+  const baseCurrency = countryCode ? getCurrencyForCountry(countryCode) : undefined;
+  const currencyQs = baseCurrency && baseCurrency !== "USD" ? `&base_currency=${baseCurrency}` : "";
   const result = await fetchWithRetry(
-    `${ctx.apiBase}/catalog/offers/${id}?include=shipping,metadata,sku_metadata,collections`,
+    `${ctx.apiBase}/catalog/offers/${id}?include=shipping,metadata,sku_metadata,collections${currencyQs}`,
     { method: "GET" },
     ctx.tokenManager,
   );
