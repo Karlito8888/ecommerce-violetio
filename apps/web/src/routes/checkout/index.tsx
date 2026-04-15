@@ -575,8 +575,13 @@ function WalletCheckoutForm({
   useEffect(() => {
     if (!stripe || !clientSecret) return;
 
+    // Country code of the Stripe platform account — determines Apple Pay/Google Pay availability.
+    // US for sandbox (Violet's internal Stripe), FR for production (our Stripe platform account).
+    // @see https://stripe.com/docs/js/payment_request
+    const accountCountry = import.meta.env.VITE_STRIPE_ACCOUNT_COUNTRY || "US";
+
     const pr = stripe.paymentRequest({
-      country: "US",
+      country: accountCountry,
       currency: currency.toLowerCase(),
       total: {
         label: "Order Total",

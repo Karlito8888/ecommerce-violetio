@@ -28,7 +28,7 @@
  * | BAG_SUBMITTED     | processBagUpdated      | order_bags.status + orders      |
  * | BAG_ACCEPTED      | processBagUpdated      | order_bags.status + orders      |
  * | BAG_SHIPPED       | processBagShipped      | order_bags.* + tracking + orders|
- * | BAG_COMPLETED     | processBagUpdated      | order_bags.status + orders      |
+ * | BAG_COMPLETED     | processBagUpdated      | order_bags.status + orders + distributions |
  * | BAG_CANCELED      | processBagUpdated      | order_bags.status + orders      |
  * | BAG_REFUNDED      | processBagRefunded     | order_bags + order_refunds      |
  *
@@ -75,6 +75,19 @@ import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import type { VioletOrderPayload, VioletBagPayload } from "../_shared/schemas.ts";
 import { updateEventStatus } from "./processors.ts";
 import { getVioletHeaders } from "../_shared/violetAuth.ts";
+
+type DistributionType = "PAYMENT" | "REFUND" | "ADJUSTMENT";
+type DistributionStatus = "PENDING" | "QUEUED" | "SENT" | "FAILED";
+
+interface VioletDistribution {
+  bagId: string | null;
+  type: DistributionType;
+  status: DistributionStatus;
+  channelAmount: number;
+  stripeFee: number;
+  merchantAmount: number;
+  subtotal: number;
+}
 
 /**
  * Derives the overall order status from its bags' statuses and updates the order row.
@@ -306,8 +319,17 @@ export async function processBagUpdated(
     }
 
     await deriveAndUpdateOrderStatus(supabase, String(payload.order_id));
-    // Fire-and-forget: bag delivered notification for COMPLETED status only (Story 5.6)
+    // Fire-and-forget: sync distributions + notifications for COMPLETED bags
     if (payload.status === "COMPLETED") {
+      // Sync payment distributions from Violet into order_distributions table.
+      // Automatic Transfer mode creates distributions after capture — we persist
+      // them here so the admin dashboard always has up-to-date financial data.
+      void syncDistributionsForOrder(supabase, String(payload.order_id)).catch(
+        (err: unknown) =>
+          console.error(
+            `[processBagUpdated] syncDistributions failed (non-critical): ${err instanceof Error ? err.message : "Unknown"}`,
+          ),
+      );
       supabase.functions
         .invoke("send-notification", {
           body: {
@@ -441,6 +463,119 @@ export const processBagCompleted = processBagUpdated;
 
 /** BAG_CANCELED — delegates to processBagUpdated (CANCELED ≠ REFUNDED per AC#3). */
 export const processBagCanceled = processBagUpdated;
+
+/**
+ * Fetches payment distributions from Violet and upserts them into order_distributions.
+ *
+ * Called as fire-and-forget after BAG_COMPLETED — distributions are a financial
+ * record, not a correctness requirement. The bag status is already persisted.
+ *
+ * ## Why here (Edge Function) instead of web server function?
+ * The `syncOrderDistributionsFn` in the web app is a TanStack Start server function
+ * only callable from the browser. The webhook Edge Function runs in Deno, so we
+ * re-implement the sync logic directly (same pattern as fetchAndStoreRefundDetails).
+ *
+ * ## Idempotency
+ * Upsert on `(violet_order_id, type, violet_bag_id)` UNIQUE constraint — safe for
+ * repeated calls (e.g., multiple BAG_COMPLETED events for different bags).
+ *
+ * @see https://docs.violet.io/prism/payments/payouts/distributions
+ * @see https://docs.violet.io/prism/payments/payment-settings/transfer-settings — Automatic Transfer
+ */
+async function syncDistributionsForOrder(
+  supabase: SupabaseClient,
+  violetOrderId: string,
+): Promise<void> {
+  const violetHeadersResult = await getVioletHeaders();
+  if (violetHeadersResult.error) {
+    console.warn(
+      `[syncDistributions] Cannot fetch distributions — Violet auth failed: ${violetHeadersResult.error.message}`,
+    );
+    return;
+  }
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const url = `${apiBase}/orders/${violetOrderId}/distributions`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { ...violetHeadersResult.data, Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(
+        `[syncDistributions] Violet distributions API returned ${res.status} for order ${violetOrderId}`,
+      );
+      return;
+    }
+
+    const raw = (await res.json()) as unknown;
+    const items: unknown[] = Array.isArray(raw)
+      ? raw
+      : (((raw as Record<string, unknown>).content as unknown[]) ?? []);
+
+    if (items.length === 0) return;
+
+    // Resolve order_bag_id for each distribution via violet_bag_id
+    const bagIds = [
+      ...new Set(
+        items
+          .map((item: unknown) => String((item as Record<string, unknown>)["bag_id"] ?? ""))
+          .filter(Boolean),
+      ),
+    ];
+    const { data: bagRows } = await supabase
+      .from("order_bags")
+      .select("id, violet_bag_id")
+      .in("violet_bag_id", bagIds.length > 0 ? bagIds : ["__none__"]);
+
+    const bagMap = new Map(
+      (bagRows ?? []).map((b: { id: string; violet_bag_id: string }) => [
+        b.violet_bag_id,
+        b.id,
+      ]),
+    );
+
+    const rows = items
+      .map((item: unknown) => {
+        const d = item as Record<string, unknown>;
+        const bagId = d["bag_id"] != null ? String(d["bag_id"]) : null;
+        const orderBagId = bagId ? bagMap.get(bagId) : null;
+        if (!orderBagId) return null;
+        return {
+          order_bag_id: orderBagId,
+          violet_order_id: violetOrderId,
+          violet_bag_id: bagId,
+          type: (d["type"] as DistributionType) ?? "PAYMENT",
+          status: (d["status"] as DistributionStatus) ?? "PENDING",
+          channel_amount_cents: Number(d["channel_amount"] ?? 0),
+          stripe_fee_cents: Number(d["stripe_fee"] ?? 0),
+          merchant_amount_cents: Number(d["merchant_amount"] ?? 0),
+          subtotal_cents: Number(d["subtotal"] ?? 0),
+          synced_at: new Date().toISOString(),
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    if (rows.length === 0) return;
+
+    const { error: upsertError } = await supabase
+      .from("order_distributions")
+      .upsert(rows, { onConflict: "violet_order_id,type,violet_bag_id" });
+
+    if (upsertError) {
+      console.error(
+        `[syncDistributions] Failed to upsert distributions for order ${violetOrderId}: ${upsertError.message}`,
+      );
+    } else {
+      console.log(
+        `[syncDistributions] Synced ${rows.length} distribution(s) for order ${violetOrderId}`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[syncDistributions] Error: ${err instanceof Error ? err.message : "Unknown"}`,
+    );
+  }
+}
 
 /**
  * Fetches refund details from the Violet API and upserts them into order_refunds.
