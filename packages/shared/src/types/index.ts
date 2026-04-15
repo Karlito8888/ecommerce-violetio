@@ -192,3 +192,11 @@ export type {
   ShippingInfo,
   CountryOption,
 } from "./shipping.types.js";
+export type {
+  TransferStatus,
+  Transfer,
+  TransferError,
+  TransferRow,
+  RetryTransferInput,
+  SearchTransfersInput,
+} from "./transfer.types.js";

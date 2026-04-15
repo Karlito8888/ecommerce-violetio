@@ -127,6 +127,10 @@ export const webhookEventTypeSchema = z.enum([
   "BAG_COMPLETED",
   "BAG_CANCELED",
   "BAG_REFUNDED",
+  "TRANSFER_SENT",
+  "TRANSFER_FAILED",
+  "TRANSFER_REVERSED",
+  "TRANSFER_PARTIALLY_REVERSED",
 ]);
 
 /**
@@ -382,3 +386,43 @@ export type VioletOfferPayload = z.infer<typeof violetOfferWebhookPayloadSchema>
 export type VioletSyncPayload = z.infer<typeof violetSyncWebhookPayloadSchema>;
 export type VioletOrderPayload = z.infer<typeof violetOrderWebhookPayloadSchema>;
 export type VioletBagPayload = z.infer<typeof violetBagWebhookPayloadSchema>;
+
+// ─── Transfer Webhook Schemas ──────────────────────────────────────────
+
+/**
+ * Validates Violet TRANSFER_* webhook payload.
+ *
+ * Handles: TRANSFER_SENT, TRANSFER_FAILED, TRANSFER_REVERSED, TRANSFER_PARTIALLY_REVERSED.
+ * Fired when a transfer to a merchant succeeds, fails, or is reversed.
+ * Critical for monitoring failed payouts and triggering retries.
+ *
+ * @see https://docs.violet.io/prism/payments/payments-during-checkout/guides/handling-failed-transfers
+ * @see https://docs.violet.io/prism/payments/payments-during-checkout/transfer-reversals
+ *
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ */
+export const violetTransferWebhookPayloadSchema = z.object({
+  id: z.number(),
+  merchant_id: z.number(),
+  amount: z.number().optional(),
+  currency: z.string().optional(),
+  status: z.string().optional(),
+  payment_provider_transfer_id: z.string().optional().nullable(),
+  related_bags: z.array(z.string()).optional(),
+  related_orders: z.array(z.string()).optional(),
+  related_distributions: z.array(z.string()).optional(),
+  errors: z
+    .array(
+      z.object({
+        payout_transfer_id: z.number().optional(),
+        error_code: z.number().optional(),
+        error_message: z.string().optional(),
+        date_created: z.string().optional(),
+      }),
+    )
+    .optional(),
+  date_created: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletTransferPayload = z.infer<typeof violetTransferWebhookPayloadSchema>;

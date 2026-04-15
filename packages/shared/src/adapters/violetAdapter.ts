@@ -20,6 +20,8 @@ import type {
   SetShippingMethodInput,
   CountryOption,
   Distribution,
+  Transfer,
+  SearchTransfersInput,
   CollectionItem,
   DiscountInput,
 } from "../types/index.js";
@@ -66,6 +68,13 @@ import {
   getOrderDistributions as getOrderDistributionsFn,
   getOrders as getOrdersFn,
 } from "./violetOrders.js";
+import {
+  searchTransfers as searchTransfersFn,
+  retryTransferForOrder as retryTransferForOrderFn,
+  retryTransferForBag as retryTransferForBagFn,
+  retryTransfersForOrders as retryTransfersForOrdersFn,
+  retryTransfersForBags as retryTransfersForBagsFn,
+} from "./violetTransfers.js";
 import { searchProducts as searchProductsFn } from "./violetSearch.js";
 import {
   validateWebhook as validateWebhookFn,
@@ -313,6 +322,28 @@ export class VioletAdapter implements SupplierAdapter {
 
   async getOrderDistributions(violetOrderId: string): Promise<ApiResponse<Distribution[]>> {
     return getOrderDistributionsFn(this.getCtx(), violetOrderId);
+  }
+
+  async searchTransfers(input?: SearchTransfersInput): Promise<ApiResponse<Transfer[]>> {
+    return searchTransfersFn(this.getCtx(), input);
+  }
+
+  async retryTransferForOrder(violetOrderId: string): Promise<ApiResponse<{ message: string }>> {
+    return retryTransferForOrderFn(this.getCtx(), violetOrderId);
+  }
+
+  async retryTransferForBag(violetBagId: string): Promise<ApiResponse<{ message: string }>> {
+    return retryTransferForBagFn(this.getCtx(), violetBagId);
+  }
+
+  async retryTransfersForOrders(
+    violetOrderIds: string[],
+  ): Promise<ApiResponse<{ message: string }>> {
+    return retryTransfersForOrdersFn(this.getCtx(), violetOrderIds);
+  }
+
+  async retryTransfersForBags(violetBagIds: string[]): Promise<ApiResponse<{ message: string }>> {
+    return retryTransfersForBagsFn(this.getCtx(), violetBagIds);
   }
 
   async getOrders(_userId: string): Promise<ApiResponse<Order[]>> {

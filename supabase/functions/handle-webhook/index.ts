@@ -108,6 +108,7 @@ import {
   violetBagWebhookPayloadSchema,
   violetMerchantWebhookPayloadSchema,
   violetCollectionWebhookPayloadSchema,
+  violetTransferWebhookPayloadSchema,
 } from "../_shared/schemas.ts";
 import {
   processOfferAdded,
@@ -130,6 +131,12 @@ import {
   processBagShipped,
   processBagRefunded,
 } from "./orderProcessors.ts";
+import {
+  processTransferSent,
+  processTransferFailed,
+  processTransferReversed,
+  processTransferPartiallyReversed,
+} from "./transferProcessors.ts";
 
 /** Standard JSON response headers for all responses. */
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
@@ -578,6 +585,71 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processBagRefunded(supabase, eventId, result.data);
+        break;
+      }
+
+      // ─── Transfer Events ────────────────────────────────────────────────
+      // Fund movement tracking: sent, failed, reversed.
+      // Critical for monitoring failed merchant payouts and triggering retries.
+      // @see https://docs.violet.io/prism/payments/payments-during-checkout/guides/handling-failed-transfers
+
+      case "TRANSFER_SENT": {
+        const result = violetTransferWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processTransferSent(supabase, eventId, result.data);
+        break;
+      }
+
+      case "TRANSFER_FAILED": {
+        const result = violetTransferWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processTransferFailed(supabase, eventId, result.data);
+        break;
+      }
+
+      case "TRANSFER_REVERSED": {
+        const result = violetTransferWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processTransferReversed(supabase, eventId, result.data);
+        break;
+      }
+
+      case "TRANSFER_PARTIALLY_REVERSED": {
+        const result = violetTransferWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processTransferPartiallyReversed(supabase, eventId, result.data);
         break;
       }
 

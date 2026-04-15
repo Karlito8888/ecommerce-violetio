@@ -19,6 +19,8 @@ import type {
   ShippingMethodsAvailable,
   SetShippingMethodInput,
   Distribution,
+  Transfer,
+  SearchTransfersInput,
   CategoryItem,
   CollectionItem,
   DiscountInput,
@@ -276,6 +278,21 @@ export interface SupplierAdapter {
    * No Violet webhook exists for distributions — must be fetched on-demand.
    */
   getOrderDistributions(violetOrderId: string): Promise<ApiResponse<Distribution[]>>;
+
+  /** Search Violet transfers with optional filters. */
+  searchTransfers(input?: SearchTransfersInput): Promise<ApiResponse<Transfer[]>>;
+
+  /** Retry failed transfer for a single order. */
+  retryTransferForOrder(violetOrderId: string): Promise<ApiResponse<{ message: string }>>;
+
+  /** Retry failed transfer for a single bag. */
+  retryTransferForBag(violetBagId: string): Promise<ApiResponse<{ message: string }>>;
+
+  /** Retry failed transfers for multiple orders. */
+  retryTransfersForOrders(violetOrderIds: string[]): Promise<ApiResponse<{ message: string }>>;
+
+  /** Retry failed transfers for multiple bags. */
+  retryTransfersForBags(violetBagIds: string[]): Promise<ApiResponse<{ message: string }>>;
 
   getOrders(userId: string): Promise<ApiResponse<Order[]>>;
 
