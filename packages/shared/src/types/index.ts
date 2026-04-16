@@ -200,3 +200,10 @@ export type {
   RetryTransferInput,
   SearchTransfersInput,
 } from "./transfer.types.js";
+export type {
+  PayoutProvider,
+  StripeAccountType,
+  StripeRequirements,
+  StripeProviderAccount,
+  MerchantPayoutAccountRow,
+} from "./payoutAccount.types.js";

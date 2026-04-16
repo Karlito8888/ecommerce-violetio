@@ -131,6 +131,8 @@ export const webhookEventTypeSchema = z.enum([
   "TRANSFER_FAILED",
   "TRANSFER_REVERSED",
   "TRANSFER_PARTIALLY_REVERSED",
+  "MERCHANT_PAYOUT_ACCOUNT_CREATED",
+  "MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED",
 ]);
 
 /**
@@ -426,3 +428,72 @@ export const violetTransferWebhookPayloadSchema = z.object({
 });
 
 export type VioletTransferPayload = z.infer<typeof violetTransferWebhookPayloadSchema>;
+
+// ─── Payout Account Webhook Schemas ──────────────────────────────
+
+/**
+ * Validates Violet MERCHANT_PAYOUT_ACCOUNT_* webhook payload.
+ *
+ * Handles: MERCHANT_PAYOUT_ACCOUNT_CREATED, MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED.
+ * Fired when a merchant's Prism Pay Account is created or when Stripe updates
+ * KYC requirements (currently_due, past_due, pending_verification).
+ *
+ * Critical for proactive monitoring: if a merchant has `past_due` requirements,
+ * Stripe may disable their account, blocking payouts.
+ *
+ * Model matches the PPA JSON from Violet docs:
+ * @see https://docs.violet.io/prism/payments/payouts/prism-payout-accounts
+ *
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ */
+export const violetPayoutAccountWebhookPayloadSchema = z.object({
+  /** Violet Payout Account ID */
+  id: z.number(),
+  /** Type of account entity — always MERCHANT for merchant payout accounts */
+  account_type: z.string().optional(),
+  /** Violet Merchant ID */
+  account_id: z.number().optional(),
+  /** Violet App ID this PPA is associated with */
+  app_id: z.number().optional(),
+  /** Merchant ID (alternate field — some payloads use this) */
+  merchant_id: z.number().optional(),
+  /** Whether this is the currently active PPA for the merchant */
+  is_active: z.boolean().optional(),
+  /** ISO-3166-1 alpha-2 country code of the bank */
+  country_code: z.string().optional(),
+  /** Payment provider: STRIPE or EXTERNAL */
+  payment_provider: z.string().optional(),
+  /** Stripe Connect account ID (e.g., "acct_1R42bBHasdfghjk2") */
+  payment_provider_account_id: z.string().optional().nullable(),
+  /** Stripe account details (KYC status, requirements, etc.) */
+  payment_provider_account: z
+    .object({
+      account_id: z.string().optional(),
+      account_type: z.string().optional(),
+      email: z.string().optional(),
+      banking_country: z.string().optional(),
+      banking_currency: z.string().optional(),
+      charges_enabled: z.boolean().optional(),
+      payouts_enabled: z.boolean().optional(),
+      requirements: z
+        .object({
+          alternatives: z.array(z.string()).optional(),
+          currently_due: z.array(z.string()).optional(),
+          errors: z.array(z.string()).optional(),
+          eventually_due: z.array(z.string()).optional(),
+          past_due: z.array(z.string()).optional(),
+          pending_verification: z.array(z.string()).optional(),
+        })
+        .optional(),
+      date_created: z.string().optional(),
+      date_last_modified: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  /** PPA-level errors */
+  errors: z.array(z.string()).optional(),
+  date_created: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletPayoutAccountPayload = z.infer<typeof violetPayoutAccountWebhookPayloadSchema>;

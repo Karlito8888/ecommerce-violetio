@@ -122,6 +122,8 @@ export const webhookEventTypeSchema = z.enum([
   "TRANSFER_FAILED",
   "TRANSFER_REVERSED",
   "TRANSFER_PARTIALLY_REVERSED",
+  "MERCHANT_PAYOUT_ACCOUNT_CREATED",
+  "MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED",
 ]);
 
 /**
@@ -388,6 +390,62 @@ export const violetTransferWebhookPayloadSchema = z.object({
 });
 
 export type VioletTransferPayload = z.infer<typeof violetTransferWebhookPayloadSchema>;
+
+// ─── Payout Account Webhook Schemas ──────────────────────────────
+
+/**
+ * Validates Violet MERCHANT_PAYOUT_ACCOUNT_* webhook payload.
+ *
+ * Handles: MERCHANT_PAYOUT_ACCOUNT_CREATED, MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED.
+ * Fired when a merchant's Prism Pay Account is created or when Stripe updates
+ * KYC requirements.
+ *
+ * @see https://docs.violet.io/prism/payments/payouts/prism-payout-accounts
+ *
+ * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
+ */
+export const violetPayoutAccountWebhookPayloadSchema = z.object({
+  id: z.number(),
+  account_type: z.string().optional(),
+  account_id: z.number().optional(),
+  app_id: z.number().optional(),
+  merchant_id: z.number().optional(),
+  is_active: z.boolean().optional(),
+  country_code: z.string().optional(),
+  payment_provider: z.string().optional(),
+  payment_provider_account_id: z.string().optional().nullable(),
+  payment_provider_account: z
+    .object({
+      account_id: z.string().optional(),
+      account_type: z.string().optional(),
+      email: z.string().optional(),
+      banking_country: z.string().optional(),
+      banking_currency: z.string().optional(),
+      charges_enabled: z.boolean().optional(),
+      payouts_enabled: z.boolean().optional(),
+      requirements: z
+        .object({
+          alternatives: z.array(z.string()).optional(),
+          currently_due: z.array(z.string()).optional(),
+          errors: z.array(z.string()).optional(),
+          eventually_due: z.array(z.string()).optional(),
+          past_due: z.array(z.string()).optional(),
+          pending_verification: z.array(z.string()).optional(),
+        })
+        .optional(),
+      date_created: z.string().optional(),
+      date_last_modified: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  errors: z.array(z.string()).optional(),
+  date_created: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletPayoutAccountPayload = z.infer<
+  typeof violetPayoutAccountWebhookPayloadSchema
+>;
 
 // ─── Recommendation Schemas (Story 6.5) ────────────────────────────
 //

@@ -51,6 +51,12 @@
  * | COLLECTION_UPDATED  | processCollectionUpdated   | Update collection metadata in DB         |
  * | COLLECTION_REMOVED  | processCollectionRemoved   | Soft-delete collection + clear junction   |
  * | COLLECTION_OFFERS_UPDATED | processCollectionOffersUpdated | Log offer composition change       |
+ * | TRANSFER_SENT            | processTransferSent                | Persist transfer success               |
+ * | TRANSFER_FAILED          | processTransferFailed              | Log failure + error details            |
+ * | TRANSFER_REVERSED        | processTransferReversed            | Persist full reversal                   |
+ * | TRANSFER_PARTIALLY_REVERSED | processTransferPartiallyReversed | Persist partial reversal              |
+ * | MERCHANT_PAYOUT_ACCOUNT_CREATED | processPayoutAccountCreated | Persist PPA + KYC alerts               |
+ * | MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED | processPayoutAccountRequirementsUpdated | Update PPA + KYC alerts |
  *
  * ## ⚠️ KNOWN LIMITATION: Synchronous processing (H1 code review)
  *
@@ -109,6 +115,7 @@ import {
   violetMerchantWebhookPayloadSchema,
   violetCollectionWebhookPayloadSchema,
   violetTransferWebhookPayloadSchema,
+  violetPayoutAccountWebhookPayloadSchema,
 } from "../_shared/schemas.ts";
 import {
   processOfferAdded,
@@ -137,6 +144,10 @@ import {
   processTransferReversed,
   processTransferPartiallyReversed,
 } from "./transferProcessors.ts";
+import {
+  processPayoutAccountCreated,
+  processPayoutAccountRequirementsUpdated,
+} from "./payoutAccountProcessors.ts";
 
 /** Standard JSON response headers for all responses. */
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
@@ -650,6 +661,41 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processTransferPartiallyReversed(supabase, eventId, result.data);
+        break;
+      }
+
+      // ─── Payout Account Events ──────────────────────────────────────────
+      // Prism Pay Account lifecycle: creation and KYC requirements updates.
+      // Critical for proactive monitoring of merchant payout readiness.
+      // @see https://docs.violet.io/prism/payments/payouts/prism-payout-accounts
+
+      case "MERCHANT_PAYOUT_ACCOUNT_CREATED": {
+        const result = violetPayoutAccountWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processPayoutAccountCreated(supabase, eventId, result.data);
+        break;
+      }
+
+      case "MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED": {
+        const result = violetPayoutAccountWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processPayoutAccountRequirementsUpdated(supabase, eventId, result.data);
         break;
       }
 
