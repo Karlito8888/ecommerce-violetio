@@ -115,6 +115,8 @@ export function transformBag(raw: VioletBagResponse): Bag {
      * @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
      */
     isDigital: items.length > 0 && items.every((item) => item.type !== "PHYSICAL"),
+    /** Enriched later in getCartFn from merchants table */
+    merchantCountryCode: null,
   };
 }
 

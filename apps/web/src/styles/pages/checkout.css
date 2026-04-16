@@ -397,6 +397,43 @@
   line-height: 1.5;
 }
 
+/* ── Cross-border duty warning (B1) ── */
+
+.checkout__cross-border-warning {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-amber-50, #fffbeb);
+  border: 1px solid var(--color-amber-200, #fde68a);
+  border-radius: 8px;
+  color: var(--color-amber-800, #92400e);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .checkout__cross-border-warning {
+  background: var(--color-amber-900, #451a03);
+  border-color: var(--color-amber-700, #b45309);
+  color: var(--color-amber-100, #fef3c7);
+}
+
+.checkout__cross-border-warning-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-amber-500, #f59e0b);
+}
+
+.checkout__cross-border-warning-text strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.checkout__cross-border-warning-text p {
+  margin: 0;
+}
+
 /* ── Address submit button (within address section) ── */
 
 .checkout__address-submit {

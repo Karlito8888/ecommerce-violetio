@@ -63,11 +63,9 @@ These are Violet.io API endpoints that are **pertinent to our Channel/affiliate 
 | | |
 |---|---|
 | **Doc link** | https://docs.violet.io/prism/checkout-guides/guides/cross-border-duties.md |
-| **Status** | ⚠️ Non implémenté — Option C recommandée (avertissement cross-border) |
-| **What to do** | Detect when `shippingAddress.country ≠ merchantCountry` and display a warning on checkout: "Customs duties may apply. You are responsible for any import fees upon delivery." |
-| **Files to modify** | `checkout/index.tsx` — add cross-border detection + warning banner. |
-| **Effort** | ~2h |
-| **Priority** | Medium — protects UX for international orders. |
+| **Status** | ✅ **COMPLÈTEMENT IMPLÉMENTÉ** (2026-04-16) |
+| **What it does** | Detects when shipping address country ≠ merchant country and displays a customs duties warning on checkout. |
+| **Details** | `merchantCountryCode` added to `Bag` type, enriched from `merchants` table in `getCartFn`. Warning banner in Order Summary with amber styling + dark mode support. DB migration adds `country_code` to `merchants` table. |
 
 ### B2. Custom Properties on OrderSku
 
@@ -192,6 +190,6 @@ These were previously ⚠️ and are now ✅:
 | Category | Count | Priority |
 |----------|-------|----------|
 | 🔴 Code to implement (APIs) | 0 | — Toutes implémentées ! |
-| 🟡 Code enhancements | 5 | B1 Medium, rest Low |
+| 🟡 Code enhancements | 4 | B2-B5 Low |
 | 🔵 Operational (manual) | 6 | C1-C3 Critical, C4-C6 High |
 | ✅ Already done | 11 | — |

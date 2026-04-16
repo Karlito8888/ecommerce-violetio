@@ -44,6 +44,14 @@ export interface Bag {
    * @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
    */
   isDigital: boolean;
+  /**
+   * Merchant's default country code (ISO 3166-1 alpha-2, e.g., "US", "GB").
+   * Enriched from our `merchants` table during cart fetch.
+   * Used for cross-border duty detection on checkout.
+   *
+   * `null` when the merchant's country is unknown (not yet synced).
+   */
+  merchantCountryCode: string | null;
 }
 
 /**

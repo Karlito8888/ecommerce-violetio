@@ -483,6 +483,25 @@ export const getCartFn = createServerFn({ method: "GET" })
       })),
     };
 
+    // ─── Enrich bags with merchant country codes for cross-border detection ──
+    const merchantIds = [...new Set(result.data.bags.map((b) => b.merchantId))];
+    if (merchantIds.length > 0) {
+      const { data: merchantRows } = await supabase
+        .from("merchants")
+        .select("merchant_id, country_code")
+        .in("merchant_id", merchantIds);
+
+      const countryCodeMap: Record<string, string> = {};
+      for (const row of merchantRows ?? []) {
+        if (row.country_code) countryCodeMap[row.merchant_id] = row.country_code;
+      }
+
+      enrichedCart.bags = enrichedCart.bags.map((bag) => ({
+        ...bag,
+        merchantCountryCode: countryCodeMap[bag.merchantId] ?? null,
+      }));
+    }
+
     return { data: enrichedCart, error: null };
   });
 

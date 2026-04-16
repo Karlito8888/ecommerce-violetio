@@ -2604,6 +2604,38 @@ function CheckoutPage() {
             <p className="checkout__affiliate">
               We earn a commission on purchases — this doesn&apos;t affect your price.
             </p>
+
+            {/* Cross-border duty warning — B1 */}
+            {cart.bags.some(
+              (bag) =>
+                bag.merchantCountryCode &&
+                address.country &&
+                bag.merchantCountryCode !== address.country,
+            ) && (
+              <div className="checkout__cross-border-warning" role="alert">
+                <svg
+                  className="checkout__cross-border-warning-icon"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  width="20"
+                  height="20"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <div className="checkout__cross-border-warning-text">
+                  <strong>International Order</strong>
+                  <p>
+                    Customs duties and import fees may apply. You are responsible for any additional
+                    charges upon delivery.
+                  </p>
+                </div>
+              </div>
+            )}
           </aside>
         </div>
       </div>
