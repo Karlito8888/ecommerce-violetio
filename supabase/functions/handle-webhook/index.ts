@@ -57,6 +57,7 @@
  * | TRANSFER_PARTIALLY_REVERSED | processTransferPartiallyReversed | Persist partial reversal              |
  * | MERCHANT_PAYOUT_ACCOUNT_CREATED | processPayoutAccountCreated | Persist PPA + KYC alerts               |
  * | MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED | processPayoutAccountRequirementsUpdated | Update PPA + KYC alerts |
+ * | MERCHANT_PAYOUT_ACCOUNT_DELETED | processPayoutAccountDeleted | Soft-delete PPA + audit log  |
  *
  * ## ⚠️ KNOWN LIMITATION: Synchronous processing (H1 code review)
  *
@@ -696,6 +697,22 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processPayoutAccountRequirementsUpdated(supabase, eventId, result.data);
+        break;
+      }
+
+      case "MERCHANT_PAYOUT_ACCOUNT_DELETED": {
+        // Minimal payload: just { "id": number }
+        const ppaId = (payload as Record<string, unknown>)?.id;
+        if (typeof ppaId !== "number") {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            "Missing or invalid id in MERCHANT_PAYOUT_ACCOUNT_DELETED payload",
+          );
+          break;
+        }
+        await processPayoutAccountDeleted(supabase, eventId, { id: ppaId });
         break;
       }
 

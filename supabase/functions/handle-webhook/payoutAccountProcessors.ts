@@ -307,3 +307,74 @@ export async function processPayoutAccountRequirementsUpdated(
     );
   }
 }
+
+/**
+ * Processes MERCHANT_PAYOUT_ACCOUNT_DELETED events.
+ *
+ * Fired when a Prism Pay Account is deleted via DELETE /payout_accounts/{id}.
+ * This happens when a PPA was created incorrectly (wrong country, wrong business type)
+ * or during administrative cleanup.
+ *
+ * The payload is minimal: `{ "id": 123456 }` — just the Violet PPA ID.
+ *
+ * Actions:
+ * 1. Soft-delete: set is_active = false on the matching row
+ * 2. Log deletion event for audit trail
+ *
+ * @see https://docs.violet.io/prism/payments/payouts/prism-payout-accounts/delete-payout-accounts
+ */
+export async function processPayoutAccountDeleted(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: { id: number },
+): Promise<void> {
+  try {
+    const ppaId = String(payload.id);
+
+    console.log(
+      `[payoutAccount] PPA deleted: id=${ppaId}`,
+    );
+
+    // 1. Soft-delete: mark as inactive
+    const { data: row, error: updateError } = await supabase
+      .from("merchant_payout_accounts")
+      .update({ is_active: false, synced_at: new Date().toISOString() })
+      .eq("violet_payout_account_id", ppaId)
+      .select("merchant_id")
+      .maybeSingle();
+
+    if (updateError) {
+      console.error(
+        `[payoutAccount] Failed to soft-delete PPA ${ppaId}: ${updateError.message}`,
+      );
+    } else if (row) {
+      console.log(
+        `[payoutAccount] Soft-deleted PPA ${ppaId} for merchant ${row.merchant_id}`,
+      );
+    } else {
+      // PPA not in our DB — may have been deleted before we received the CREATED webhook
+      console.log(
+        `[payoutAccount] PPA ${ppaId} not found in DB — already absent`,
+      );
+    }
+
+    // 2. Log deletion for audit trail
+    await supabase.from("error_logs").insert({
+      source: "webhook",
+      error_type: "MERCHANT_PAYOUT_ACCOUNT_DELETED",
+      message: `Payout account ${ppaId} deleted`,
+      context: { payout_account_id: ppaId, merchant_id: row?.merchant_id ?? null },
+    });
+
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error
+        ? err.message
+        : "Unknown error in processPayoutAccountDeleted",
+    );
+  }
+}
