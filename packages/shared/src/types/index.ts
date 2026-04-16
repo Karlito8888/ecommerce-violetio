@@ -166,6 +166,8 @@ export type {
   TimeRange,
   TimeRangeParams,
   AdminDashboardData,
+  SetCommissionRateInput,
+  AppInstall,
 } from "./admin.types.js";
 export { SUPPORT_STATUSES } from "./admin-support.types.js";
 export type {
@@ -201,6 +203,13 @@ export type {
   TransferRow,
   RetryTransferInput,
   SearchTransfersInput,
+  PendingTransferSummary,
+  PendingTransferPayoutAccount,
+  GetPendingTransfersInput,
+  TransferDetail,
+  TransferDetailError,
+  TransferType,
+  TransferMechanism,
 } from "./transfer.types.js";
 export type {
   PayoutProvider,

@@ -13,7 +13,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
-import type { ApiResponse, Transfer } from "@ecommerce/shared";
+import type {
+  ApiResponse,
+  Transfer,
+  PendingTransferSummary,
+  TransferDetail,
+} from "@ecommerce/shared";
 
 /**
  * Search failed transfers from Violet API.
@@ -130,4 +135,61 @@ export const syncFailedTransfersFn = createServerFn({ method: "POST" })
     }
 
     return { data: validRows.length, error: null };
+  });
+
+/**
+ * Get pending transfers aggregated by merchant from Violet API.
+ *
+ * Returns all transfers in PENDING status that haven't been processed yet.
+ * Useful for proactive monitoring — transfers stuck in PENDING may indicate
+ * Stripe/Violet issues requiring investigation.
+ *
+ * @see https://docs.violet.io/api-reference/payments/transfers/get-pending-transfers
+ */
+export const getPendingTransfersFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    const schema = z.object({
+      merchantId: z.string().optional(),
+      appId: z.string().optional(),
+    });
+    return schema.parse(input);
+  })
+  .handler(async ({ data }): Promise<ApiResponse<PendingTransferSummary[]>> => {
+    const adapter = getAdapter();
+    return adapter.getPendingTransfers(data);
+  });
+
+/**
+ * Get a single transfer by its Violet Transfer ID.
+ *
+ * Returns the full transfer detail including payout references,
+ * transfer mechanism, effective related entity IDs, and reversal IDs.
+ * Useful for manual refresh of a specific transfer's status.
+ *
+ * @see https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-id
+ */
+export const getTransferFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    return z.object({ transferId: z.string().min(1) }).parse(input);
+  })
+  .handler(async ({ data }): Promise<ApiResponse<TransferDetail>> => {
+    const adapter = getAdapter();
+    return adapter.getTransfer(data.transferId);
+  });
+
+/**
+ * Get a transfer by its payment provider (Stripe) transfer ID.
+ *
+ * Looks up a Violet transfer using the external ID (e.g., "tr_1QMs...").
+ * Useful for reconciliation — matching Stripe Dashboard transfers to Violet orders.
+ *
+ * @see https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-payment-provider-transfer-id
+ */
+export const getTransferByProviderIdFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    return z.object({ providerTransferId: z.string().min(1) }).parse(input);
+  })
+  .handler(async ({ data }): Promise<ApiResponse<TransferDetail>> => {
+    const adapter = getAdapter();
+    return adapter.getTransferByProviderId(data.providerTransferId);
   });

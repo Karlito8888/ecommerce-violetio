@@ -23,44 +23,36 @@ These are Violet.io API endpoints that are **pertinent to our Channel/affiliate 
 | | |
 |---|---|
 | **Doc link** | https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-id.md |
-| **Status** | ⚠️ Non implémenté |
-| **What it does** | Fetch a single transfer by its Violet Transfer ID. |
-| **Why implement** | Our `order_transfers` table stores transfer data from webhooks. This API would allow **manual refresh** of a specific transfer's status (e.g., after a TRANSFER_FAILED webhook, check if it was retried successfully). |
-| **Effort** | ~1h — add to `violetTransfers.ts`, server function, admin transfer detail view. |
-| **Priority** | Low — our webhook + searchTransfers already cover most needs. |
+| **Status** | ✅ **COMPLÈTEMENT IMPLÉMENTÉ** (2026-04-16) |
+| **What it does** | Fetch a single transfer by its Violet Transfer ID with full detail. |
+| **Details** | `getTransfer()` returns `TransferDetail` (extends base Transfer with 17 additional fields: payout references, transfer mechanism, effective related IDs, reversal IDs, extended errors with resolved status). Server function `getTransferFn` with Zod validation. 6 unit tests. |
 
-### A3. `Get Transfer by Payment Provider Transfer ID` — `GET /payments/transfers?payment_provider_transfer_id={stripe_transfer_id}`
+### A3. `Get Transfer by Payment Provider Transfer ID` — `GET /payments/transfers/external/{external_transfer_id}`
 
 | | |
 |---|---|
 | **Doc link** | https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-payment-provider-transfer-id.md |
-| **Status** | ⚠️ Non implémenté |
-| **What it does** | Look up a Violet transfer by its Stripe transfer ID (e.g., `tr_xxx`). |
-| **Why implement** | Useful for **reconciliation** — matching Stripe Dashboard transfers to Violet orders. Also useful for debugging when Stripe shows a transfer but we don't know which Violet order it belongs to. |
-| **Effort** | ~1h — add to `violetTransfers.ts`, server function. |
-| **Priority** | Low — reconciliation is manual for now. |
+| **Status** | ✅ **COMPLÈTEMENT IMPLÉMENTÉ** (2026-04-16) |
+| **What it does** | Look up a Violet transfer by its Stripe transfer ID. |
+| **Details** | `getTransferByProviderId()` returns same `TransferDetail` as `getTransfer()`. Server function `getTransferByProviderIdFn` with Zod validation. 4 unit tests. |
 
 ### A4. `Get Pending Transfers` — `GET /payments/transfers/pending`
 
 | | |
 |---|---|
 | **Doc link** | https://docs.violet.io/api-reference/payments/transfers/get-pending-transfers.md |
-| **Status** | ⚠️ Non implémenté |
-| **What it does** | Returns all transfers in PENDING status that haven't been processed yet. |
-| **Why implement** | Proactive monitoring — if transfers stay PENDING for too long, it indicates a Stripe/Violet issue. Could power an admin **alert system**. |
-| **Effort** | ~1h — add to `violetTransfers.ts`, server function, admin badge. |
-| **Priority** | Medium — early warning for payment issues. |
+| **Status** | ✅ **COMPLÈTEMENT IMPLÉMENTÉ** (2026-04-16) |
+| **What it does** | Returns all transfers in PENDING status aggregated by merchant, with payout account details. |
+| **Details** | `getPendingTransfers()` with optional merchant_id/app_id filters, `PendingTransferSummary` type with embedded `PendingTransferPayoutAccount`, server function `getPendingTransfersFn` with Zod validation, 7 unit tests. |
 
-### A5. `Set Merchant/Channel Commission Rate` — `POST /merchants/{id}/commission`
+### A5. `Set Merchant/Channel Commission Rate` — `PUT /apps/{app_id}/merchants/{merchant_id}/commission_rate`
 
 | | |
 |---|---|
 | **Doc link** | https://docs.violet.io/api-reference/apps/commission-rates/set-merchant-app-commission-rate.md |
-| **Status** | ⚠️ Non implémenté |
-| **What it does** | Programmatically set the commission rate for a merchant. Supports `lock` parameter to prevent merchant override. |
-| **Why implement** | Currently commission rates are set manually via Channel Dashboard. This API would enable **automated onboarding** — when a merchant connects via Violet Connect, set their commission rate automatically instead of manual Dashboard configuration. |
-| **Effort** | ~2h — new function in adapter, server function, admin UI commission editor. |
-| **Priority** | Medium — becomes critical when scaling to many merchants. |
+| **Status** | ✅ **COMPLÈTEMENT IMPLÉMENTÉ** (2026-04-16) |
+| **What it does** | Set commission rate for a merchant with optional lock. |
+| **Details** | `setCommissionRate()` with rate 0–50 + lock. Returns `AppInstall` record. New `violetMerchants.ts` module, server function `setCommissionRateFn` with Zod validation, 8 unit tests. |
 
 ---
 
@@ -187,7 +179,11 @@ These were previously ⚠️ and are now ✅:
 - [x] **Get Payout Account by ID** — `GET /payments/payout_accounts/{id}` — implemented (commit 5421230)
 - [x] **Search Distributions** — `POST /payments/DEVELOPER/{id}/distributions/search` — implemented (commit a9de118)
 - [x] **Register an External Transfer** — `POST /payments/transfers/external/register` — not applicable (no EXTERNAL merchants)
+- [x] **Set Merchant/Channel Commission Rate** — `PUT /apps/{app_id}/merchants/{merchant_id}/commission_rate` — implemented with rate + lock (2026-04-16)
+- [x] **Get Transfer by Payment Provider Transfer ID** — `GET /payments/transfers/external/{id}` — implemented with TransferDetail (2026-04-16)
+- [x] **Get Transfer** — `GET /payments/transfers/{id}` — implemented with TransferDetail + 17 extra fields (2026-04-16)
 - [x] **Payment Integration Health** — Dashboard page, appears after Live Mode setup
+- [x] **Get Pending Transfers** — `GET /payments/transfers/pending` — implemented with aggregated summaries + payout account details (2026-04-16)
 
 ---
 
@@ -195,7 +191,7 @@ These were previously ⚠️ and are now ✅:
 
 | Category | Count | Priority |
 |----------|-------|----------|
-| 🔴 Code to implement (APIs) | 4 | A4 Medium, rest Low |
+| 🔴 Code to implement (APIs) | 0 | — Toutes implémentées ! |
 | 🟡 Code enhancements | 5 | B1 Medium, rest Low |
 | 🔵 Operational (manual) | 6 | C1-C3 Critical, C4-C6 High |
-| ✅ Already done | 7 | — |
+| ✅ Already done | 11 | — |

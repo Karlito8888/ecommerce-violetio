@@ -325,6 +325,49 @@ export interface SupplierAdapter {
   /** Retry failed transfers for multiple bags. */
   retryTransfersForBags(violetBagIds: string[]): Promise<ApiResponse<{ message: string }>>;
 
+  /**
+   * Get pending transfers aggregated by merchant.
+   *
+   * Calls `GET /payments/transfers/pending` — returns all transfers in PENDING status.
+   * Each entry represents a merchant with funds waiting to be transferred,
+   * including payout account details.
+   *
+   * Useful for proactive monitoring — transfers stuck in PENDING may indicate
+   * Stripe/Violet issues.
+   *
+   * @see https://docs.violet.io/api-reference/payments/transfers/get-pending-transfers
+   */
+  getPendingTransfers(
+    input?: import("../types/transfer.types.js").GetPendingTransfersInput,
+  ): Promise<ApiResponse<import("../types/transfer.types.js").PendingTransferSummary[]>>;
+
+  /**
+   * Get a single transfer by its Violet Transfer ID.
+   *
+   * Calls `GET /payments/transfers/{transfer_id}` — returns the full transfer detail
+   * including payout references, transfer mechanism, effective related entity IDs,
+   * and reversal IDs.
+   *
+   * Useful for manual refresh of a specific transfer's status.
+   *
+   * @see https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-id
+   */
+  getTransfer(
+    transferId: string,
+  ): Promise<ApiResponse<import("../types/transfer.types.js").TransferDetail>>;
+
+  /**
+   * Get a transfer by its payment provider (Stripe) transfer ID.
+   *
+   * Calls `GET /payments/transfers/external/{external_transfer_id}`.
+   * Useful for reconciliation — matching Stripe Dashboard transfers to Violet orders.
+   *
+   * @see https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-payment-provider-transfer-id
+   */
+  getTransferByProviderId(
+    providerTransferId: string,
+  ): Promise<ApiResponse<import("../types/transfer.types.js").TransferDetail>>;
+
   getOrders(userId: string): Promise<ApiResponse<Order[]>>;
 
   // Payout Accounts
@@ -365,6 +408,23 @@ export interface SupplierAdapter {
    * @see https://docs.violet.io/api-reference/payments/payout-accounts/get-payout-account-by-id
    */
   getPayoutAccountById(payoutAccountId: string): Promise<ApiResponse<VioletPayoutAccount | null>>;
+
+  // Merchant Management
+
+  /**
+   * Set the commission rate for a merchant's app install.
+   *
+   * Calls `PUT /apps/{app_id}/merchants/{merchant_id}/commission_rate`.
+   * The commission rate is a percentage (0–50 for channels). When locked,
+   * the merchant cannot override it.
+   *
+   * Returns the updated AppInstall record.
+   *
+   * @see https://docs.violet.io/api-reference/apps/commission-rates/set-merchant-app-commission-rate
+   */
+  setCommissionRate(
+    input: import("../types/admin.types.js").SetCommissionRateInput,
+  ): Promise<ApiResponse<import("../types/admin.types.js").AppInstall>>;
 
   // Webhooks
   validateWebhook(headers: Headers, body: string): boolean;

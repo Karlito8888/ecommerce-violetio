@@ -17,6 +17,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { VioletTokenManager } from "../../clients/violetAuth.js";
+import type { PendingTransferSummary } from "../../types/transfer.types.js";
 import {
   webhookEventTypeSchema,
   violetTransferWebhookPayloadSchema,
@@ -349,6 +350,454 @@ describe("violetTransfers adapter", () => {
       const body = JSON.parse(options.body);
       expect(body.bag_ids).toEqual([12345, 12346]);
     });
+  });
+
+  // ─── getPendingTransfers ────────────────────────────────────────────
+
+  describe("getPendingTransfers", () => {
+    /** Create a mock pending transfer summary as returned by the API. */
+    function createMockPendingSummary(overrides: Record<string, unknown> = {}) {
+      return {
+        merchant_id: 12345,
+        amount: 25000,
+        currency: "USD",
+        related_distributions: [1118941, 1118942],
+        merchant_name: "Test Merchant",
+        distribution_count: 2,
+        payout_account_id: 99,
+        payout_account: {
+          id: 99,
+          account_type: "MERCHANT",
+          account_id: 12345,
+          merchant_id: 12345,
+          app_id: 100,
+          is_active: true,
+          country_code: "US",
+          payment_provider: "STRIPE",
+          payment_provider_account_id: "acct_123",
+          payment_provider_account_type: "EXPRESS",
+          payment_provider_metadata: {},
+          payment_provider_account: {},
+          errors: [],
+          date_created: "2026-04-16T10:00:00Z",
+          date_last_modified: "2026-04-16T10:00:00Z",
+        },
+        ...overrides,
+      };
+    }
+
+    it("calls GET /payments/transfers/pending with no filters", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const { getPendingTransfers } = await import("../violetTransfers.js");
+      const result = await getPendingTransfers(ctx);
+
+      expect(result.error).toBeNull();
+      expect(result.data).toEqual([]);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const [url, options] = fetchSpy.mock.calls[0];
+      expect(url).toBe("https://sandbox-api.violet.io/v1/payments/transfers/pending");
+      expect(options.method).toBe("GET");
+    });
+
+    it("sends merchant_id and app_id as query params", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const { getPendingTransfers } = await import("../violetTransfers.js");
+      await getPendingTransfers(ctx, { merchantId: "12345", appId: "100" });
+
+      const url = fetchSpy.mock.calls[0][0] as string;
+      expect(url).toContain("merchant_id=12345");
+      expect(url).toContain("app_id=100");
+      expect(url).toContain("/payments/transfers/pending?");
+    });
+
+    it("maps Violet pending summary response with full payout account", async () => {
+      const rawSummary = createMockPendingSummary();
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([rawSummary]),
+      });
+
+      const { getPendingTransfers } = await import("../violetTransfers.js");
+      const result = await getPendingTransfers(ctx);
+
+      expect(result.error).toBeNull();
+      expect(result.data).toHaveLength(1);
+
+      const summary: PendingTransferSummary = result.data![0];
+      expect(summary.merchantId).toBe("12345");
+      expect(summary.amount).toBe(25000);
+      expect(summary.currency).toBe("USD");
+      expect(summary.merchantName).toBe("Test Merchant");
+      expect(summary.distributionCount).toBe(2);
+      expect(summary.relatedDistributions).toEqual(["1118941", "1118942"]);
+      expect(summary.payoutAccountId).toBe("99");
+      expect(summary.payoutAccount).not.toBeNull();
+      expect(summary.payoutAccount!.id).toBe("99");
+      expect(summary.payoutAccount!.isActive).toBe(true);
+      expect(summary.payoutAccount!.paymentProvider).toBe("STRIPE");
+      expect(summary.payoutAccount!.paymentProviderAccountId).toBe("acct_123");
+      expect(summary.payoutAccount!.paymentProviderAccountType).toBe("EXPRESS");
+      expect(summary.payoutAccount!.countryCode).toBe("US");
+    });
+
+    it("handles summary without payout_account (null)", async () => {
+      const rawSummary = createMockPendingSummary({
+        payout_account: null,
+        payout_account_id: null,
+      });
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([rawSummary]),
+      });
+
+      const { getPendingTransfers } = await import("../violetTransfers.js");
+      const result = await getPendingTransfers(ctx);
+
+      const summary = result.data![0];
+      expect(summary.payoutAccountId).toBeNull();
+      expect(summary.payoutAccount).toBeNull();
+    });
+
+    it("handles multiple pending summaries", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            createMockPendingSummary({ merchant_id: 1, merchant_name: "Merchant A" }),
+            createMockPendingSummary({ merchant_id: 2, merchant_name: "Merchant B" }),
+          ]),
+      });
+
+      const { getPendingTransfers } = await import("../violetTransfers.js");
+      const result = await getPendingTransfers(ctx);
+
+      expect(result.data).toHaveLength(2);
+      expect(result.data![0].merchantName).toBe("Merchant A");
+      expect(result.data![1].merchantName).toBe("Merchant B");
+    });
+
+    it("returns error on non-2xx response", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve("Unauthorized"),
+      });
+
+      const { getPendingTransfers } = await import("../violetTransfers.js");
+      const result = await getPendingTransfers(ctx);
+
+      expect(result.data).toBeNull();
+      expect(result.error!.code).toBe("VIOLET.AUTH_FAILED");
+    });
+
+    it("returns NETWORK_ERROR on fetch failure", async () => {
+      fetchSpy.mockRejectedValue(new Error("Connection refused"));
+
+      const { getPendingTransfers } = await import("../violetTransfers.js");
+      const result = await getPendingTransfers(ctx);
+
+      expect(result.data).toBeNull();
+      expect(result.error!.code).toBe("VIOLET.NETWORK_ERROR");
+    }, 10000);
+  });
+
+  // ─── getTransfer ────────────────────────────────────────────────────
+
+  describe("getTransfer", () => {
+    /** Create a mock full transfer detail as returned by GET /transfers/{id}. */
+    function createMockTransferDetail(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 335500,
+        payment_transaction: 99001,
+        payout_id: 77001,
+        payment_provider_id: "tr_1QMsWtKUtPkD123456789",
+        payment_provider_payout_id: "po_stripe_123",
+        payout_account_id: 99,
+        bag_amount: 10000,
+        bag_currency: "USD",
+        amount: 10000,
+        currency: "USD",
+        status: "SENT",
+        type: "MERCHANT",
+        payment_provider: "STRIPE",
+        idempotency_key: "ik_335500",
+        transfer_mechanism: "STANDARD_TRANSFERS",
+        date_created: "2026-04-16T10:00:00Z",
+        date_last_modified: "2026-04-16T10:05:00Z",
+        errors: [],
+        externalId: "ext_335500",
+        payoutExternalId: "po_ext_77001",
+        paymentService: "STRIPE",
+        effectiveRelatedOrderIds: [22345],
+        effectiveRelatedBagIds: [12345],
+        effectiveRelatedDistributionIds: [1118941],
+        effectiveTransferReversalIds: [],
+        related_order_ids: [22345],
+        related_bag_ids: [12345],
+        related_distribution_ids: [1118941],
+        transfer_reversal_ids: [],
+        ...overrides,
+      };
+    }
+
+    it("calls GET /payments/transfers/{id}", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(createMockTransferDetail()),
+      });
+
+      const { getTransfer } = await import("../violetTransfers.js");
+      const result = await getTransfer(ctx, "335500");
+
+      expect(result.error).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const [url, options] = fetchSpy.mock.calls[0];
+      expect(url).toBe("https://sandbox-api.violet.io/v1/payments/transfers/335500");
+      expect(options.method).toBe("GET");
+    });
+
+    it("maps full TransferDetail with all extended fields", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(createMockTransferDetail()),
+      });
+
+      const { getTransfer } = await import("../violetTransfers.js");
+      const result = await getTransfer(ctx, "335500");
+
+      expect(result.error).toBeNull();
+      const t = result.data!;
+
+      // Base Transfer fields
+      expect(t.id).toBe("335500");
+      expect(t.amount).toBe(10000);
+      expect(t.currency).toBe("USD");
+      expect(t.status).toBe("SENT");
+      expect(t.dateCreated).toBe("2026-04-16T10:00:00Z");
+      expect(t.dateLastModified).toBe("2026-04-16T10:05:00Z");
+
+      // TransferDetail-specific fields
+      expect(t.paymentTransaction).toBe("99001");
+      expect(t.payoutId).toBe("77001");
+      expect(t.paymentProviderId).toBe("tr_1QMsWtKUtPkD123456789");
+      expect(t.paymentProviderPayoutId).toBe("po_stripe_123");
+      expect(t.payoutAccountId).toBe("99");
+      expect(t.bagAmount).toBe(10000);
+      expect(t.bagCurrency).toBe("USD");
+      expect(t.type).toBe("MERCHANT");
+      expect(t.transferMechanism).toBe("STANDARD_TRANSFERS");
+      expect(t.idempotencyKey).toBe("ik_335500");
+      expect(t.externalId).toBe("ext_335500");
+      expect(t.payoutExternalId).toBe("po_ext_77001");
+      expect(t.paymentService).toBe("STRIPE");
+      expect(t.effectiveRelatedOrderIds).toEqual(["22345"]);
+      expect(t.effectiveRelatedBagIds).toEqual(["12345"]);
+      expect(t.effectiveRelatedDistributionIds).toEqual(["1118941"]);
+      expect(t.effectiveTransferReversalIds).toEqual([]);
+      expect(t.transferReversalIds).toEqual([]);
+    });
+
+    it("maps FAILED transfer with extended errors including resolved status", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            createMockTransferDetail({
+              status: "FAILED",
+              type: "MERCHANT",
+              errors: [
+                {
+                  id: 501,
+                  error_code: 1001,
+                  error_message: "Insufficient funds",
+                  resolved: false,
+                  date_created: "2026-04-16T08:00:00Z",
+                  payout_transfer_id: 335500,
+                },
+              ],
+            }),
+          ),
+      });
+
+      const { getTransfer } = await import("../violetTransfers.js");
+      const result = await getTransfer(ctx, "335500");
+
+      const t = result.data!;
+      expect(t.status).toBe("FAILED");
+      expect(t.errors).toHaveLength(1);
+      expect(t.errors[0].id).toBe(501);
+      expect(t.errors[0].errorCode).toBe(1001);
+      expect(t.errors[0].errorMessage).toBe("Insufficient funds");
+      expect(t.errors[0].resolved).toBe(false);
+      expect(t.errors[0].payoutTransferId).toBe(335500);
+    });
+
+    it("handles null optional fields gracefully", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 1,
+            status: "PENDING",
+          }),
+      });
+
+      const { getTransfer } = await import("../violetTransfers.js");
+      const result = await getTransfer(ctx, "1");
+
+      const t = result.data!;
+      expect(t.id).toBe("1");
+      expect(t.status).toBe("PENDING");
+      expect(t.paymentTransaction).toBeNull();
+      expect(t.payoutId).toBeNull();
+      expect(t.paymentProviderId).toBeNull();
+      expect(t.paymentProviderPayoutId).toBeNull();
+      expect(t.payoutAccountId).toBeNull();
+      expect(t.type).toBeNull();
+      expect(t.transferMechanism).toBeNull();
+      expect(t.idempotencyKey).toBeNull();
+      expect(t.externalId).toBeNull();
+      expect(t.payoutExternalId).toBeNull();
+      expect(t.paymentService).toBeNull();
+      expect(t.effectiveRelatedOrderIds).toEqual([]);
+      expect(t.effectiveRelatedBagIds).toEqual([]);
+      expect(t.effectiveTransferReversalIds).toEqual([]);
+      expect(t.transferReversalIds).toEqual([]);
+      expect(t.errors).toEqual([]);
+    });
+
+    it("returns error on non-2xx response", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve("Transfer not found"),
+      });
+
+      const { getTransfer } = await import("../violetTransfers.js");
+      const result = await getTransfer(ctx, "99999");
+
+      expect(result.data).toBeNull();
+      expect(result.error!.code).toBe("VIOLET.NOT_FOUND");
+    });
+
+    it("returns NETWORK_ERROR on fetch failure", async () => {
+      fetchSpy.mockRejectedValue(new Error("Connection refused"));
+
+      const { getTransfer } = await import("../violetTransfers.js");
+      const result = await getTransfer(ctx, "335500");
+
+      expect(result.data).toBeNull();
+      expect(result.error!.code).toBe("VIOLET.NETWORK_ERROR");
+    }, 10000);
+  });
+
+  // ─── getTransferByProviderId ─────────────────────────────────────────
+
+  describe("getTransferByProviderId", () => {
+    it("calls GET /payments/transfers/external/{id}", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 335500,
+            status: "SENT",
+            amount: 10000,
+            currency: "USD",
+            payment_provider: "STRIPE",
+            type: "MERCHANT",
+            transfer_mechanism: "STANDARD_TRANSFERS",
+            errors: [],
+            related_order_ids: [22345],
+            related_bag_ids: [12345],
+            related_distribution_ids: [1118941],
+          }),
+      });
+
+      const { getTransferByProviderId } = await import("../violetTransfers.js");
+      const result = await getTransferByProviderId(ctx, "tr_1QMsWtKUtPkD123");
+
+      expect(result.error).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const [url, options] = fetchSpy.mock.calls[0];
+      expect(url).toBe(
+        "https://sandbox-api.violet.io/v1/payments/transfers/external/tr_1QMsWtKUtPkD123",
+      );
+      expect(options.method).toBe("GET");
+    });
+
+    it("returns TransferDetail with same shape as getTransfer", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 335500,
+            payment_transaction: 99001,
+            payout_id: 77001,
+            payment_provider_id: "tr_1QMsWtKUtPkD123",
+            payout_account_id: 99,
+            bag_amount: 10000,
+            bag_currency: "USD",
+            amount: 10000,
+            currency: "USD",
+            status: "SENT",
+            type: "MERCHANT",
+            payment_provider: "STRIPE",
+            transfer_mechanism: "STANDARD_TRANSFERS",
+            errors: [],
+            effectiveRelatedOrderIds: [22345],
+            effectiveRelatedBagIds: [12345],
+            related_order_ids: [22345],
+            related_bag_ids: [12345],
+          }),
+      });
+
+      const { getTransferByProviderId } = await import("../violetTransfers.js");
+      const result = await getTransferByProviderId(ctx, "tr_1QMsWtKUtPkD123");
+
+      const t = result.data!;
+      expect(t.id).toBe("335500");
+      expect(t.status).toBe("SENT");
+      expect(t.paymentProviderId).toBe("tr_1QMsWtKUtPkD123");
+      expect(t.payoutId).toBe("77001");
+      expect(t.paymentTransaction).toBe("99001");
+      expect(t.type).toBe("MERCHANT");
+      expect(t.transferMechanism).toBe("STANDARD_TRANSFERS");
+    });
+
+    it("returns 404 error for unknown provider transfer ID", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve("Transfer not found"),
+      });
+
+      const { getTransferByProviderId } = await import("../violetTransfers.js");
+      const result = await getTransferByProviderId(ctx, "tr_unknown");
+
+      expect(result.data).toBeNull();
+      expect(result.error!.code).toBe("VIOLET.NOT_FOUND");
+    });
+
+    it("returns NETWORK_ERROR on fetch failure", async () => {
+      fetchSpy.mockRejectedValue(new Error("Connection refused"));
+
+      const { getTransferByProviderId } = await import("../violetTransfers.js");
+      const result = await getTransferByProviderId(ctx, "tr_abc");
+
+      expect(result.data).toBeNull();
+      expect(result.error!.code).toBe("VIOLET.NETWORK_ERROR");
+    }, 10000);
   });
 
   // ─── Field mapping edge cases ─────────────────────────────────────

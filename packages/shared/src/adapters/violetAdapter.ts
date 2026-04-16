@@ -22,9 +22,14 @@ import type {
   Distribution,
   Transfer,
   SearchTransfersInput,
+  PendingTransferSummary,
+  GetPendingTransfersInput,
+  TransferDetail,
   CollectionItem,
   DiscountInput,
   VioletPayoutAccount,
+  SetCommissionRateInput,
+  AppInstall,
 } from "../types/index.js";
 import type { SupplierAdapter } from "./supplierAdapter.js";
 import { VioletTokenManager } from "../clients/violetAuth.js";
@@ -76,7 +81,11 @@ import {
   retryTransferForBag as retryTransferForBagFn,
   retryTransfersForOrders as retryTransfersForOrdersFn,
   retryTransfersForBags as retryTransfersForBagsFn,
+  getPendingTransfers as getPendingTransfersFn,
+  getTransfer as getTransferFn,
+  getTransferByProviderId as getTransferByProviderIdFn,
 } from "./violetTransfers.js";
+import { setCommissionRate as setCommissionRateFn } from "./violetMerchants.js";
 import { searchProducts as searchProductsFn } from "./violetSearch.js";
 import { getExchangeRates as getExchangeRatesFn } from "./violetCurrency.js";
 import {
@@ -380,6 +389,20 @@ export class VioletAdapter implements SupplierAdapter {
     return retryTransfersForBagsFn(this.getCtx(), violetBagIds);
   }
 
+  async getPendingTransfers(
+    input?: GetPendingTransfersInput,
+  ): Promise<ApiResponse<PendingTransferSummary[]>> {
+    return getPendingTransfersFn(this.getCtx(), input);
+  }
+
+  async getTransfer(transferId: string): Promise<ApiResponse<TransferDetail>> {
+    return getTransferFn(this.getCtx(), transferId);
+  }
+
+  async getTransferByProviderId(providerTransferId: string): Promise<ApiResponse<TransferDetail>> {
+    return getTransferByProviderIdFn(this.getCtx(), providerTransferId);
+  }
+
   async getOrders(_userId: string): Promise<ApiResponse<Order[]>> {
     return getOrdersFn(this.getCtx(), _userId);
   }
@@ -428,6 +451,13 @@ export class VioletAdapter implements SupplierAdapter {
         error: { code: "VIOLET.API_ERROR", message: e instanceof Error ? e.message : String(e) },
       };
     }
+  }
+
+  // ─── Merchant Management ──────────────────────────────────────────
+
+  async setCommissionRate(input: SetCommissionRateInput): Promise<ApiResponse<AppInstall>> {
+    const appId = (typeof process !== "undefined" && process.env?.VIOLET_APP_ID) || "";
+    return setCommissionRateFn(this.getCtx(), appId, input);
   }
 
   // ─── Webhooks ─────────────────────────────────────────────────────
