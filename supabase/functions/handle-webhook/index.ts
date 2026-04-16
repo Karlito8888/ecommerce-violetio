@@ -58,6 +58,8 @@
  * | MERCHANT_PAYOUT_ACCOUNT_CREATED | processPayoutAccountCreated | Persist PPA + KYC alerts               |
  * | MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED | processPayoutAccountRequirementsUpdated | Update PPA + KYC alerts |
  * | MERCHANT_PAYOUT_ACCOUNT_DELETED | processPayoutAccountDeleted | Soft-delete PPA + audit log  |
+ * | MERCHANT_PAYOUT_ACCOUNT_ACTIVATED | processPayoutAccountActivated | Upsert PPA active + deactivate others |
+ * | MERCHANT_PAYOUT_ACCOUNT_DEACTIVATED | processPayoutAccountDeactivated | Upsert PPA inactive + audit log |
  *
  * ## ⚠️ KNOWN LIMITATION: Synchronous processing (H1 code review)
  *
@@ -148,6 +150,9 @@ import {
 import {
   processPayoutAccountCreated,
   processPayoutAccountRequirementsUpdated,
+  processPayoutAccountDeleted,
+  processPayoutAccountActivated,
+  processPayoutAccountDeactivated,
 } from "./payoutAccountProcessors.ts";
 
 /** Standard JSON response headers for all responses. */
@@ -713,6 +718,36 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processPayoutAccountDeleted(supabase, eventId, { id: ppaId });
+        break;
+      }
+
+      case "MERCHANT_PAYOUT_ACCOUNT_ACTIVATED": {
+        const result = violetPayoutAccountWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processPayoutAccountActivated(supabase, eventId, result.data);
+        break;
+      }
+
+      case "MERCHANT_PAYOUT_ACCOUNT_DEACTIVATED": {
+        const result = violetPayoutAccountWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processPayoutAccountDeactivated(supabase, eventId, result.data);
         break;
       }
 

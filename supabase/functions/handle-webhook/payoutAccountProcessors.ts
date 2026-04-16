@@ -378,3 +378,115 @@ export async function processPayoutAccountDeleted(
     );
   }
 }
+
+/**
+ * Processes MERCHANT_PAYOUT_ACCOUNT_ACTIVATED events.
+ *
+ * Fired when a PPA is marked as the active payout account for a merchant.
+ * Only one PPA can be active at any given time per merchant.
+ *
+ * Actions:
+ * 1. Upsert PPA with is_active = true
+ * 2. Deactivate other PPAs for the same merchant
+ * 3. Log activation for audit trail
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/payout-account-webhooks
+ */
+export async function processPayoutAccountActivated(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: VioletPayoutAccountPayload,
+): Promise<void> {
+  try {
+    const merchantId = extractMerchantId(payload);
+    const ppaId = String(payload.id);
+
+    console.log(
+      `[payoutAccount] PPA activated: id=${ppaId} merchant=${merchantId}`,
+    );
+
+    // 1. Upsert PPA (will set is_active = true from payload)
+    await upsertPayoutAccount(supabase, payload);
+
+    // 2. Deactivate other PPAs for this merchant (only one active at a time)
+    if (merchantId) {
+      await supabase
+        .from("merchant_payout_accounts")
+        .update({ is_active: false, synced_at: new Date().toISOString() })
+        .eq("merchant_id", merchantId)
+        .neq("violet_payout_account_id", ppaId);
+    }
+
+    // 3. Log activation
+    await supabase.from("error_logs").insert({
+      source: "webhook",
+      error_type: "MERCHANT_PAYOUT_ACCOUNT_ACTIVATED",
+      message: `Payout account ${ppaId} activated for merchant ${merchantId}`,
+      context: {
+        merchant_id: merchantId,
+        payout_account_id: ppaId,
+        payment_provider: payload.payment_provider ?? "STRIPE",
+      },
+    });
+
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error
+        ? err.message
+        : "Unknown error in processPayoutAccountActivated",
+    );
+  }
+}
+
+/**
+ * Processes MERCHANT_PAYOUT_ACCOUNT_DEACTIVATED events.
+ *
+ * Fired when a PPA is deactivated — typically because another PPA was activated.
+ * NOT an error — simply means another account is now active.
+ *
+ * Actions:
+ * 1. Upsert PPA with is_active = false
+ * 2. Log deactivation for audit trail
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/payout-account-webhooks
+ */
+export async function processPayoutAccountDeactivated(
+  supabase: SupabaseClient,
+  eventId: string,
+  payload: VioletPayoutAccountPayload,
+): Promise<void> {
+  try {
+    const merchantId = extractMerchantId(payload);
+    const ppaId = String(payload.id);
+
+    console.log(
+      `[payoutAccount] PPA deactivated: id=${ppaId} merchant=${merchantId}`,
+    );
+
+    // 1. Upsert PPA (will set is_active = false from payload)
+    await upsertPayoutAccount(supabase, payload);
+
+    // 2. Log deactivation
+    await supabase.from("error_logs").insert({
+      source: "webhook",
+      error_type: "MERCHANT_PAYOUT_ACCOUNT_DEACTIVATED",
+      message: `Payout account ${ppaId} deactivated for merchant ${merchantId}`,
+      context: { merchant_id: merchantId, payout_account_id: ppaId },
+    });
+
+    await updateEventStatus(supabase, eventId, "processed");
+  } catch (err) {
+    await updateEventStatus(
+      supabase,
+      eventId,
+      "failed",
+      err instanceof Error
+        ? err.message
+        : "Unknown error in processPayoutAccountDeactivated",
+    );
+  }
+}
