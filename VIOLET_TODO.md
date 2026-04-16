@@ -14,11 +14,9 @@ These are Violet.io API endpoints that are **pertinent to our Channel/affiliate 
 | | |
 |---|---|
 | **Doc link** | https://docs.violet.io/api-reference/payments/distributions/search-distributions.md |
-| **Status** | ⚠️ Non implémenté |
+| **Status** | ✅ **COMPLÈTEMENT IMPLÉMENTÉ** (commit a9de118) |
 | **What it does** | Advanced distribution search with filters (status, merchant, date range, type). |
-| **Why implement** | Our current `getOrderDistributions()` only fetches per-order. A search endpoint would power an admin **financial dashboard** with cross-order distribution analytics. |
-| **Effort** | ~2h — new function in `violetTransfers.ts`, server function, admin UI table with filters. |
-| **Priority** | Medium — useful for reporting, not blocking transactions. |
+| **Details** | `searchDistributions()` with 8 filters + pagination, server function admin, 6 unit tests. |
 
 ### A2. `Get Transfer` — `GET /payments/transfers/{id}`
 
@@ -187,6 +185,7 @@ These were previously ⚠️ and are now ✅:
 - [x] **Get Payout Account** — `GET /payments/MERCHANT/{id}/payout_account` — implemented (commit 5421230)
 - [x] **Get all Payout Accounts** — `GET /payments/MERCHANT/{id}/payout_accounts` — implemented (commit 5421230)
 - [x] **Get Payout Account by ID** — `GET /payments/payout_accounts/{id}` — implemented (commit 5421230)
+- [x] **Search Distributions** — `POST /payments/DEVELOPER/{id}/distributions/search` — implemented (commit a9de118)
 - [x] **Register an External Transfer** — `POST /payments/transfers/external/register` — not applicable (no EXTERNAL merchants)
 - [x] **Payment Integration Health** — Dashboard page, appears after Live Mode setup
 
@@ -196,7 +195,7 @@ These were previously ⚠️ and are now ✅:
 
 | Category | Count | Priority |
 |----------|-------|----------|
-| 🔴 Code to implement (APIs) | 5 | A4 Medium, rest Low |
+| 🔴 Code to implement (APIs) | 4 | A4 Medium, rest Low |
 | 🟡 Code enhancements | 5 | B1 Medium, rest Low |
 | 🔵 Operational (manual) | 6 | C1-C3 Critical, C4-C6 High |
-| ✅ Already done | 6 | — |
+| ✅ Already done | 7 | — |
