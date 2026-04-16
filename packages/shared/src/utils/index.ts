@@ -33,7 +33,9 @@ export {
   getCurrencyForCountry,
   getCountryName,
   countryFlag,
-  EXCHANGE_RATES,
+  FALLBACK_EXCHANGE_RATES,
+  setLiveExchangeRates,
+  getActiveExchangeRates,
   COUNTRY_TO_CURRENCY,
   COUNTRY_NAMES,
 } from "./currency.js";

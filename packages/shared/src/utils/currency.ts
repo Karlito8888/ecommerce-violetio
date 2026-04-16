@@ -1,21 +1,65 @@
 /**
  * Currency conversion utilities and delivery estimate fallback tables.
  *
- * Exchange rates are approximate (last updated: 2026-03-28).
+ * ## Exchange rate sources
+ *
+ * 1. **Live rates** (preferred) — fetched from Violet's `GET /catalog/currencies/latest`
+ *    via `getExchangeRates()` in `violetCurrency.ts`. Cached for 12 hours.
+ * 2. **Fallback rates** (hardcodED) — used when the Violet API is unavailable
+ *    (offline, Demo Mode, network error). Updated manually.
+ *
  * All prices remain in USD for cart/checkout — local currency is informational only.
+ *
+ * @see https://docs.violet.io/api-reference/catalog/currencies/currency-exchange-rates
  */
 
 import type { DeliveryEstimate } from "../types/shipping.types.js";
 
-/** Date these rates were last updated. Check monthly. */
-export const RATES_LAST_UPDATED = "2026-03-28";
+/** Date the hardcodED fallback rates were last updated. */
+export const FALLBACK_RATES_LAST_UPDATED = "2026-03-28";
+
+/**
+ * Live exchange rates injected from Violet's API.
+ * Populated by `setLiveExchangeRates()` — null until first fetch.
+ * Takes priority over {@link FALLBACK_EXCHANGE_RATES} in `convertPrice()`.
+ */
+let _liveRates: Record<string, number> | null = null;
+
+/** The date the live rates were fetched from Violet. */
+let _liveRatesDate: string | null = null;
+
+/**
+ * Inject live exchange rates from Violet's API.
+ *
+ * Called by server-side code after a successful `getExchangeRates()` call.
+ * Once set, these rates take priority over the hardcodED fallback rates.
+ *
+ * @param rates - Map of currency code → USD-based rate (e.g., { EUR: 0.92 })
+ * @param date - Date string from Violet (e.g., "2026-04-16")
+ */
+export function setLiveExchangeRates(rates: Record<string, number>, date: string): void {
+  _liveRates = rates;
+  _liveRatesDate = date;
+}
+
+/**
+ * Get the currently active exchange rates.
+ * Returns live rates if available, otherwise falls back to hardcodED rates.
+ */
+export function getActiveExchangeRates(): { rates: Record<string, number>; date: string } {
+  if (_liveRates && _liveRatesDate) {
+    return { rates: _liveRates, date: _liveRatesDate };
+  }
+  return { rates: FALLBACK_EXCHANGE_RATES, date: FALLBACK_RATES_LAST_UPDATED };
+}
 
 /**
  * Approximate USD → target currency multipliers.
+ * **Fallback only** — used when Violet's Exchange Rates API is unavailable.
  * Update periodically (monthly recommended).
- * Last updated: {@link RATES_LAST_UPDATED}
+ * Last updated: {@link FALLBACK_RATES_LAST_UPDATED}
  */
-export const EXCHANGE_RATES: Record<string, number> = {
+export const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
   USD: 1,
   EUR: 0.92,
   GBP: 0.79,
@@ -175,11 +219,19 @@ function getRegion(countryCode: string): string {
   return "INTL";
 }
 
-/** Convert price in integer cents from one currency to another. */
+/**
+ * Convert price in integer cents from one currency to another.
+ *
+ * Uses live rates from Violet's API when available (injected via `setLiveExchangeRates()`),
+ * otherwise falls back to hardcodED rates in {@link FALLBACK_EXCHANGE_RATES}.
+ *
+ * @see https://docs.violet.io/api-reference/catalog/currencies/currency-exchange-rates
+ */
 export function convertPrice(cents: number, fromCurrency: string, toCurrency: string): number {
   if (fromCurrency === toCurrency) return cents;
-  const fromRate = EXCHANGE_RATES[fromCurrency] ?? 1;
-  const toRate = EXCHANGE_RATES[toCurrency] ?? 1;
+  const activeRates = (_liveRates ?? FALLBACK_EXCHANGE_RATES) as Record<string, number>;
+  const fromRate = activeRates[fromCurrency] ?? 1;
+  const toRate = activeRates[toCurrency] ?? 1;
   return Math.round((cents / fromRate) * toRate);
 }
 

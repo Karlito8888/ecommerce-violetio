@@ -20,6 +20,8 @@ import {
   removeFromCartFn,
 } from "../server/cartActions";
 import { getCountryCookieFn } from "../server/geoip";
+import { getExchangeRatesFn } from "../server/exchangeRates";
+import { setLiveExchangeRates } from "@ecommerce/shared";
 import UserLocationProvider from "../contexts/UserLocationContext";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
 import { _setSupabaseClient } from "@ecommerce/shared";
@@ -54,11 +56,22 @@ const removeFromCart: RemoveFromCartFn = (input) => removeFromCartFn({ data: inp
  */
 export const Route = createRootRouteWithContext<RouterContext>()({
   loader: async () => {
-    const [{ violetCartId }, { countryCode }] = await Promise.all([
+    const [{ violetCartId }, { countryCode }, exchangeRates] = await Promise.all([
       getCartCookieFn(),
       getCountryCookieFn(),
+      getExchangeRatesFn(),
     ]);
-    return { initialVioletCartId: violetCartId ?? null, initialCountryCode: countryCode };
+
+    // Inject live exchange rates into the shared module for SSR
+    if (exchangeRates) {
+      setLiveExchangeRates(exchangeRates.rates, exchangeRates.date);
+    }
+
+    return {
+      initialVioletCartId: violetCartId ?? null,
+      initialCountryCode: countryCode,
+      exchangeRates,
+    };
   },
   head: () => ({
     meta: [
@@ -84,7 +97,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   // Hydrate CartProvider from the HttpOnly cookie read server-side in the loader.
   // This ensures the cart badge and drawer are populated immediately on page refresh,
   // without waiting for a client-side fetch.
-  const { initialVioletCartId, initialCountryCode } = Route.useLoaderData();
+  const { initialVioletCartId, initialCountryCode, exchangeRates } = Route.useLoaderData();
+
+  // Inject live exchange rates client-side (hydrated from SSR loader)
+  if (exchangeRates) {
+    setLiveExchangeRates(exchangeRates.rates, exchangeRates.date);
+  }
 
   // Auth session for Realtime subscription (Story 4.6)
   const { user, isAnonymous } = useAuthSession();

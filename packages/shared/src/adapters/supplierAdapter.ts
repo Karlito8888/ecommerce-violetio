@@ -24,6 +24,7 @@ import type {
   CategoryItem,
   CollectionItem,
   DiscountInput,
+  VioletPayoutAccount,
 } from "../types/index.js";
 
 /**
@@ -120,6 +121,22 @@ export interface SupplierAdapter {
    * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
    */
   enableSkuMetadataSync(merchantId: string): Promise<ApiResponse<void>>;
+
+  /**
+   * Fetches the latest currency exchange rates from Violet.
+   *
+   * Calls `GET /catalog/currencies/latest` with `base_currency=USD`.
+   * Results are cached for 12 hours (Violet caches for max 24h).
+   *
+   * Used by `setLiveExchangeRates()` to populate `convertPrice()` with live rates
+   * instead of the hardcodED fallback rates.
+   *
+   * @returns Map of currency code → exchange rate (e.g., { EUR: 0.92, GBP: 0.79 })
+   *          or null if unavailable
+   *
+   * @see https://docs.violet.io/api-reference/catalog/currencies/currency-exchange-rates
+   */
+  getExchangeRates(): Promise<ApiResponse<{ rates: Record<string, number>; date: string } | null>>;
 
   // Search (AI)
   searchProducts(query: string, filters?: SearchFilters): Promise<ApiResponse<SearchResult>>;
@@ -295,6 +312,45 @@ export interface SupplierAdapter {
   retryTransfersForBags(violetBagIds: string[]): Promise<ApiResponse<{ message: string }>>;
 
   getOrders(userId: string): Promise<ApiResponse<Order[]>>;
+
+  // Payout Accounts
+
+  /**
+   * Fetches the active Payout Account for a merchant.
+   *
+   * Calls `GET /payments/MERCHANT/{merchant_id}/payout_account?extended=true`.
+   * Returns the currently active PPA with full Stripe Connect details.
+   * Only one PPA may be active at a time per merchant-app pair.
+   *
+   * @see https://docs.violet.io/api-reference/payments/payout-accounts/get-payout-account
+   */
+  getActivePayoutAccount(
+    merchantId: string,
+    appId?: string,
+  ): Promise<ApiResponse<VioletPayoutAccount | null>>;
+
+  /**
+   * Fetches all Payout Accounts for a merchant (including inactive history).
+   *
+   * Calls `GET /payments/MERCHANT/{merchant_id}/payout_accounts?extended=true`.
+   * Returns all PPAs with full Stripe Connect details.
+   *
+   * @see https://docs.violet.io/api-reference/payments/payout-accounts/get-payout-accounts
+   */
+  getAllPayoutAccounts(
+    merchantId: string,
+    appId?: string,
+  ): Promise<ApiResponse<VioletPayoutAccount[]>>;
+
+  /**
+   * Fetches a Payout Account by its Violet ID.
+   *
+   * Calls `GET /payments/payout_accounts/{payout_account_id}?extended=true`.
+   * Useful for fetching a specific PPA when the ID is known from a webhook.
+   *
+   * @see https://docs.violet.io/api-reference/payments/payout-accounts/get-payout-account-by-id
+   */
+  getPayoutAccountById(payoutAccountId: string): Promise<ApiResponse<VioletPayoutAccount | null>>;
 
   // Webhooks
   validateWebhook(headers: Headers, body: string): boolean;

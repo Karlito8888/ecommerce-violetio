@@ -14,6 +14,7 @@ import {
   createSupabaseClient,
   useCartSync,
   mobilePushDataToPath,
+  setLiveExchangeRates,
 } from "@ecommerce/shared";
 import {
   setupNotificationHandler,
@@ -71,6 +72,23 @@ function AppContent() {
       router.push(path as never);
     }
   });
+
+  // Fetch live exchange rates from Violet at startup (fire-and-forget).
+  // Falls back to hardcoded rates if the API is unavailable.
+  React.useEffect(() => {
+    const supabaseUrl =
+      Constants.expoConfig?.extra?.supabaseUrl ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+    fetch(`${supabaseUrl}/functions/v1/get-exchange-rates`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.data?.rates && json.data.date) {
+          setLiveExchangeRates(json.data.rates, json.data.date);
+        }
+      })
+      .catch(() => {
+        // Non-critical: fallback hardcoded rates will be used
+      });
+  }, []);
 
   // Cross-device cart sync via Supabase Realtime (Story 4.6)
   const syncUserId = user && !isAnonymous ? user.id : null;

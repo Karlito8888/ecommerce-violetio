@@ -202,8 +202,12 @@ export type {
 } from "./transfer.types.js";
 export type {
   PayoutProvider,
+  PayoutProviderAccountType,
+  VioletAccountType,
   StripeAccountType,
   StripeRequirements,
   StripeProviderAccount,
   MerchantPayoutAccountRow,
+  PayoutAccountError,
+  VioletPayoutAccount,
 } from "./payoutAccount.types.js";

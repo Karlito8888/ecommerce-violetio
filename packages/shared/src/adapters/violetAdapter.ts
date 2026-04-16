@@ -24,6 +24,7 @@ import type {
   SearchTransfersInput,
   CollectionItem,
   DiscountInput,
+  VioletPayoutAccount,
 } from "../types/index.js";
 import type { SupplierAdapter } from "./supplierAdapter.js";
 import { VioletTokenManager } from "../clients/violetAuth.js";
@@ -76,6 +77,12 @@ import {
   retryTransfersForBags as retryTransfersForBagsFn,
 } from "./violetTransfers.js";
 import { searchProducts as searchProductsFn } from "./violetSearch.js";
+import { getExchangeRates as getExchangeRatesFn } from "./violetCurrency.js";
+import {
+  getActivePayoutAccount as getActivePayoutAccountFn,
+  getAllPayoutAccounts as getAllPayoutAccountsFn,
+  getPayoutAccountById as getPayoutAccountByIdFn,
+} from "./violetPayoutAccounts.js";
 import {
   validateWebhook as validateWebhookFn,
   processWebhook as processWebhookFn,
@@ -261,6 +268,23 @@ export class VioletAdapter implements SupplierAdapter {
     return enableContextualPricingFn(this.getCtx(), merchantId);
   }
 
+  // ─── Currency Exchange Rates ────────────────────────────────────
+
+  /**
+   * Fetches live currency exchange rates from Violet's API.
+   *
+   * @see https://docs.violet.io/api-reference/catalog/currencies/currency-exchange-rates
+   */
+  async getExchangeRates(): Promise<
+    ApiResponse<{ rates: Record<string, number>; date: string } | null>
+  > {
+    const result = await getExchangeRatesFn(this.getCtx());
+    if (result === null) {
+      return { data: null, error: null };
+    }
+    return { data: result, error: null };
+  }
+
   // ─── Not implemented (future stories) ─────────────────────────────
 
   async searchProducts(
@@ -349,6 +373,54 @@ export class VioletAdapter implements SupplierAdapter {
   async getOrders(_userId: string): Promise<ApiResponse<Order[]>> {
     return getOrdersFn(this.getCtx(), _userId);
   }
+
+  // ─── Payout Accounts ──────────────────────────────────────────────
+
+  async getActivePayoutAccount(
+    merchantId: string,
+    appId?: string,
+  ): Promise<ApiResponse<VioletPayoutAccount | null>> {
+    try {
+      const data = await getActivePayoutAccountFn(this.getCtx(), merchantId, appId);
+      return { data, error: null };
+    } catch (e) {
+      return {
+        data: null,
+        error: { code: "VIOLET.API_ERROR", message: e instanceof Error ? e.message : String(e) },
+      };
+    }
+  }
+
+  async getAllPayoutAccounts(
+    merchantId: string,
+    appId?: string,
+  ): Promise<ApiResponse<VioletPayoutAccount[]>> {
+    try {
+      const data = await getAllPayoutAccountsFn(this.getCtx(), merchantId, appId);
+      return { data, error: null };
+    } catch (e) {
+      return {
+        data: null,
+        error: { code: "VIOLET.API_ERROR", message: e instanceof Error ? e.message : String(e) },
+      };
+    }
+  }
+
+  async getPayoutAccountById(
+    payoutAccountId: string,
+  ): Promise<ApiResponse<VioletPayoutAccount | null>> {
+    try {
+      const data = await getPayoutAccountByIdFn(this.getCtx(), payoutAccountId);
+      return { data, error: null };
+    } catch (e) {
+      return {
+        data: null,
+        error: { code: "VIOLET.API_ERROR", message: e instanceof Error ? e.message : String(e) },
+      };
+    }
+  }
+
+  // ─── Webhooks ─────────────────────────────────────────────────────
 
   validateWebhook(headers: Headers, _body: string): boolean {
     return validateWebhookFn(headers, _body);
