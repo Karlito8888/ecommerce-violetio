@@ -42,3 +42,30 @@ export interface DistributionRow {
   subtotal_cents: number;
   synced_at: string;
 }
+
+/**
+ * Search filters for `POST /payments/DEVELOPER/{id}/distributions/search`.
+ *
+ * All fields optional — omit for broad search.
+ *
+ * @see https://docs.violet.io/api-reference/payments/distributions/search-distributions
+ */
+export interface SearchDistributionsInput {
+  orderId?: string;
+  merchantId?: string;
+  bagId?: string;
+  externalOrderId?: string;
+  payoutId?: string;
+  payoutTransferId?: string;
+  beforeDate?: string;
+  afterDate?: string;
+}
+
+/** Paginated distribution search result. */
+export interface PaginatedDistributions {
+  distributions: Distribution[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNext: boolean;
+}

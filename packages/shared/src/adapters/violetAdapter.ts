@@ -67,6 +67,7 @@ import type { CollectionsCacheState } from "./violetCollections.js";
 import {
   getOrder as getOrderFn,
   getOrderDistributions as getOrderDistributionsFn,
+  searchDistributions as searchDistributionsFn,
   getOrders as getOrdersFn,
 } from "./violetOrders.js";
 import {
@@ -346,6 +347,15 @@ export class VioletAdapter implements SupplierAdapter {
 
   async getOrderDistributions(violetOrderId: string): Promise<ApiResponse<Distribution[]>> {
     return getOrderDistributionsFn(this.getCtx(), violetOrderId);
+  }
+
+  async searchDistributions(
+    input?: import("../types/distribution.types.js").SearchDistributionsInput,
+    page?: number,
+    pageSize?: number,
+  ): Promise<ApiResponse<import("../types/distribution.types.js").PaginatedDistributions>> {
+    const appId = (typeof process !== "undefined" && process.env?.VIOLET_APP_ID) || "";
+    return searchDistributionsFn(this.getCtx(), appId, input, page, pageSize);
   }
 
   async searchTransfers(input?: SearchTransfersInput): Promise<ApiResponse<Transfer[]>> {

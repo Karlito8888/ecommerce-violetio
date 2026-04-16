@@ -87,3 +87,35 @@ export const syncOrderDistributionsFn = createServerFn({ method: "POST" })
       return { data: upserted as DistributionRow[], error: null };
     },
   );
+
+/**
+ * Search distributions across all orders with filters.
+ *
+ * Calls `POST /payments/DEVELOPER/{app_id}/distributions/search`.
+ * Returns paginated results for admin financial reporting.
+ *
+ * @see https://docs.violet.io/api-reference/payments/distributions/search-distributions
+ */
+export const searchDistributionsFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    return z
+      .object({
+        orderId: z.string().optional(),
+        merchantId: z.string().optional(),
+        bagId: z.string().optional(),
+        externalOrderId: z.string().optional(),
+        payoutId: z.string().optional(),
+        payoutTransferId: z.string().optional(),
+        beforeDate: z.string().optional(),
+        afterDate: z.string().optional(),
+        page: z.number().int().min(1).optional(),
+        pageSize: z.number().int().min(1).max(100).optional(),
+      })
+      .parse(input);
+  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  .handler(async ({ data }): Promise<any> => {
+    const adapter = getAdapter();
+    const { page, pageSize, ...searchInput } = data;
+    return adapter.searchDistributions(searchInput, page, pageSize);
+  });

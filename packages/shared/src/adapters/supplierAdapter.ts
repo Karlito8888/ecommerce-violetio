@@ -299,6 +299,20 @@ export interface SupplierAdapter {
   /** Search Violet transfers with optional filters. */
   searchTransfers(input?: SearchTransfersInput): Promise<ApiResponse<Transfer[]>>;
 
+  /**
+   * Search distributions across all orders with filters.
+   *
+   * Calls `POST /payments/DEVELOPER/{app_id}/distributions/search`.
+   * Returns paginated results matching the search criteria.
+   *
+   * @see https://docs.violet.io/api-reference/payments/distributions/search-distributions
+   */
+  searchDistributions(
+    input?: import("../types/distribution.types.js").SearchDistributionsInput,
+    page?: number,
+    pageSize?: number,
+  ): Promise<ApiResponse<import("../types/distribution.types.js").PaginatedDistributions>>;
+
   /** Retry failed transfer for a single order. */
   retryTransferForOrder(violetOrderId: string): Promise<ApiResponse<{ message: string }>>;
 

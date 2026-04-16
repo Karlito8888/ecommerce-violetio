@@ -97,6 +97,8 @@ export type {
   DistributionRow,
   DistributionType,
   DistributionStatus,
+  SearchDistributionsInput,
+  PaginatedDistributions,
 } from "./distribution.types.js";
 export type { UserProfile, UserPreferences, UpdateProfilePayload } from "./profile.types.js";
 export type {

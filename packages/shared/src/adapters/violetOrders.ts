@@ -127,12 +127,19 @@ export async function getOrderDistributions(
   );
   if (result.error) return { data: null, error: result.error };
 
-  const raw = result.data as unknown;
+  return { data: parseDistributions(result.data), error: null };
+}
+
+/**
+ * Shared helper to parse distribution items from Violet API responses.
+ * Used by both getOrderDistributions and searchDistributions.
+ */
+function parseDistributions(raw: unknown): Distribution[] {
   const items: unknown[] = Array.isArray(raw)
     ? raw
-    : (((raw as Record<string, unknown>).content as unknown[]) ?? []);
+    : (((raw as Record<string, unknown>)?.content as unknown[]) ?? []);
 
-  const distributions: Distribution[] = items.map((item: unknown) => {
+  return items.map((item: unknown) => {
     const d = item as Record<string, unknown>;
     return {
       violetBagId: d["bag_id"] != null ? String(d["bag_id"]) : null,
@@ -144,8 +151,73 @@ export async function getOrderDistributions(
       subtotalCents: Number(d["subtotal"] ?? 0),
     };
   });
+}
 
-  return { data: distributions, error: null };
+/**
+ * Search distributions across all orders with filters.
+ *
+ * Calls `POST /payments/DEVELOPER/{app_id}/distributions/search`.
+ * Returns paginated results matching the search criteria.
+ *
+ * ## Pagination
+ * Violet uses 1-based pages (Spring Boot Pageable).
+ *
+ * @param ctx - Catalog context with API base URL and token manager
+ * @param appId - Violet App ID (used as developer account ID for the search)
+ * @param input - Optional search filters (order, merchant, dates, etc.)
+ * @param page - 1-based page number (default: 1)
+ * @param pageSize - Items per page (default: 20)
+ *
+ * @see https://docs.violet.io/api-reference/payments/distributions/search-distributions
+ */
+export async function searchDistributions(
+  ctx: CatalogContext,
+  appId: string,
+  input: import("../types/distribution.types.js").SearchDistributionsInput = {},
+  page = 1,
+  pageSize = 20,
+): Promise<ApiResponse<import("../types/distribution.types.js").PaginatedDistributions>> {
+  const body: Record<string, unknown> = {};
+  if (input.orderId) body.order_id = Number(input.orderId);
+  if (input.merchantId) body.merchant_id = Number(input.merchantId);
+  if (input.bagId) body.bag_id = Number(input.bagId);
+  if (input.externalOrderId) body.external_order_id = input.externalOrderId;
+  if (input.payoutId) body.payout_id = Number(input.payoutId);
+  if (input.payoutTransferId) body.payout_transfer_id = Number(input.payoutTransferId);
+  if (input.beforeDate) body.before_date = input.beforeDate;
+  if (input.afterDate) body.after_date = input.afterDate;
+
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(pageSize),
+    include_merchants: "true",
+    include_channels: "true",
+  });
+
+  const result = await fetchWithRetry(
+    `${ctx.apiBase}/payments/DEVELOPER/${appId}/distributions/search?${params}`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+    ctx.tokenManager,
+  );
+
+  if (result.error) return { data: null, error: result.error };
+
+  const raw = result.data as Record<string, unknown>;
+  const distributions = parseDistributions(raw);
+
+  return {
+    data: {
+      distributions,
+      total: Number(raw.totalElements ?? raw.total_elements ?? distributions.length),
+      page: Number(raw.number ?? raw.number ?? page),
+      pageSize: Number(raw.size ?? pageSize),
+      hasNext: !(raw.last ?? true),
+    },
+    error: null,
+  };
 }
 
 export async function getOrders(
