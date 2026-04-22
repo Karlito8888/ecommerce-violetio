@@ -17,6 +17,7 @@ function createMockTokenManager(): VioletTokenManager {
       error: null,
     }),
     getValidToken: vi.fn(),
+    invalidateToken: vi.fn(),
     config: {},
   } as unknown as VioletTokenManager;
 }

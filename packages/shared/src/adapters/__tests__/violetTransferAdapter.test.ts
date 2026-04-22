@@ -36,6 +36,7 @@ function createMockTokenManager(): VioletTokenManager {
       error: null,
     }),
     getValidToken: vi.fn(),
+    invalidateToken: vi.fn(),
     config: {},
   } as unknown as VioletTokenManager;
 }
@@ -231,11 +232,13 @@ describe("violetTransfers adapter", () => {
     });
 
     it("returns error on non-2xx response", async () => {
-      fetchSpy.mockResolvedValueOnce({
+      // Mock 401 twice: first request + retry after token refresh
+      const notFound = {
         ok: false,
         status: 401,
         text: () => Promise.resolve("Unauthorized"),
-      });
+      };
+      fetchSpy.mockResolvedValueOnce(notFound).mockResolvedValueOnce(notFound);
 
       const { searchTransfers } = await import("../violetTransfers.js");
       const result = await searchTransfers(ctx);
@@ -486,11 +489,13 @@ describe("violetTransfers adapter", () => {
     });
 
     it("returns error on non-2xx response", async () => {
-      fetchSpy.mockResolvedValueOnce({
+      // Mock 401 twice: first request + retry after token refresh
+      const notFound = {
         ok: false,
         status: 401,
         text: () => Promise.resolve("Unauthorized"),
-      });
+      };
+      fetchSpy.mockResolvedValueOnce(notFound).mockResolvedValueOnce(notFound);
 
       const { getPendingTransfers } = await import("../violetTransfers.js");
       const result = await getPendingTransfers(ctx);

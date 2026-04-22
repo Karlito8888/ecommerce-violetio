@@ -36,7 +36,7 @@
  * @see https://docs.violet.io/concepts/overview/making-authenticated-requests
  */
 
-import { getVioletHeaders } from "./violetAuth.ts";
+import { getVioletHeaders, invalidateVioletToken } from "./violetAuth.ts";
 import { MAX_RETRIES, BASE_DELAY_MS, REQUEST_TIMEOUT_MS, delay } from "./constants.ts";
 
 // ── Constants imported from ./constants.ts (sync with violetConstants.ts) ─────
@@ -87,7 +87,12 @@ export async function violetFetch(
   init: RequestInit = {},
 ): Promise<Response> {
   // ── Auth ────────────────────────────────────────────────────────────
-  const authResult = await getVioletHeaders();
+  const buildHeaders = (authHeaders: Record<string, string>): Record<string, string> => ({
+    ...authHeaders,
+    ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+  });
+
+  let authResult = await getVioletHeaders();
   if (authResult.error) {
     const err: VioletFetchError = {
       code: authResult.error.code,
@@ -96,15 +101,8 @@ export async function violetFetch(
     throw err;
   }
 
-  /**
-   * Only set Content-Type for requests with a body (POST, PUT, PATCH).
-   * GET requests should not include Content-Type as they have no body,
-   * and some proxies/CDNs may reject or mishandle it.
-   */
-  const headers: Record<string, string> = {
-    ...authResult.data,
-    ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
-  };
+  let headers = buildHeaders(authResult.data);
+  let refreshedOn401 = false;
 
   // ── Retry loop ──────────────────────────────────────────────────────
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -117,6 +115,25 @@ export async function violetFetch(
         res = await fetch(url, { ...init, headers, signal: controller.signal });
       } finally {
         clearTimeout(timeoutId);
+      }
+
+      // HTTP 401: token expired or revoked — refresh and retry once
+      // @see https://docs.violet.io/concepts/overview/token-refresh-management
+      if (res.status === 401 && !refreshedOn401) {
+        await res.text().catch(() => {}); // free the connection
+        // Invalidate cached token so getVioletHeaders triggers a fresh refresh/login
+        invalidateVioletToken();
+        authResult = await getVioletHeaders();
+        if (authResult.error) {
+          const err: VioletFetchError = {
+            code: authResult.error.code,
+            message: authResult.error.message,
+          };
+          throw err;
+        }
+        headers = buildHeaders(authResult.data);
+        refreshedOn401 = true;
+        continue; // retry with new token — don't increment attempt
       }
 
       // HTTP 429: rate limited — retry with backoff if attempts remain

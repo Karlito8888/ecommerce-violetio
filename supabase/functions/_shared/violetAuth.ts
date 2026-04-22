@@ -157,6 +157,22 @@ class VioletTokenManager {
     this.config = config;
   }
 
+  /**
+   * Forces a token refresh by clearing the cached token data.
+   *
+   * The next call to `getValidToken()` or `getAuthHeaders()` will trigger
+   * a fresh refresh (or re-login if refresh fails).
+   *
+   * Used by `violetFetch` when a 401 is received mid-request — the
+   * proactive 5-min refresh normally prevents this, but a manual key
+   * rotation or server-side revocation can invalidate a token early.
+   *
+   * @see https://docs.violet.io/concepts/overview/token-refresh-management
+   */
+  invalidateToken(): void {
+    this.tokenData = null;
+  }
+
   private needsRefresh(): boolean {
     if (!this.tokenData) return true;
     const elapsed = Date.now() - this.tokenData.loginTimestamp;
@@ -242,4 +258,18 @@ export async function getVioletHeaders(): Promise<ApiResponse<VioletAuthHeaders>
   }
 
   return _manager.getAuthHeaders();
+}
+
+/**
+ * Invalidates the cached Violet token, forcing a refresh on the next API call.
+ *
+ * Used by `violetFetch` when a 401 is received — the proactive 5-min refresh
+ * normally prevents this, but a manual key rotation can invalidate a token early.
+ *
+ * @see https://docs.violet.io/concepts/overview/token-refresh-management
+ */
+export function invalidateVioletToken(): void {
+  if (_manager) {
+    _manager.invalidateToken();
+  }
 }

@@ -159,6 +159,22 @@ export class VioletTokenManager {
     this.config = config;
   }
 
+  /**
+   * Forces a token refresh by clearing the cached token data.
+   *
+   * The next call to `getValidToken()` or `getAuthHeaders()` will trigger
+   * a fresh refresh (or re-login if refresh fails).
+   *
+   * Used by `fetchWithRetry` when a 401 is received mid-request — the
+   * proactive 5-min refresh normally prevents this, but a manual key
+   * rotation or server-side revocation can invalidate a token early.
+   *
+   * @see https://docs.violet.io/concepts/overview/token-refresh-management
+   */
+  invalidateToken(): void {
+    this.tokenData = null;
+  }
+
   /** Returns true if the cached token needs refresh (within 5 min of 24h expiry). */
   private needsRefresh(): boolean {
     if (!this.tokenData) return true;
