@@ -10,7 +10,9 @@
   "scripts": {
     "dev": "bun --env-file=.env.local --cwd=apps/web run dev",
     "dev:mobile": "bun --cwd=apps/mobile run start",
+    "dev:android": "bun --cwd=apps/mobile run android",
     "dev:functions": "supabase functions serve --env-file supabase/.env",
+    "dev:all": "supabase start 2>&1 && echo '\\n✅ Supabase is running!\\n' && concurrently --kill-others --names supabase,web,mobile --prefix-colors cyan,green,magenta 'supabase functions serve --env-file supabase/.env' 'bun --env-file=.env.local --cwd=apps/web run dev' 'cd apps/mobile && npx expo prebuild --clean && npx expo run:android'",
     "build": "bun --env-file=.env.local --cwd=apps/web run build",
     "typecheck": "bun --cwd=apps/web run typecheck && bun --cwd=apps/mobile run typecheck",
     "lint": "eslint apps/ packages/ --max-warnings 0",
@@ -26,6 +28,7 @@
     "@supabase/supabase-js": "^2.100.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "concurrently": "^9.2.1",
     "eslint": "^10.2.1",
     "prettier": "^3.8.1",
     "react": "19.2.0",

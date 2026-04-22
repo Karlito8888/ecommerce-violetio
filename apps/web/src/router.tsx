@@ -62,6 +62,29 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
+
+    defaultNotFoundComponent: () => (
+      <div className="page-wrap" style={{ padding: "4rem 0", textAlign: "center" }}>
+        <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>404 — Page Not Found</h1>
+        <p style={{ color: "var(--color-text-secondary)" }}>
+          The page you are looking for does not exist.
+        </p>
+        <a
+          href="/"
+          style={{
+            display: "inline-block",
+            marginTop: "1.5rem",
+            padding: "0.75rem 1.5rem",
+            background: "var(--color-primary)",
+            color: "#fff",
+            borderRadius: "0.5rem",
+            textDecoration: "none",
+          }}
+        >
+          Go Home
+        </a>
+      </div>
+    ),
   });
 
   setupRouterSsrQueryIntegration({ router, queryClient });

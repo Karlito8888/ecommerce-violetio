@@ -17,7 +17,7 @@ import {
   mapAuthError,
 } from "@ecommerce/shared";
 import { colors, typography, spacing } from "@ecommerce/ui";
-import { getPendingSignup, clearPendingSignup } from "./_pending";
+import { getPendingSignup, clearPendingSignup } from "@/utils/pendingSignup";
 
 export default function VerifyScreen() {
   const [otp, setOtp] = useState("");

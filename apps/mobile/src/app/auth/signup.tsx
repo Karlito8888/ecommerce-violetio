@@ -19,7 +19,7 @@ import {
 import type { SocialProvider } from "@ecommerce/shared";
 import * as WebBrowser from "expo-web-browser";
 import { colors, typography, spacing } from "@ecommerce/ui";
-import { setPendingSignup } from "./_pending";
+import { setPendingSignup } from "@/utils/pendingSignup";
 
 export default function SignupScreen() {
   const [email, setEmail] = useState("");
