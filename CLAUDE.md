@@ -33,7 +33,7 @@ bun --cwd=apps/web run test   # Run vitest
 ```
 apps/
   web/          # TanStack Start (Vite-based SSR), file-based routing
-  mobile/       # Expo SDK 55, expo-router, React Native 0.83.2
+  mobile/       # Expo SDK 55, expo-router, React Native 0.83.6
 packages/
   shared/       # @ecommerce/shared — business logic, types, API clients
   ui/           # @ecommerce/ui — design tokens, cross-platform components
@@ -68,9 +68,10 @@ BEM convention: `.block__element--modifier` (e.g., `.site-header__nav`, `.hero__
 
 ### Mobile App (apps/mobile)
 
-- **Framework**: Expo SDK 55, expo-router ~55.0.4
+- **Framework**: Expo SDK 55, expo-router ~55.0.13
 - **Navigation**: File-based with `_layout.tsx` pattern, tab navigation
-- **Key constraint**: Expo pins exact versions for react (19.2.0), react-native (0.83.2), reanimated (4.2.1) — never bump these independently of the SDK
+- **Key constraint**: Expo pins exact versions for react (19.2.0), react-native (0.83.6), reanimated (4.2.1) — never bump these independently of the SDK
+- **Root overrides**: react/react-dom pinned to 19.2.0 at monorepo root to prevent Bun from resolving mismatched versions
 - **Path alias**: `@/*` resolves to `./src/*`, `@/assets/*` to `./assets/*`
 
 ### Shared TypeScript Config
@@ -97,14 +98,10 @@ BEM convention: `.block__element--modifier` (e.g., `.site-header__nav`, `.hero__
 
 Ne jamais coder contre l'API Violet sans avoir consulté ce fichier.
 
-### BMAD Framework
+### Environment Variables
 
-Project management artifacts live in `_bmad-output/`:
-
-- `planning-artifacts/` — PRD, architecture, epics, UX spec, research
-- `implementation-artifacts/` — story files, sprint-status.yaml
-
-Sprint stories are tracked in `sprint-status.yaml`. Story files use format `{epic#}-{story#}-{slug}.md`.
+Single source of truth: `.env.example` at repo root. Copy to `.env.local` and fill in values.
+Do NOT create additional `.env.*.example` files.
 
 ## Code Style
 
