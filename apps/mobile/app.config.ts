@@ -92,6 +92,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-notifications",
     "expo-localization",
+    "expo-font",
+    "expo-image",
+    "expo-web-browser",
     // Required for native Stripe SDK linking during expo prebuild / EAS Build.
     // merchantIdentifier = your Apple Merchant ID (from Apple Developer portal).
     // Required for Apple Pay on iOS. Leave empty for Android / card-only flows.

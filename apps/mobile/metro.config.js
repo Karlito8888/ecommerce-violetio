@@ -15,9 +15,12 @@ const config = getDefaultConfig(projectRoot);
 
 // Watch workspace packages so Metro can see changes in them
 config.watchFolders = [
+  // Monorepo packages (shared, ui, config)
   path.resolve(monorepoRoot, "packages/shared"),
   path.resolve(monorepoRoot, "packages/ui"),
   path.resolve(monorepoRoot, "packages/config"),
+  // Other apps in the monorepo (needed by Expo defaults)
+  path.resolve(monorepoRoot, "apps/web"),
   // Also watch root node_modules so bun-hoisted deps are visible
   path.resolve(monorepoRoot, "node_modules"),
 ];
