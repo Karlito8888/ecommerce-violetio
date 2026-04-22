@@ -1,16 +1,44 @@
 /**
- * Violet Merchant API client — commission rate management.
+ * Violet Merchant API client — merchant details and commission rate management.
  *
  * Provides functions to:
+ * - Fetch individual merchant details (GET /merchants/{id})
  * - Set a merchant's commission rate for the channel
  *
+ * @see https://docs.violet.io/api-reference/merchants/get-merchant-by-id
  * @see https://docs.violet.io/api-reference/apps/commission-rates
  */
 
 import type { ApiResponse } from "../types/index.js";
+import type { MerchantDetail } from "../types/orderPersistence.types.js";
 import type { AppInstall, SetCommissionRateInput } from "../types/admin.types.js";
 import { fetchWithRetry } from "./violetFetch.js";
 import type { CatalogContext } from "./violetCatalog.js";
+
+/**
+ * Fetch details for a single merchant by ID.
+ *
+ * GET /v1/merchants/{merchant_id}
+ *
+ * Returns enriched merchant data including store URL, currency, and status.
+ *
+ * @see https://docs.violet.io/api-reference/merchants/get-merchant-by-id
+ */
+export async function getMerchantById(
+  ctx: CatalogContext,
+  merchantId: string,
+): Promise<ApiResponse<MerchantDetail>> {
+  const result = await fetchWithRetry(
+    `${ctx.apiBase}/merchants/${merchantId}`,
+    { method: "GET" },
+    ctx.tokenManager,
+  );
+
+  if (result.error) return { data: null, error: result.error };
+
+  const merchant = mapMerchantDetail(result.data);
+  return { data: merchant, error: null };
+}
 
 /**
  * Set the commission rate for a merchant's app install.
@@ -63,5 +91,19 @@ function mapAppInstall(raw: unknown): AppInstall {
     commissionLocked: (d.commission_locked as boolean) ?? false,
     dateCreated: (d.date_created as string) ?? "",
     dateLastModified: (d.date_last_modified as string) ?? "",
+  };
+}
+
+function mapMerchantDetail(raw: unknown): MerchantDetail {
+  const d = raw as Record<string, unknown>;
+  return {
+    id: String(d.id ?? ""),
+    name: String(d.name ?? "Unknown"),
+    platform: (d.source as string) ?? null,
+    status: (d.status as string) ?? "UNKNOWN",
+    commissionRate: d.commission_rate != null ? Number(d.commission_rate) : null,
+    currency: (d.currency as string) ?? null,
+    storeUrl: (d.store_url as string) ?? null,
+    connectedAt: (d.date_created as string) ?? null,
   };
 }

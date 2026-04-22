@@ -14,6 +14,7 @@ import { Route as AccountRouteRouteImport } from './routes/account/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
+import { Route as MerchantsIndexRouteImport } from './routes/merchants/index'
 import { Route as HelpIndexRouteImport } from './routes/help/index'
 import { Route as ContentIndexRouteImport } from './routes/content/index'
 import { Route as CollectionsIndexRouteImport } from './routes/collections/index'
@@ -22,6 +23,7 @@ import { Route as CartIndexRouteImport } from './routes/cart/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ProductsProductIdRouteImport } from './routes/products/$productId'
 import { Route as OrderLookupRouteImport } from './routes/order/lookup'
+import { Route as MerchantsMerchantIdRouteImport } from './routes/merchants/$merchantId'
 import { Route as LegalSlugRouteImport } from './routes/legal/$slug'
 import { Route as HelpContactRouteImport } from './routes/help/contact'
 import { Route as ContentSlugRouteImport } from './routes/content/$slug'
@@ -63,6 +65,11 @@ const ProductsIndexRoute = ProductsIndexRouteImport.update({
   path: '/products/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MerchantsIndexRoute = MerchantsIndexRouteImport.update({
+  id: '/merchants/',
+  path: '/merchants/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HelpIndexRoute = HelpIndexRouteImport.update({
   id: '/help/',
   path: '/help/',
@@ -101,6 +108,11 @@ const ProductsProductIdRoute = ProductsProductIdRouteImport.update({
 const OrderLookupRoute = OrderLookupRouteImport.update({
   id: '/order/lookup',
   path: '/order/lookup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MerchantsMerchantIdRoute = MerchantsMerchantIdRouteImport.update({
+  id: '/merchants/$merchantId',
+  path: '/merchants/$merchantId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalSlugRoute = LegalSlugRouteImport.update({
@@ -194,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
   '/legal/$slug': typeof LegalSlugRoute
+  '/merchants/$merchantId': typeof MerchantsMerchantIdRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -202,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/collections/': typeof CollectionsIndexRoute
   '/content/': typeof ContentIndexRoute
   '/help/': typeof HelpIndexRoute
+  '/merchants/': typeof MerchantsIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
@@ -224,6 +238,7 @@ export interface FileRoutesByTo {
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
   '/legal/$slug': typeof LegalSlugRoute
+  '/merchants/$merchantId': typeof MerchantsMerchantIdRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/admin': typeof AdminIndexRoute
@@ -232,6 +247,7 @@ export interface FileRoutesByTo {
   '/collections': typeof CollectionsIndexRoute
   '/content': typeof ContentIndexRoute
   '/help': typeof HelpIndexRoute
+  '/merchants': typeof MerchantsIndexRoute
   '/products': typeof ProductsIndexRoute
   '/search': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
@@ -255,6 +271,7 @@ export interface FileRoutesById {
   '/content/$slug': typeof ContentSlugRoute
   '/help/contact': typeof HelpContactRoute
   '/legal/$slug': typeof LegalSlugRoute
+  '/merchants/$merchantId': typeof MerchantsMerchantIdRoute
   '/order/lookup': typeof OrderLookupRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -263,6 +280,7 @@ export interface FileRoutesById {
   '/collections/': typeof CollectionsIndexRoute
   '/content/': typeof ContentIndexRoute
   '/help/': typeof HelpIndexRoute
+  '/merchants/': typeof MerchantsIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
@@ -287,6 +305,7 @@ export interface FileRouteTypes {
     | '/content/$slug'
     | '/help/contact'
     | '/legal/$slug'
+    | '/merchants/$merchantId'
     | '/order/lookup'
     | '/products/$productId'
     | '/admin/'
@@ -295,6 +314,7 @@ export interface FileRouteTypes {
     | '/collections/'
     | '/content/'
     | '/help/'
+    | '/merchants/'
     | '/products/'
     | '/search/'
     | '/account/orders/$orderId'
@@ -317,6 +337,7 @@ export interface FileRouteTypes {
     | '/content/$slug'
     | '/help/contact'
     | '/legal/$slug'
+    | '/merchants/$merchantId'
     | '/order/lookup'
     | '/products/$productId'
     | '/admin'
@@ -325,6 +346,7 @@ export interface FileRouteTypes {
     | '/collections'
     | '/content'
     | '/help'
+    | '/merchants'
     | '/products'
     | '/search'
     | '/account/orders/$orderId'
@@ -347,6 +369,7 @@ export interface FileRouteTypes {
     | '/content/$slug'
     | '/help/contact'
     | '/legal/$slug'
+    | '/merchants/$merchantId'
     | '/order/lookup'
     | '/products/$productId'
     | '/admin/'
@@ -355,6 +378,7 @@ export interface FileRouteTypes {
     | '/collections/'
     | '/content/'
     | '/help/'
+    | '/merchants/'
     | '/products/'
     | '/search/'
     | '/account/orders/$orderId'
@@ -376,6 +400,7 @@ export interface RootRouteChildren {
   ContentSlugRoute: typeof ContentSlugRoute
   HelpContactRoute: typeof HelpContactRoute
   LegalSlugRoute: typeof LegalSlugRoute
+  MerchantsMerchantIdRoute: typeof MerchantsMerchantIdRoute
   OrderLookupRoute: typeof OrderLookupRoute
   ProductsProductIdRoute: typeof ProductsProductIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -384,6 +409,7 @@ export interface RootRouteChildren {
   CollectionsIndexRoute: typeof CollectionsIndexRoute
   ContentIndexRoute: typeof ContentIndexRoute
   HelpIndexRoute: typeof HelpIndexRoute
+  MerchantsIndexRoute: typeof MerchantsIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
   AdminSupportInquiryIdRoute: typeof AdminSupportInquiryIdRoute
@@ -426,6 +452,13 @@ declare module '@tanstack/react-router' {
       path: '/products'
       fullPath: '/products/'
       preLoaderRoute: typeof ProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/merchants/': {
+      id: '/merchants/'
+      path: '/merchants'
+      fullPath: '/merchants/'
+      preLoaderRoute: typeof MerchantsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help/': {
@@ -482,6 +515,13 @@ declare module '@tanstack/react-router' {
       path: '/order/lookup'
       fullPath: '/order/lookup'
       preLoaderRoute: typeof OrderLookupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/merchants/$merchantId': {
+      id: '/merchants/$merchantId'
+      path: '/merchants/$merchantId'
+      fullPath: '/merchants/$merchantId'
+      preLoaderRoute: typeof MerchantsMerchantIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal/$slug': {
@@ -622,6 +662,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContentSlugRoute: ContentSlugRoute,
   HelpContactRoute: HelpContactRoute,
   LegalSlugRoute: LegalSlugRoute,
+  MerchantsMerchantIdRoute: MerchantsMerchantIdRoute,
   OrderLookupRoute: OrderLookupRoute,
   ProductsProductIdRoute: ProductsProductIdRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -630,6 +671,7 @@ const rootRouteChildren: RootRouteChildren = {
   CollectionsIndexRoute: CollectionsIndexRoute,
   ContentIndexRoute: ContentIndexRoute,
   HelpIndexRoute: HelpIndexRoute,
+  MerchantsIndexRoute: MerchantsIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
   AdminSupportInquiryIdRoute: AdminSupportInquiryIdRoute,

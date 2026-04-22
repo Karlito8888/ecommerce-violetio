@@ -102,6 +102,8 @@ export type {
 } from "./distribution.types.js";
 export type { UserProfile, UserPreferences, UpdateProfilePayload } from "./profile.types.js";
 export type {
+  MerchantDetail,
+  MerchantRow,
   OrderRow,
   OrderBagRow,
   OrderItemRow,

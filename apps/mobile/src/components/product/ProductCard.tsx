@@ -5,6 +5,7 @@ import type { Product } from "@ecommerce/shared";
 import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { Link } from "expo-router";
 
 /**
  * Native product card for the mobile catalog grid.
@@ -53,9 +54,17 @@ function ProductCard({ product }: { product: Product }) {
         <ThemedText style={styles.name} numberOfLines={2}>
           {product.name}
         </ThemedText>
-        <ThemedText type="small" style={styles.merchant}>
-          {product.seller}
-        </ThemedText>
+        <Link
+          href={`/merchants/${product.merchantId}`}
+          asChild
+          onPress={(e) => e.stopPropagation()}
+        >
+          <Pressable hitSlop={8} style={styles.merchantLink}>
+            <ThemedText type="small" style={styles.merchant}>
+              {product.seller}
+            </ThemedText>
+          </Pressable>
+        </Link>
         <ThemedText style={styles.price}>{priceDisplay}</ThemedText>
       </View>
     </Pressable>
@@ -112,6 +121,9 @@ const styles = StyleSheet.create({
   merchant: {
     color: Colors.light.textSecondary,
     marginBottom: Spacing.one,
+  },
+  merchantLink: {
+    alignSelf: "flex-start",
   },
   price: {
     fontSize: 14,

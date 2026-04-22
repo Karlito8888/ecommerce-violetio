@@ -109,13 +109,13 @@ async function checkMerchantConnectionHealth(): Promise<
 > {
   const appId = Deno.env.get("VIOLET_APP_ID");
   const appSecret = Deno.env.get("VIOLET_APP_SECRET");
-  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io";
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
 
   if (!appId || !appSecret) return null;
 
   try {
     // First, login to get a token
-    const loginRes = await fetchWithRetryRaw(`${apiBase}/v1/login`, {
+    const loginRes = await fetchWithRetryRaw(`${apiBase}/login`, {
       method: "POST",
       headers: {
         "X-Violet-App-Id": appId,
@@ -136,7 +136,7 @@ async function checkMerchantConnectionHealth(): Promise<
     // Batch endpoint: GET /operations/connection_health
     // Returns health for ALL connected merchants in one call.
     const healthRes = await fetchWithRetryRaw(
-      `${apiBase}/v1/operations/connection_health`,
+      `${apiBase}/operations/connection_health`,
       {
         method: "GET",
         headers: {
@@ -254,7 +254,7 @@ async function checkViolet(): Promise<ServiceStatus> {
   const start = Date.now();
   const appId = Deno.env.get("VIOLET_APP_ID");
   const appSecret = Deno.env.get("VIOLET_APP_SECRET");
-  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox.violet.io";
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
 
   if (!appId || !appSecret) {
     return { status: "unknown", latency_ms: null, error: "VIOLET_APP_ID/SECRET not configured" };
@@ -262,7 +262,7 @@ async function checkViolet(): Promise<ServiceStatus> {
 
   try {
     // Lightweight endpoint — just check reachability
-    const res = await fetchWithRetryRaw(`${apiBase}/v1/catalog/categories`, {
+    const res = await fetchWithRetryRaw(`${apiBase}/catalog/categories`, {
       method: "GET",
       headers: {
         "X-Violet-App-Id": appId,

@@ -38,6 +38,7 @@ export default function ProductCard({ product }: { product: Product }) {
       id={product.id}
       name={product.name}
       merchantName={product.seller}
+      merchantId={product.merchantId}
       thumbnailUrl={product.thumbnailUrl}
       available={product.available}
       minPrice={product.minPrice}

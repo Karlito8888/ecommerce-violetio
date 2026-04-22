@@ -6,6 +6,7 @@ import type {
   Cart,
   CartItemInput,
   CountryOption,
+  MerchantDetail,
   CreateCartInput,
   CustomerInput,
   PaymentIntent,
@@ -46,6 +47,29 @@ export interface SupplierAdapter {
   ): Promise<ApiResponse<PaginatedResult<Product>>>;
   getProduct(id: string, countryCode?: string): Promise<ApiResponse<Product>>;
   getAvailableCountries(): Promise<ApiResponse<CountryOption[]>>;
+
+  /**
+   * Fetches details for a single merchant by ID.
+   *
+   * Returns enriched merchant data (name, platform, store URL, currency, etc.)
+   * for the public-facing merchant page.
+   *
+   * @see https://docs.violet.io/api-reference/merchants/get-merchant-by-id
+   */
+  getMerchant(merchantId: string): Promise<ApiResponse<MerchantDetail>>;
+
+  /**
+   * Fetches paginated products for a specific merchant.
+   *
+   * Used on the merchant page to display all products from a single merchant.
+   *
+   * @see https://docs.violet.io/api-reference/catalog/offers/get-offers-for-a-merchant
+   */
+  getMerchantProducts(
+    merchantId: string,
+    params: ProductQuery,
+    countryCode?: string,
+  ): Promise<ApiResponse<PaginatedResult<Product>>>;
 
   /**
    * Fetches product categories from the supplier.

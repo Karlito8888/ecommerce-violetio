@@ -23,6 +23,8 @@ export interface BaseProductCardProps {
   id: string;
   name: string;
   merchantName: string;
+  /** Merchant ID — when provided, the merchant name becomes a link to /merchants/$merchantId */
+  merchantId?: string;
   thumbnailUrl: string | null;
   available: boolean;
   minPrice: number;
@@ -53,6 +55,7 @@ export default function BaseProductCard({
   id,
   name,
   merchantName,
+  merchantId,
   thumbnailUrl,
   available,
   minPrice,
@@ -123,7 +126,20 @@ export default function BaseProductCard({
 
         <div className="product-card__info">
           <h2 className="product-card__name">{name}</h2>
-          <p className="product-card__merchant">{merchantName}</p>
+          <p className="product-card__merchant">
+            {merchantId ? (
+              <Link
+                to="/merchants/$merchantId"
+                params={{ merchantId }}
+                className="product-card__merchant-link"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {merchantName}
+              </Link>
+            ) : (
+              merchantName
+            )}
+          </p>
           <p className="product-card__price">{priceDisplay}</p>
           {deliveryLabel && (
             <p

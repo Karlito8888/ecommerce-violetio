@@ -47,6 +47,7 @@ interface VioletOffer {
   currency?: string;
   available?: boolean;
   vendor?: string;
+  seller?: string;
   source?: string;
   external_url?: string;
   merchant_id?: number;
@@ -65,6 +66,7 @@ interface ProductResult {
   maxPrice: number;
   currency: string;
   available: boolean;
+  seller: string;
   vendor: string;
   source: string;
   thumbnailUrl: string | null;
@@ -97,6 +99,7 @@ function transformOffer(offer: VioletOffer): ProductResult {
     maxPrice: offer.max_price ?? 0,
     currency: offer.currency ?? "USD",
     available: offer.available ?? false,
+    seller: offer.seller ?? "",
     vendor: offer.vendor ?? "",
     source: offer.source ?? "",
     thumbnailUrl: extractThumbnail(offer),
@@ -125,6 +128,7 @@ async function searchOffers(
     sortBy?: string;
     sortDirection?: string;
     baseCurrency?: string;
+    merchantId?: string;
   },
 ): Promise<{
   content: VioletOffer[];
@@ -151,6 +155,7 @@ async function searchOffers(
   if (params.minPrice !== undefined) body.min_price = params.minPrice;
   if (params.maxPrice !== undefined) body.max_price = params.maxPrice;
   if (params.inStock === true) body.available = true;
+  if (params.merchantId) body.merchant_id = Number(params.merchantId);
   if (params.sortBy === "price") {
     body.sort_by = "minPrice";
     body.sort_direction = params.sortDirection ?? "ASC";
@@ -254,6 +259,7 @@ Deno.serve(async (req: Request) => {
     const sortBy = p.get("sortBy") ?? undefined;
     const sortDirection = p.get("sortDirection") ?? undefined;
     const baseCurrency = p.get("baseCurrency") ?? undefined;
+    const merchantId = p.get("merchantId") ?? undefined;
 
     const violetPage = page - 1; // 1-based → 0-based
 
@@ -265,6 +271,7 @@ Deno.serve(async (req: Request) => {
       sortBy,
       sortDirection,
       baseCurrency,
+      merchantId,
     });
 
     // Demo mode fallback

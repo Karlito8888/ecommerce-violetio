@@ -98,6 +98,7 @@ export default function AppTabs() {
         <Tabs.Screen name="auth" options={{ href: null }} />
         <Tabs.Screen name="products" options={{ href: null }} />
         <Tabs.Screen name="collections" options={{ href: null }} />
+        <Tabs.Screen name="merchants" options={{ href: null }} />
         <Tabs.Screen name="checkout" options={{ href: null }} />
         <Tabs.Screen name="content" options={{ href: null }} />
         <Tabs.Screen name="help" options={{ href: null }} />

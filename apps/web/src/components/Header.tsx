@@ -34,6 +34,7 @@ const CATEGORY_LINKS: { to: string; label: string; search?: Record<string, strin
   { to: "/products", label: "Fashion", search: { category: "Clothing" } },
   { to: "/products", label: "Home & Living", search: { category: "Home" } },
   { to: "/collections", label: "Collections" },
+  { to: "/merchants", label: "Merchants" },
   { to: "/about", label: "About" },
 ];
 

@@ -122,6 +122,17 @@
   margin: 0 0 var(--space-2);
 }
 
+.product-card__merchant-link {
+  color: var(--color-steel);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.product-card__merchant-link:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
 .product-card__price {
   font-family: var(--font-body);
   font-size: 0.95rem;

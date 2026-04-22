@@ -1,4 +1,31 @@
 /**
+ * Merchant detail from Violet API (GET /merchants/{id}).
+ *
+ * Enriched version of {@link MerchantRow} with data directly from Violet's
+ * merchant endpoint. Used for the public-facing merchant page.
+ *
+ * @see https://docs.violet.io/api-reference/merchants/get-merchant-by-id
+ */
+export interface MerchantDetail {
+  /** Violet merchant ID */
+  id: string;
+  /** Merchant display name */
+  name: string;
+  /** E-commerce platform (SHOPIFY, BIGCOMMERCE, etc.) */
+  platform: string | null;
+  /** Connection status */
+  status: string;
+  /** Commission rate as decimal (e.g., 0.12 = 12%) */
+  commissionRate: number | null;
+  /** Currency code (e.g., "USD") */
+  currency: string | null;
+  /** Store URL (e.g., "acme.myshopify.com") */
+  storeUrl: string | null;
+  /** ISO 8601 timestamp of initial connection */
+  connectedAt: string | null;
+}
+
+/**
  * Supabase row type for the `merchants` table — central source of truth for connected merchants.
  *
  * Populated by MERCHANT_CONNECTED webhook and updated by MERCHANT_DISCONNECTED/ENABLED/DISABLED.

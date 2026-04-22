@@ -1,0 +1,224 @@
+/* ============================================================
+   Merchants index page — /merchants
+   BEM block: .merchants-page
+   ============================================================ */
+
+.merchants-page {
+  padding-bottom: 4rem;
+}
+
+.merchants-page__header {
+  padding: 2rem 0 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 2rem;
+}
+
+.merchants-page__title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  margin: 0 0 0.5rem;
+}
+
+.merchants-page__subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.merchants-page__empty {
+  color: var(--color-text-secondary);
+  padding: 3rem 0;
+  text-align: center;
+}
+
+.merchants-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.merchants-page__card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.merchants-page__card:hover {
+  border-color: var(--color-text-secondary);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
+}
+
+.merchants-page__card-icon {
+  flex-shrink: 0;
+}
+
+.merchants-page__card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.merchants-page__card-name {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 0.25rem;
+}
+
+.merchants-page__card-platform {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-transform: capitalize;
+}
+
+.merchants-page__card-arrow {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  color: var(--color-text-secondary);
+  transition: transform 0.15s;
+}
+
+.merchants-page__card:hover .merchants-page__card-arrow {
+  transform: translateX(4px);
+}
+
+[data-theme="dark"] .merchants-page__card:hover {
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+/* ============================================================
+   Merchant detail page — /merchants/$merchantId
+   BEM block: .merchant-page
+   ============================================================ */
+
+.merchant-page {
+  padding-bottom: 4rem;
+}
+
+/* ── Breadcrumb ────────────────────────────────────────────── */
+.merchant-page__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: 1rem 0;
+}
+
+.merchant-page__breadcrumb span[aria-hidden] {
+  opacity: 0.4;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.merchant-page__header {
+  padding: 2rem 0 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 2rem;
+}
+
+.merchant-page__title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  margin: 0 0 0.75rem;
+}
+
+.merchant-page__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.merchant-page__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+.merchant-page__badge--verified {
+  background: var(--color-success-bg, #ecfdf5);
+  color: var(--color-success, #059669);
+}
+
+.merchant-page__store-url {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: 0.5rem;
+}
+
+/* ── Products section ──────────────────────────────────────── */
+.merchant-page__section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 1.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.merchant-page__count {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+}
+
+.merchant-page__empty {
+  color: var(--color-text-secondary);
+  padding: 3rem 0;
+  text-align: center;
+}
+
+/* ── Load more ─────────────────────────────────────────────── */
+.merchant-page__load-more {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.merchant-page__load-more-btn {
+  padding: 0.75rem 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.merchant-page__load-more-btn:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-text-secondary);
+}
+
+.merchant-page__load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Back link ─────────────────────────────────────────────── */
+.merchant-page__back {
+  padding: 2rem 0;
+}
+
+/* ── Dark theme ────────────────────────────────────────────── */
+[data-theme="dark"] .merchant-page__badge--verified {
+  background: #052e16;
+  color: #4ade80;
+}

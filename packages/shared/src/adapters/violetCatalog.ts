@@ -281,3 +281,54 @@ export async function getAvailableCountries(
 
   return { data: aggregateCountries(offers), error: null };
 }
+
+/**
+ * Fetch paginated products for a specific merchant.
+ *
+ * GET /catalog/offers/merchants/{id}?page=&size=&include=shipping,metadata,sku_metadata,collections
+ *
+ * Used for the merchant page to display all products from a single merchant.
+ * Supports contextual pricing via `base_currency` query param.
+ *
+ * @see https://docs.violet.io/api-reference/catalog/offers/get-offers-for-a-merchant
+ */
+export async function getProductsByMerchant(
+  ctx: CatalogContext,
+  merchantId: string,
+  params: ProductQuery,
+  countryCode?: string,
+): Promise<ApiResponse<PaginatedResult<Product>>> {
+  const page = params.page ?? 1;
+  const size = params.pageSize ?? 20;
+  const baseCurrency = countryCode ? getCurrencyForCountry(countryCode) : undefined;
+  const currencyQs = baseCurrency && baseCurrency !== "USD" ? `&base_currency=${baseCurrency}` : "";
+
+  const url =
+    `${ctx.apiBase}/catalog/offers/merchants/${merchantId}?page=${page}&size=${size}` +
+    `&include=shipping,metadata,sku_metadata,collections${currencyQs}`;
+
+  const result = await fetchWithRetry(url, { method: "GET" }, ctx.tokenManager);
+  if (result.error) return { data: null, error: result.error };
+
+  const parsed = violetPaginatedOffersSchema.safeParse(result.data);
+  if (!parsed.success) {
+    return {
+      data: null,
+      error: { code: "VIOLET.VALIDATION_ERROR", message: parsed.error.message },
+    };
+  }
+
+  const rawPage = parsed.data;
+  const products = rawPage.content.map((offer) => transformOffer(offer, countryCode));
+
+  return {
+    data: {
+      data: products,
+      total: rawPage.total_elements,
+      page,
+      pageSize: size,
+      hasNext: !rawPage.last,
+    },
+    error: null,
+  };
+}

@@ -19,6 +19,7 @@ import type {
   ShippingMethodsAvailable,
   SetShippingMethodInput,
   CountryOption,
+  MerchantDetail,
   Distribution,
   Transfer,
   SearchTransfersInput,
@@ -42,8 +43,13 @@ import {
   getProducts as getProductsFn,
   getProduct as getProductFn,
   getAvailableCountries as getAvailableCountriesFn,
+  getProductsByMerchant as getProductsByMerchantFn,
 } from "./violetCatalog.js";
 import type { CatalogContext } from "./violetCatalog.js";
+import {
+  getMerchantById as getMerchantByIdFn,
+  setCommissionRate as setCommissionRateFn,
+} from "./violetMerchants.js";
 import { getCategories as getCategoriesFn } from "./violetCategories.js";
 import {
   setShippingAddress as setShippingAddressFn,
@@ -85,7 +91,6 @@ import {
   getTransfer as getTransferFn,
   getTransferByProviderId as getTransferByProviderIdFn,
 } from "./violetTransfers.js";
-import { setCommissionRate as setCommissionRateFn } from "./violetMerchants.js";
 import { searchProducts as searchProductsFn } from "./violetSearch.js";
 import { getExchangeRates as getExchangeRatesFn } from "./violetCurrency.js";
 import {
@@ -154,6 +159,20 @@ export class VioletAdapter implements SupplierAdapter {
 
   async getAvailableCountries(): Promise<ApiResponse<CountryOption[]>> {
     return getAvailableCountriesFn(this.getCtx());
+  }
+
+  // ─── Merchant ────────────────────────────────────────────────────
+
+  async getMerchant(merchantId: string): Promise<ApiResponse<MerchantDetail>> {
+    return getMerchantByIdFn(this.getCtx(), merchantId);
+  }
+
+  async getMerchantProducts(
+    merchantId: string,
+    params: ProductQuery,
+    countryCode?: string,
+  ): Promise<ApiResponse<PaginatedResult<Product>>> {
+    return getProductsByMerchantFn(this.getCtx(), merchantId, params, countryCode);
   }
 
   // ─── Categories ──────────────────────────────────────────────────
