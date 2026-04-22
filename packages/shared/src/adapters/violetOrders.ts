@@ -212,7 +212,7 @@ export async function searchDistributions(
     data: {
       distributions,
       total: Number(raw.totalElements ?? raw.total_elements ?? distributions.length),
-      page: Number(raw.number ?? raw.number ?? page),
+      page: Number(raw.number ?? 0) + 1, // Violet returns 0-based `number`, convert to 1-based
       pageSize: Number(raw.size ?? pageSize),
       hasNext: !(raw.last ?? true),
     },

@@ -15,7 +15,8 @@
  */
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
+
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 
 const VIOLET_API_BASE = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
 
@@ -25,13 +26,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const headers = await getVioletHeaders();
     const url = `${VIOLET_API_BASE}/catalog/currencies/latest?base_currency=USD`;
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers,
-    });
+    const response = await violetFetch(url);
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");

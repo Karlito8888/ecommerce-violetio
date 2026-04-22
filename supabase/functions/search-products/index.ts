@@ -21,7 +21,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { generateEmbedding } from "../_shared/openai.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
+
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 import { searchQuerySchema } from "../_shared/schemas.ts";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -106,24 +107,12 @@ async function fetchVioletProducts(productIds: string[]): Promise<Map<string, Vi
   const result = new Map<string, VioletProduct>();
   if (productIds.length === 0) return result;
 
-  const headersResult = await getVioletHeaders();
-  if (headersResult.error) {
-    console.error(
-      "[search-products] Violet auth failed, skipping enrichment:",
-      headersResult.error,
-    );
-    return result;
-  }
-
   const violetApiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
 
   // Fetch products in parallel for speed
   const fetches = productIds.map(async (id) => {
     try {
-      const res = await fetch(`${violetApiBase}/catalog/offers/${id}`, {
-        method: "GET",
-        headers: headersResult.data,
-      });
+      const res = await violetFetch(`${violetApiBase}/catalog/offers/${id}`);
       if (res.ok) {
         const product: VioletProduct = await res.json();
         result.set(id, product);

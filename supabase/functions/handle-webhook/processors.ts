@@ -41,7 +41,8 @@
  */
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
+
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 import type {
   VioletOfferPayload,
   VioletSyncPayload,
@@ -675,17 +676,6 @@ export async function processCollectionOffersUpdated(
     );
 
     // ─── Fetch current offer IDs from Violet API (lightweight /ids endpoint) ────
-    const headersResult = await getVioletHeaders();
-    if (headersResult.error) {
-      await updateEventStatus(
-        supabase,
-        eventId,
-        "failed",
-        `Auth failed for COLLECTION_OFFERS_UPDATED: ${headersResult.error.message}`,
-      );
-      return;
-    }
-
     const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
     const offerIds: string[] = [];
     let page = 1; // Violet pagination is 1-based (default: page=1)
@@ -696,9 +686,7 @@ export async function processCollectionOffersUpdated(
       // @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
       const url =
         `${apiBase}/catalog/collections/${collectionId}/offers/ids?page=${page}&size=100&exclude_hidden=true`;
-      const res = await fetch(url, {
-        headers: { ...headersResult.data, Accept: "application/json" },
-      });
+      const res = await violetFetch(url);
 
       if (!res.ok) {
         // Non-fatal: if Violet API is temporarily unavailable, acknowledge and skip.
@@ -791,23 +779,13 @@ export async function processCollectionOffersUpdated(
  */
 async function autoEnableMerchantFlags(merchantId: string): Promise<void> {
   const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata", "contextual_pricing"];
-  const headersResult = await getVioletHeaders();
-
-  if (headersResult.error) {
-    console.warn(
-      `[merchant] Cannot auto-enable flags for ${merchantId} — auth failed: ${headersResult.error.message}`,
-    );
-    return;
-  }
-
   const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
 
   for (const flag of flags) {
     try {
       const url = `${apiBase}/merchants/${merchantId}/configuration/global_feature_flags/${flag}`;
-      const res = await fetch(url, {
+      const res = await violetFetch(url, {
         method: "PUT",
-        headers: { ...headersResult.data, "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: true }),
       });
 

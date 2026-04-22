@@ -884,7 +884,7 @@ describe("VioletAdapter — Collections", () => {
         ],
         last: true,
         total_elements: 1,
-        number: 1,
+        number: 0,
         size: 50,
       };
       vi.stubGlobal("fetch", mockFetchResponse(page1));
@@ -915,7 +915,7 @@ describe("VioletAdapter — Collections", () => {
         content: [{ id: 1, name: "A", merchant_id: 1, type: "CUSTOM" }],
         last: false,
         total_elements: 2,
-        number: 1,
+        number: 0,
         size: 1,
       };
       const p2 = {
@@ -957,7 +957,7 @@ describe("VioletAdapter — Collections", () => {
           },
         ],
         last: true,
-        number: 1,
+        number: 0,
         size: 50,
       };
       vi.stubGlobal("fetch", mockFetchResponse(page));
@@ -970,7 +970,7 @@ describe("VioletAdapter — Collections", () => {
       const page = {
         content: [{ id: 1, name: "No Image", merchant_id: 1 }],
         last: true,
-        number: 1,
+        number: 0,
         size: 50,
       };
       vi.stubGlobal("fetch", mockFetchResponse(page));
@@ -999,7 +999,7 @@ describe("VioletAdapter — Collections", () => {
       const page = {
         content: [{ id: 1, name: "Cached", merchant_id: 1 }],
         last: true,
-        number: 1,
+        number: 0,
         size: 50,
       };
       const fetchMock = vi.fn().mockResolvedValue({
@@ -1016,7 +1016,7 @@ describe("VioletAdapter — Collections", () => {
     });
 
     it("uses merchant-specific endpoint when merchantId provided", async () => {
-      const page = { content: [], last: true, number: 1, size: 50 };
+      const page = { content: [], last: true, number: 0, size: 50 };
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -1039,7 +1039,7 @@ describe("VioletAdapter — Collections", () => {
         content: [offer],
         last: true,
         total_elements: 1,
-        number: 1,
+        number: 0,
         size: 24,
       };
       vi.stubGlobal("fetch", mockFetchResponse(page));
@@ -1053,7 +1053,7 @@ describe("VioletAdapter — Collections", () => {
     });
 
     it("passes 1-based page number directly (no offset)", async () => {
-      const page = { content: [], last: true, number: 3, size: 12 };
+      const page = { content: [], last: true, number: 2, size: 12 };
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -1073,7 +1073,7 @@ describe("VioletAdapter — Collections", () => {
         content: [createMockOffer()],
         last: false,
         total_elements: 50,
-        number: 1,
+        number: 0,
         size: 24,
       };
       vi.stubGlobal("fetch", mockFetchResponse(page));
@@ -1087,7 +1087,7 @@ describe("VioletAdapter — Collections", () => {
       const page = {
         content: [createMockOffer()],
         last: true,
-        number: 1,
+        number: 0,
         size: 24,
         total_elements: 1,
       };
@@ -1107,7 +1107,7 @@ describe("VioletAdapter — Collections", () => {
         content: [100, 200, 300],
         last: true,
         total_elements: 3,
-        number: 1,
+        number: 0,
         size: 50,
       };
       const fetchMock = vi.fn().mockResolvedValue({

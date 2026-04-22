@@ -14,7 +14,8 @@
  */
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
+
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
@@ -35,14 +36,6 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const headersResult = await getVioletHeaders();
-  if (headersResult.error) {
-    return new Response(
-      JSON.stringify({ data: null, error: { code: "AUTH_ERROR", message: headersResult.error.message } }),
-      { status: 401, headers: jsonHeaders },
-    );
-  }
-
   const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
   // Contextual pricing: pass base_currency for presentment prices
   // @see https://docs.violet.io/prism/catalog/contextual-pricing
@@ -54,9 +47,7 @@ Deno.serve(async (req: Request) => {
   const apiUrl = `${apiBase}/catalog/collections/${collectionId}/offers?page=${page}&size=${pageSize}&exclude_hidden=true${currencyQs}`;
 
   try {
-    const res = await fetch(apiUrl, {
-      headers: { ...headersResult.data, Accept: "application/json" },
-    });
+    const res = await violetFetch(apiUrl);
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -176,7 +167,7 @@ Deno.serve(async (req: Request) => {
         data: {
           data: products,
           total: raw.total_elements ?? products.length,
-          page: raw.number ?? page, // Violet 1-based matches our convention
+          page: (raw.number ?? 0) + 1, // Violet returns 0-based `number`, convert to 1-based
           pageSize: raw.size ?? pageSize,
           hasNext: !raw.last,
         },

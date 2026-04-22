@@ -25,6 +25,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { fetchWithRetryRaw } from "../_shared/fetchWithRetry.ts";
 
 interface ServiceStatus {
   status: "up" | "down" | "unknown";
@@ -114,7 +115,7 @@ async function checkMerchantConnectionHealth(): Promise<
 
   try {
     // First, login to get a token
-    const loginRes = await fetch(`${apiBase}/v1/login`, {
+    const loginRes = await fetchWithRetryRaw(`${apiBase}/v1/login`, {
       method: "POST",
       headers: {
         "X-Violet-App-Id": appId,
@@ -134,7 +135,7 @@ async function checkMerchantConnectionHealth(): Promise<
 
     // Batch endpoint: GET /operations/connection_health
     // Returns health for ALL connected merchants in one call.
-    const healthRes = await fetch(
+    const healthRes = await fetchWithRetryRaw(
       `${apiBase}/v1/operations/connection_health`,
       {
         method: "GET",
@@ -261,7 +262,7 @@ async function checkViolet(): Promise<ServiceStatus> {
 
   try {
     // Lightweight endpoint — just check reachability
-    const res = await fetch(`${apiBase}/v1/catalog/categories`, {
+    const res = await fetchWithRetryRaw(`${apiBase}/v1/catalog/categories`, {
       method: "GET",
       headers: {
         "X-Violet-App-Id": appId,

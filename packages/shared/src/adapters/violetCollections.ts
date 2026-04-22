@@ -153,7 +153,7 @@ export async function getCollectionOffers(
     data: {
       data: data.content.map((offer) => transformOffer(offer)),
       total: data.total_elements,
-      page: data.number,
+      page: data.number + 1, // Violet returns 0-based `number`, convert to 1-based
       pageSize: data.size,
       hasNext: !data.last,
     },
@@ -200,7 +200,7 @@ export async function getCollectionOfferIds(
     data: {
       data: (data.content ?? []).map(String),
       total: data.total_elements,
-      page: data.number,
+      page: data.number + 1, // Violet returns 0-based `number`, convert to 1-based
       pageSize: data.size,
       hasNext: !data.last,
     },

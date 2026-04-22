@@ -17,7 +17,7 @@
  */
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 
 const VIOLET_API_BASE = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
 
@@ -115,7 +115,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 // ─── Violet API calls ────────────────────────────────────────────────────────
 
 async function searchOffers(
-  authHeaders: Record<string, string>,
   page: number,
   size: number,
   params: {
@@ -157,9 +156,8 @@ async function searchOffers(
     body.sort_direction = params.sortDirection ?? "ASC";
   }
 
-  const res = await fetch(`${VIOLET_API_BASE}/catalog/offers/search?${qs}`, {
+  const res = await violetFetch(`${VIOLET_API_BASE}/catalog/offers/search?${qs}`, {
     method: "POST",
-    headers: { ...authHeaders, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
@@ -169,7 +167,6 @@ async function searchOffers(
 
 /** Demo mode fallback: fetch from each merchant directly */
 async function getProductsFromMerchants(
-  authHeaders: Record<string, string>,
   page: number,
   size: number,
   params: {
@@ -180,19 +177,10 @@ async function getProductsFromMerchants(
     sortBy?: string;
     sortDirection?: string;
     baseCurrency?: string;
-  }, {
-    category?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    inStock?: boolean;
-    sortBy?: string;
-    sortDirection?: string;
   },
 ): Promise<{ data: ProductResult[]; total: number; hasNext: boolean }> {
   // Get merchants
-  const merchantsRes = await fetch(`${VIOLET_API_BASE}/merchants?page=1&size=50`, {
-    headers: authHeaders,
-  });
+  const merchantsRes = await violetFetch(`${VIOLET_API_BASE}/merchants?page=1&size=50`);
   if (!merchantsRes.ok) return { data: [], total: 0, hasNext: false };
   const merchantsData = await merchantsRes.json();
   const merchantIds: number[] = (merchantsData.content ?? []).map((m: { id: number }) => m.id);
@@ -205,9 +193,8 @@ async function getProductsFromMerchants(
   // Fetch all offers in parallel
   const offerArrays = await Promise.all(
     merchantIds.map(async (id) => {
-      const res = await fetch(
+      const res = await violetFetch(
         `${VIOLET_API_BASE}/catalog/offers/merchants/${id}?page=1&size=100&include=shipping,metadata,sku_metadata,collections${currencyQs}`,
-        { headers: authHeaders },
       );
       if (!res.ok) return [];
       const d = await res.json();
@@ -268,15 +255,9 @@ Deno.serve(async (req: Request) => {
     const sortDirection = p.get("sortDirection") ?? undefined;
     const baseCurrency = p.get("baseCurrency") ?? undefined;
 
-    const authResult = await getVioletHeaders();
-    if (authResult.error) {
-      return jsonResponse({ data: null, error: authResult.error }, 503);
-    }
-
-    const authHeaders = authResult.data as Record<string, string>;
     const violetPage = page - 1; // 1-based → 0-based
 
-    const searchResult = await searchOffers(authHeaders, violetPage, pageSize, {
+    const searchResult = await searchOffers(violetPage, pageSize, {
       category,
       minPrice,
       maxPrice,
@@ -288,7 +269,7 @@ Deno.serve(async (req: Request) => {
 
     // Demo mode fallback
     if (!searchResult || searchResult.content.length === 0) {
-      const fallback = await getProductsFromMerchants(authHeaders, page, pageSize, {
+      const fallback = await getProductsFromMerchants(page, pageSize, {
         category,
         minPrice,
         maxPrice,

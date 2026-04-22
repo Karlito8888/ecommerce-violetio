@@ -60,8 +60,8 @@
  */
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 const VIOLET_API_BASE = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
@@ -267,16 +267,6 @@ Deno.serve(async (req: Request) => {
   }
   const userId = authResult.userId;
 
-  // ── Violet auth headers ────────────────────────────────────────────
-  const violetHeadersResult = await getVioletHeaders();
-  if (violetHeadersResult.error) {
-    return errorResponse("VIOLET.CONFIG_ERROR", violetHeadersResult.error.message, 500);
-  }
-  const violetHeaders = {
-    ...violetHeadersResult.data,
-    "Content-Type": "application/json",
-  };
-
   const url = new URL(req.url);
   // Path after /functions/v1/cart
   const path = url.pathname.replace(/.*\/cart/, "");
@@ -323,9 +313,8 @@ Deno.serve(async (req: Request) => {
       violetBody.customer = requestBody.customer;
     }
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify(violetBody),
     });
 
@@ -422,13 +411,11 @@ Deno.serve(async (req: Request) => {
 
     // Fetch both carts from Violet
     const [anonRes, targetRes] = await Promise.all([
-      fetch(`${VIOLET_API_BASE}/checkout/cart/${anonymousVioletCartId}`, {
+      violetFetch(`${VIOLET_API_BASE}/checkout/cart/${anonymousVioletCartId}`, {
         method: "GET",
-        headers: violetHeaders,
       }),
-      fetch(`${VIOLET_API_BASE}/checkout/cart/${mergeTargetVioletCartId}`, {
+      violetFetch(`${VIOLET_API_BASE}/checkout/cart/${mergeTargetVioletCartId}`, {
         method: "GET",
-        headers: violetHeaders,
       }),
     ]);
 
@@ -472,22 +459,20 @@ Deno.serve(async (req: Request) => {
         const existingQty = existingSkus.get(skuId);
 
         if (existingQty !== undefined) {
-          const mergeRes = await fetch(
+          const mergeRes = await violetFetch(
             `${VIOLET_API_BASE}/checkout/cart/${mergeTargetVioletCartId}/skus/${skuId}`,
             {
               method: "PUT",
-              headers: violetHeaders,
               body: JSON.stringify({ quantity: existingQty + qty }),
             },
           );
           if (!mergeRes.ok) mergeErrors.push(`Failed to update qty for SKU ${skuId}`);
           else mergedCount++;
         } else {
-          const mergeRes = await fetch(
+          const mergeRes = await violetFetch(
             `${VIOLET_API_BASE}/checkout/cart/${mergeTargetVioletCartId}/skus`,
             {
               method: "POST",
-              headers: violetHeaders,
               body: JSON.stringify({
                 sku_id: skuId,
                 quantity: qty,
@@ -526,9 +511,8 @@ Deno.serve(async (req: Request) => {
   const getMatch = path.match(/^\/([^/]+)$/);
   if (req.method === "GET" && getMatch) {
     const violetCartId = getMatch[1];
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
       method: "GET",
-      headers: violetHeaders,
     });
 
     if (!res.ok) {
@@ -589,9 +573,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     if (!appId) return errorResponse("VIOLET.CONFIG_MISSING", "VIOLET_APP_ID not configured", 500);
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify({
         sku_id: body.sku_id,
         quantity: body.quantity ?? 1,
@@ -667,9 +650,8 @@ Deno.serve(async (req: Request) => {
      */
     let orderSkuId = skuId; // default: assume caller sent the right ID
     try {
-      const cartRes = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
+      const cartRes = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
         method: "GET",
-        headers: violetHeaders,
       });
       if (cartRes.ok) {
         const cartRaw = await cartRes.json();
@@ -689,9 +671,8 @@ Deno.serve(async (req: Request) => {
       // Fall through — try with the original skuId
     }
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${orderSkuId}`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${orderSkuId}`, {
       method: "PUT",
-      headers: violetHeaders,
       body: JSON.stringify({ quantity: body.quantity }),
     });
 
@@ -734,9 +715,8 @@ Deno.serve(async (req: Request) => {
      */
     let orderSkuId = skuId;
     try {
-      const cartRes = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
+      const cartRes = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}`, {
         method: "GET",
-        headers: violetHeaders,
       });
       if (cartRes.ok) {
         const cartRaw = await cartRes.json();
@@ -756,9 +736,8 @@ Deno.serve(async (req: Request) => {
       // Fall through — try with the original skuId
     }
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${orderSkuId}`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/skus/${orderSkuId}`, {
       method: "DELETE",
-      headers: violetHeaders,
     });
 
     if (!res.ok) {
@@ -804,9 +783,8 @@ Deno.serve(async (req: Request) => {
     const violetCartId = shippingAddressMatch[1];
     const body = await req.json();
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping_address`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping_address`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify(body),
     });
 
@@ -850,9 +828,8 @@ Deno.serve(async (req: Request) => {
 
     // Note: This call is intentionally slow (2–5s) — it queries carrier APIs.
     // The mobile app should show a per-bag skeleton loader while pending.
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping/available`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping/available`, {
       method: "GET",
-      headers: violetHeaders,
     });
 
     if (!res.ok) {
@@ -887,9 +864,8 @@ Deno.serve(async (req: Request) => {
 
     // Body: [{ bag_id: number, shipping_method_id: string }]
     // Violet returns the full "priced cart" (shipping_total per bag updated).
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/shipping`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify(body),
     });
 
@@ -924,9 +900,8 @@ Deno.serve(async (req: Request) => {
     const violetCartId = discountsMatch[1];
     const body = await req.json();
 
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/discounts`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/discounts`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify(body),
     });
 
@@ -959,9 +934,9 @@ Deno.serve(async (req: Request) => {
     const violetCartId = discountDeleteMatch[1];
     const discountId = discountDeleteMatch[2];
 
-    const res = await fetch(
+    const res = await violetFetch(
       `${VIOLET_API_BASE}/checkout/cart/${violetCartId}/discounts/${discountId}`,
-      { method: "DELETE", headers: violetHeaders },
+      { method: "DELETE" },
     );
 
     if (!res.ok) {
@@ -1000,9 +975,8 @@ Deno.serve(async (req: Request) => {
      *
      * @see https://docs.violet.io/api-reference/checkout-cart/apply-guest-customer-to-cart
      */
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/customer`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/customer`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify(body),
     });
 
@@ -1037,9 +1011,8 @@ Deno.serve(async (req: Request) => {
      *
      * @see https://docs.violet.io/api-reference/checkout-cart/set-billing-address
      */
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/billing_address`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/billing_address`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify(body),
     });
 
@@ -1078,9 +1051,8 @@ Deno.serve(async (req: Request) => {
      *
      * @see https://docs.violet.io/api-reference/checkout-cart/submit-cart
      */
-    const res = await fetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/submit`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/checkout/cart/${violetCartId}/submit`, {
       method: "POST",
-      headers: violetHeaders,
       body: JSON.stringify(body),
     });
 
@@ -1219,9 +1191,8 @@ Deno.serve(async (req: Request) => {
      *
      * @see https://docs.violet.io/api-reference/orders-and-checkout/orders/get-order-by-id
      */
-    const res = await fetch(`${VIOLET_API_BASE}/orders/${orderId}`, {
+    const res = await violetFetch(`${VIOLET_API_BASE}/orders/${orderId}`, {
       method: "GET",
-      headers: violetHeaders,
     });
 
     if (!res.ok) {
@@ -1250,15 +1221,8 @@ Deno.serve(async (req: Request) => {
   const offerMatch = path.match(/^\/offers\/([^/]+)$/);
   if (req.method === "GET" && offerMatch) {
     const offerId = offerMatch[1];
-    const violetHeadersResult = await getVioletHeaders();
-    if (violetHeadersResult.error) {
-      return errorResponse("VIOLET.AUTH_FAILED", "Violet auth failed", 503);
-    }
-    const offerVioletHeaders = { ...violetHeadersResult.data };
 
-    const offerRes = await fetch(`${VIOLET_API_BASE}/catalog/offers/${offerId}`, {
-      headers: offerVioletHeaders,
-    });
+    const offerRes = await violetFetch(`${VIOLET_API_BASE}/catalog/offers/${offerId}`);
 
     if (!offerRes.ok) {
       return errorResponse("VIOLET.NOT_FOUND", `Offer ${offerId} not found`, offerRes.status);

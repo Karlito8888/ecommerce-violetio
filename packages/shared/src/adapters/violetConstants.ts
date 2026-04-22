@@ -4,6 +4,9 @@
  * Extracted from violetAdapter.ts to keep each module focused.
  * This file has ZERO imports from other adapter modules — it is the
  * foundation layer everything else depends on.
+ *
+ * SYNC: Deno Edge Functions use the same values in
+ * supabase/functions/_shared/constants.ts — keep them in sync!
  */
 
 /**

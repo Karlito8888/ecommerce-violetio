@@ -82,7 +82,7 @@ describe("searchDistributions", () => {
     expect(result.error).toBeNull();
     expect(result.data!.distributions).toHaveLength(2);
     expect(result.data!.total).toBe(15);
-    expect(result.data!.page).toBe(0);
+    expect(result.data!.page).toBe(1);
     expect(result.data!.pageSize).toBe(20);
     expect(result.data!.hasNext).toBe(true);
 

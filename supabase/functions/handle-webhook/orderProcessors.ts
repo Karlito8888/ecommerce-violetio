@@ -74,7 +74,8 @@
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import type { VioletOrderPayload, VioletBagPayload } from "../_shared/schemas.ts";
 import { updateEventStatus } from "./processors.ts";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
+
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 
 type DistributionType = "PAYMENT" | "REFUND" | "ADJUSTMENT";
 type DistributionStatus = "PENDING" | "QUEUED" | "SENT" | "FAILED";
@@ -486,20 +487,11 @@ async function syncDistributionsForOrder(
   supabase: SupabaseClient,
   violetOrderId: string,
 ): Promise<void> {
-  const violetHeadersResult = await getVioletHeaders();
-  if (violetHeadersResult.error) {
-    console.warn(
-      `[syncDistributions] Cannot fetch distributions — Violet auth failed: ${violetHeadersResult.error.message}`,
-    );
-    return;
-  }
   const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
   const url = `${apiBase}/orders/${violetOrderId}/distributions`;
 
   try {
-    const res = await fetch(url, {
-      headers: { ...violetHeadersResult.data, Accept: "application/json" },
-    });
+    const res = await violetFetch(url);
     if (!res.ok) {
       console.warn(
         `[syncDistributions] Violet distributions API returned ${res.status} for order ${violetOrderId}`,
@@ -610,19 +602,10 @@ async function fetchAndStoreRefundDetails(
   payload: VioletBagPayload,
   orderBagId: string,
 ): Promise<void> {
-  const violetHeadersResult = await getVioletHeaders();
-  if (violetHeadersResult.error) {
-    console.warn(
-      `[processBagRefunded] Cannot fetch refund details — Violet auth failed: ${violetHeadersResult.error.message}`,
-    );
-    return;
-  }
   const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
   const url = `${apiBase}/orders/${payload.order_id}/bags/${payload.id}/refunds`;
   try {
-    const res = await fetch(url, {
-      headers: { ...violetHeadersResult.data, Accept: "application/json" },
-    });
+    const res = await violetFetch(url);
     if (!res.ok) {
       console.warn(
         `[processBagRefunded] Violet refund API returned ${res.status} for bag ${payload.id}`,

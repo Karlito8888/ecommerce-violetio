@@ -30,7 +30,8 @@
  */
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { getVioletHeaders } from "../_shared/violetAuth.ts";
+
+import { violetFetch } from "../_shared/fetchWithRetry.ts";
 
 const VIOLET_API_BASE = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
 
@@ -312,13 +313,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const authResult = await getVioletHeaders();
-    if (authResult.error) {
-      return jsonResponse({ data: null, error: authResult.error }, 503);
-    }
-
-    const violetHeaders = authResult.data as Record<string, string>;
-
     // Contextual pricing: append base_currency query param
     // @see https://docs.violet.io/prism/catalog/contextual-pricing
     const currencyQs = baseCurrency && baseCurrency !== "USD" ? `?base_currency=${baseCurrency}` : "";
@@ -329,9 +323,7 @@ Deno.serve(async (req: Request) => {
      *
      * @see https://docs.violet.io/api-reference/catalog/offers/get-offer-by-id
      */
-    const res = await fetch(`${VIOLET_API_BASE}/catalog/offers/${offerId}${currencyQs}`, {
-      headers: violetHeaders,
-    });
+    const res = await violetFetch(`${VIOLET_API_BASE}/catalog/offers/${offerId}${currencyQs}`);
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
