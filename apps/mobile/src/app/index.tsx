@@ -9,14 +9,13 @@ import {
   View,
   useColorScheme,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useMobileTracking } from "@/hooks/useMobileTracking";
 import { useAuth } from "@/context/AuthContext";
 
 import { ThemedView } from "@/components/themed-view";
 import ProductList from "@/components/product/ProductList";
-import { Colors, Fonts, Spacing, BottomTabInset, MaxContentWidth } from "@/constants/theme";
+import { Colors, Fonts, Spacing, MaxContentWidth } from "@/constants/theme";
 import { useRecentlyViewed, productsInfiniteQueryOptions } from "@ecommerce/shared";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { fetchProductsMobile } from "@/server/getProducts";
@@ -66,7 +65,7 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
+      <View style={styles.safeArea}>
         {/* Category chips */}
         <ScrollView
           horizontal
@@ -115,7 +114,7 @@ export default function HomeScreen() {
           isLoading={isLoading || isFetchingNextPage}
           onLoadMore={fetchNextPage}
         />
-      </SafeAreaView>
+      </View>
     </ThemedView>
   );
 }
@@ -178,11 +177,11 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     alignSelf: "center",
     width: "100%",
-    paddingBottom: BottomTabInset,
   },
   chipsRow: {
     borderBottomWidth: 1,
     flexGrow: 0,
+    flexShrink: 0,
   },
   chips: {
     paddingHorizontal: Spacing.three,

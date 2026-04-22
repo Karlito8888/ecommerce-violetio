@@ -26,13 +26,13 @@
 .hero__glow--top {
   top: -6rem;
   left: -5rem;
-  background: radial-gradient(circle, rgba(201, 169, 110, 0.32), transparent 66%);
+  background: radial-gradient(circle, rgba(201, 169, 110, 0.15), transparent 66%);
 }
 
 .hero__glow--bottom {
   bottom: -5rem;
   right: -5rem;
-  background: radial-gradient(circle, rgba(139, 115, 85, 0.18), transparent 66%);
+  background: radial-gradient(circle, rgba(139, 115, 85, 0.15), transparent 66%);
 }
 
 .hero__kicker {

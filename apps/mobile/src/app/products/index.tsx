@@ -191,10 +191,12 @@ const styles = StyleSheet.create({
   },
   chipScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     paddingVertical: Spacing.two,
   },
   sortScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     paddingBottom: Spacing.two,
   },
   chipRow: {
@@ -207,10 +209,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: Colors.light.textSecondary,
+    alignItems: "center",
+    justifyContent: "center",
   },
   chipText: {
     fontSize: 14,
     fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 14,
+    includeFontPadding: false,
   },
   chipTextActive: {
     color: Colors.light.background,

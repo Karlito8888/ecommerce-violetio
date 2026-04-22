@@ -66,6 +66,9 @@
   color: var(--color-ink);
   margin: 0 0 var(--space-1);
   line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .content-product-card__merchant {

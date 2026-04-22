@@ -40,10 +40,15 @@ export default function ProductList({
   return (
     <FlatList
       data={products}
-      renderItem={({ item }) => <ProductCard product={item} />}
+      renderItem={({ item }) => (
+        <View style={styles.cardWrapper}>
+          <ProductCard product={item} />
+        </View>
+      )}
       keyExtractor={(item) => item.id}
       numColumns={2}
       contentContainerStyle={styles.list}
+      style={styles.flatList}
       ListHeaderComponent={
         <ThemedText type="small" style={styles.count}>
           Showing {products.length} of {total} products
@@ -71,6 +76,13 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: Spacing.two,
+  },
+  flatList: {
+    flex: 1,
+  },
+  cardWrapper: {
+    flex: 1,
+    maxWidth: "50%",
   },
   count: {
     textAlign: "center",

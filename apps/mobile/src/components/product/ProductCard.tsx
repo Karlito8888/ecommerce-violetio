@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
+import React from "react";
 import type { Product } from "@ecommerce/shared";
 import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
@@ -16,7 +17,7 @@ import { Colors, Fonts, Spacing } from "@/constants/theme";
  *
  * Uses React Native StyleSheet with design tokens from theme constants.
  */
-export default function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product }: { product: Product }) {
   const router = useRouter();
   const priceDisplay = formatPrice(product.minPrice, product.currency);
 
@@ -60,6 +61,8 @@ export default function ProductCard({ product }: { product: Product }) {
     </Pressable>
   );
 }
+
+export default React.memo(ProductCard);
 
 const styles = StyleSheet.create({
   card: {

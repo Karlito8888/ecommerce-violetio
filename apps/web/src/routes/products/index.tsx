@@ -13,8 +13,6 @@ import { useUserLocation } from "../../contexts/UserLocationContext";
 import ProductGrid from "../../components/product/ProductGrid";
 import ProductGridSkeleton from "../../components/product/ProductGridSkeleton";
 import CategoryChips from "../../components/product/CategoryChips";
-import FilterChips from "../../components/product/FilterChips";
-import type { ActiveFilters } from "../../components/product/FilterChips";
 import SortSelect from "../../components/product/SortSelect";
 
 /**
@@ -322,22 +320,6 @@ function ProductListingPage() {
   };
 
   /**
-   * Filter chip change preserves category and sort, replaces price/availability filters.
-   */
-  const handleFilterChange = (filters: ActiveFilters) => {
-    navigate({
-      search: {
-        category,
-        minPrice: filters.minPrice,
-        maxPrice: filters.maxPrice,
-        inStock: filters.inStock,
-        sortBy,
-        sortDirection,
-      },
-    });
-  };
-
-  /**
    * Sort change preserves all other params (category, filters).
    *
    * ## Contract with SortSelect
@@ -366,9 +348,6 @@ function ProductListingPage() {
     });
   };
 
-  const hasActiveFilters =
-    category !== undefined || minPrice !== undefined || maxPrice !== undefined || inStock === true;
-
   if (allProducts.length === 0 && total === 0) {
     return (
       <div className="page-wrap products-page">
@@ -377,10 +356,6 @@ function ProductListingPage() {
           categories={categories}
           activeCategory={category}
           onCategoryChange={handleCategoryChange}
-        />
-        <FilterChips
-          activeFilters={{ minPrice, maxPrice, inStock }}
-          onFilterChange={handleFilterChange}
         />
         <div className="products-page__empty">
           {emptyReason === "no-shipping" ? (
@@ -404,18 +379,7 @@ function ProductListingPage() {
               </div>
             </>
           ) : (
-            <>
-              <p>No products match your filters.</p>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="products-page__clear-filters"
-                  onClick={() => handleFilterChange({})}
-                >
-                  Clear filters
-                </button>
-              )}
-            </>
+            <p>No products match your filters.</p>
           )}
         </div>
       </div>
@@ -430,11 +394,6 @@ function ProductListingPage() {
         categories={categories}
         activeCategory={category}
         onCategoryChange={handleCategoryChange}
-      />
-
-      <FilterChips
-        activeFilters={{ minPrice, maxPrice, inStock }}
-        onFilterChange={handleFilterChange}
       />
 
       {/**

@@ -23,12 +23,17 @@
   font-family: var(--font-body);
   font-size: 0.875rem;
   color: var(--color-ink);
-  background: transparent;
+  background-color: var(--color-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: var(--space-1) var(--space-3);
   cursor: pointer;
   transition: border-color var(--transition-fast);
+}
+
+.sort-select__dropdown option {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
 }
 
 .sort-select__dropdown:hover {

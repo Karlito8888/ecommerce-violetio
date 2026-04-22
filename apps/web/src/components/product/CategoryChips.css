@@ -1,6 +1,6 @@
 /* ─── Category Chips ───
  * BEM block: category-chips
- * Horizontal scrollable chip bar with fade gradients at edges.
+ * Horizontal scrollable chip bar.
  * Active state: solid midnight bg with white text.
  * Inactive state: outlined with subtle border.
  */
@@ -8,28 +8,6 @@
 .category-chips {
   position: relative;
   margin-bottom: var(--space-6);
-}
-
-/* Fade gradients at scroll edges */
-.category-chips::before,
-.category-chips::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2rem;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.category-chips::before {
-  left: 0;
-  background: linear-gradient(to right, var(--color-ivory), transparent);
-}
-
-.category-chips::after {
-  right: 0;
-  background: linear-gradient(to left, var(--color-ivory), transparent);
 }
 
 .category-chips__list {

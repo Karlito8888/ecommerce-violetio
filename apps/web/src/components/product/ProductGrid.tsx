@@ -17,7 +17,7 @@ export default function ProductGrid({ products }: { products: Product[] }) {
   return (
     <div className="product-grid" role="list">
       {products.map((product) => (
-        <div key={product.id} role="listitem">
+        <div key={product.id} role="listitem" style={{ minWidth: 0 }}>
           <ProductCard product={product} />
         </div>
       ))}
