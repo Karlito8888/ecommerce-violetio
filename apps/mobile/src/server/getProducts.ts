@@ -21,7 +21,12 @@ export const fetchProductsMobile: ProductsFetchFn = async (params) => {
 
   try {
     return await apiGet(`/api/products?${qs}`);
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[getProducts] Failed to fetch from web backend:",
+      err instanceof Error ? err.message : err,
+    );
     return {
       data: null,
       error: {

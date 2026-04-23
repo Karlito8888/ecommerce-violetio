@@ -15,6 +15,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isTest = !!process.env.VITEST;
 
 const config = defineConfig({
+  server: {
+    // Listen on all interfaces so the Android emulator (10.0.2.2) and iOS simulator
+    // (localhost) can reach the API routes. Without this, Vite only listens on
+    // IPv6 localhost ([::1]) which breaks Android emulator IPv4 connections.
+    host: true,
+  },
   envDir: path.resolve(__dirname, "../.."),
   plugins: [
     devtools(),
