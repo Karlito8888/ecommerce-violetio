@@ -246,7 +246,7 @@ export const violetOfferSchema = z.object({
   collections: z
     .array(
       z.object({
-        collection_id: z.number(),
+        collection_id: z.number().optional(),
         name: z.string().optional(),
       }),
     )
