@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { useCallback, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
 import WishlistButton from "./WishlistButton";
 
@@ -67,6 +67,16 @@ export default function BaseProductCard({
   const isOutOfStock = !available;
   const priceDisplay = formatPrice(minPrice, currency);
   const imageAlt = `${name} by ${merchantName}`;
+  const navigate = useNavigate();
+
+  const handleMerchantClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      navigate({ to: "/merchants/$merchantId", params: { merchantId: merchantId! } });
+    },
+    [navigate, merchantId],
+  );
 
   /**
    * M10 review fix: Show placeholder instead of hiding the entire card on image error.
@@ -128,14 +138,13 @@ export default function BaseProductCard({
           <h2 className="product-card__name">{name}</h2>
           <p className="product-card__merchant">
             {merchantId ? (
-              <Link
-                to="/merchants/$merchantId"
-                params={{ merchantId }}
+              <button
+                type="button"
                 className="product-card__merchant-link"
-                onClick={(e) => e.stopPropagation()}
+                onClick={handleMerchantClick}
               >
                 {merchantName}
-              </Link>
+              </button>
             ) : (
               merchantName
             )}

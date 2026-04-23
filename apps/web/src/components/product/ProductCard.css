@@ -123,14 +123,26 @@
 }
 
 .product-card__merchant-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
   color: var(--color-steel);
   text-decoration: none;
+  cursor: pointer;
   transition: color 0.15s;
 }
 
 .product-card__merchant-link:hover {
   color: var(--color-ink);
   text-decoration: underline;
+}
+
+.product-card__merchant-link:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .product-card__price {

@@ -77,6 +77,10 @@ export default function MobileProductDetail({ product }: { product: Product }) {
   /** Safe plain-text description — HTML stripped via shared `stripHtml` utility. */
   const plainDescription = stripHtml(product.htmlDescription ?? product.description);
 
+  const optimizedUrls = images.map(
+    (img) => optimizeImageUrl(img.url, { width: HERO_WIDTH_PX, height: HERO_WIDTH_PX }) ?? img.url,
+  );
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Image Gallery — horizontal swipe */}
@@ -90,13 +94,7 @@ export default function MobileProductDetail({ product }: { product: Product }) {
           {images.map((img, i) => (
             <Image
               key={img.id}
-              source={{
-                uri:
-                  optimizeImageUrl(img.url, {
-                    width: HERO_WIDTH_PX,
-                    height: HERO_WIDTH_PX,
-                  }) ?? img.url,
-              }}
+              source={{ uri: optimizedUrls[i] }}
               style={styles.heroImage}
               contentFit="cover"
               transition={200}

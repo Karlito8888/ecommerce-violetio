@@ -5,7 +5,7 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  Image,
+  PixelRatio,
   Pressable,
   ScrollView,
   Share,
@@ -13,14 +13,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import * as SecureStore from "expo-secure-store";
 import {
   createSupabaseClient,
   formatPrice,
+  optimizeImageUrl,
   stripHtml,
   useRecommendations,
   useUser,
-  optimizeWithPreset,
 } from "@ecommerce/shared";
 import type { Product, RecommendationItem } from "@ecommerce/shared";
 
@@ -36,6 +37,16 @@ import { apiGet, apiPost } from "@/server/apiClient";
 const CART_KEY = "violet_cart_id";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
+
+/**
+ * Physical pixel dimensions for PDP images.
+ *
+ * Mobile screens have high pixel densities (2x–3.5x). To avoid blurry
+ * rendering, we request images at *physical* pixel size from the CDN.
+ * Capped at 2160px for bandwidth on large tablets.
+ */
+const HERO_PX = Math.min(Math.round(SCREEN_WIDTH * PixelRatio.get()), 2160);
+const REC_PX = Math.min(Math.round(180 * PixelRatio.get()), 800);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -235,7 +246,15 @@ export default function ProductDetailScreen() {
             {images.map((img, i) => (
               <Image
                 key={img.id}
-                source={{ uri: optimizeWithPreset(img.url, "pdpThumb") ?? undefined }}
+                source={{
+                  uri:
+                    optimizeImageUrl(img.url, {
+                      width: HERO_PX,
+                      height: HERO_PX,
+                    }) ?? img.url,
+                }}
+                contentFit="cover"
+                transition={200}
                 style={styles.heroImage}
                 accessibilityLabel={`${product.name} - Image ${i + 1} of ${images.length}`}
               />
@@ -353,7 +372,14 @@ function RecommendationsSection({ productId }: { productId: string }) {
     >
       {item.thumbnailUrl ? (
         <Image
-          source={{ uri: optimizeWithPreset(item.thumbnailUrl, "recommendation") ?? undefined }}
+          source={{
+            uri:
+              optimizeImageUrl(item.thumbnailUrl, {
+                width: REC_PX,
+                height: Math.round(REC_PX * 1.33),
+              }) ?? item.thumbnailUrl,
+          }}
+          contentFit="cover"
           style={styles.recImage}
         />
       ) : (
@@ -405,7 +431,6 @@ const styles = StyleSheet.create({
   heroImage: {
     width: SCREEN_WIDTH,
     height: SCREEN_WIDTH,
-    resizeMode: "cover",
   },
   noImage: {
     height: 300,
@@ -495,7 +520,6 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     height: CARD_WIDTH * 1.33,
     borderRadius: 8,
-    resizeMode: "cover",
   },
   recImagePlaceholder: {
     width: CARD_WIDTH,
