@@ -16,6 +16,8 @@ import type { Product, RecommendationItem } from "@ecommerce/shared";
 import {
   createSupabaseClient,
   formatPrice,
+  optimizeWithPreset,
+  optimizeImageUrl,
   stripHtml,
   useRecommendations,
   useUser,
@@ -78,7 +80,7 @@ export default function MobileProductDetail({ product }: { product: Product }) {
           {images.map((img, i) => (
             <Image
               key={img.id}
-              source={{ uri: img.url }}
+              source={{ uri: optimizeImageUrl(img.url, { width: 800, height: 800 }) ?? img.url }}
               style={styles.heroImage}
               accessibilityLabel={`${product.name} - Image ${i + 1} of ${images.length}`}
             />
@@ -191,7 +193,12 @@ function RecommendationsSection({ productId }: { productId: string }) {
       accessibilityLabel={`${item.name}, ${formatPrice(item.minPrice, item.currency)}`}
     >
       {item.thumbnailUrl ? (
-        <Image source={{ uri: item.thumbnailUrl }} style={styles.recImage} />
+        <Image
+          source={{
+            uri: optimizeWithPreset(item.thumbnailUrl, "recommendation") ?? item.thumbnailUrl,
+          }}
+          style={styles.recImage}
+        />
       ) : (
         <ThemedView type="backgroundElement" style={styles.recImagePlaceholder}>
           <ThemedText themeColor="textSecondary">No image</ThemedText>
