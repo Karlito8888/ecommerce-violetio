@@ -3,8 +3,7 @@ import { View, FlatList, Pressable, ActivityIndicator, useColorScheme } from "re
 import { ThemedText } from "../../components/themed-text";
 import { useState, useEffect } from "react";
 import { Colors, Spacing } from "@/constants/theme";
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+import { apiGet } from "@/server/apiClient";
 
 interface MerchantItem {
   merchant_id: string;
@@ -23,10 +22,9 @@ export default function MerchantsScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/get-merchants`, {
-          headers: { apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "" },
-        });
-        const json = await res.json();
+        const json = await apiGet<{ data?: MerchantItem[]; error?: { message?: string } }>(
+          "/api/merchants",
+        );
 
         if (json.error) {
           setError(json.error.message ?? "Failed to fetch merchants");

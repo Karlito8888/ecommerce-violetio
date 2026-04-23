@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-E-commerce monorepo for a curated shopping platform powered by Violet.io (multi-merchant affiliate commerce API). Dual-platform: web (TanStack Start) + mobile (Expo Router), with Supabase backend and AI-powered product search.
+E-commerce monorepo for a curated shopping platform powered by Violet.io (multi-merchant affiliate commerce API). Dual-platform: web (TanStack Start) + mobile (Expo Router), sharing a **single backend** (TanStack Start API Routes). Supabase provides auth + database + webhook processing. AI-powered product search via OpenAI embeddings.
 
 ## Commands
 
@@ -73,15 +73,28 @@ BEM convention: `.block__element--modifier` (e.g., `.site-header__nav`, `.hero__
 - **Key constraint**: Expo pins exact versions for react (19.2.0), react-native (0.83.6), reanimated (4.2.1) — never bump these independently of the SDK
 - **Root overrides**: react/react-dom pinned to 19.2.0 at monorepo root to prevent Bun from resolving mismatched versions
 - **Path alias**: `@/*` resolves to `./src/*`, `@/assets/*` to `./assets/*`
+- **API calls**: All e-commerce API calls go through web backend API Routes via `EXPO_PUBLIC_API_URL`. See `src/server/apiClient.ts` for the typed client (`apiGet`, `apiPost`, `apiPut`, `apiDelete` with auto-auth).
 
 ### Shared TypeScript Config
 
 `tsconfig.base.json` at root: strict mode, ESNext modules, bundler resolution, ES2022 target. Both apps extend it.
 
+### Backend Architecture (Single Backend)
+
+Both web and mobile share the **same TanStack Start backend** — no separate mobile API layer.
+
+- **Web frontend** → TanStack Start server functions (direct, same process)
+- **Mobile app** → `EXPO_PUBLIC_API_URL` env var → TanStack Start API Routes (`apps/web/src/routes/api/...`)
+- **Supabase Edge Functions** (`supabase/functions/`) — webhook processing (`handle-webhook`) + health-check **only**. NOT used as a mobile API proxy.
+
+Mobile API client (`apps/mobile/src/server/apiClient.ts`) auto-injects `Authorization: Bearer <JWT Supabase>` via `getAuthHeaders()` for protected routes (cart, checkout, orders). Public routes (products, merchants, collections) require no auth.
+
+Migration status: Phase 3 complete. See `audit-dual-backend.md` for details.
+
 ### External Services
 
-- **Violet.io**: Multi-merchant commerce API (products, cart, checkout, orders)
-- **Supabase**: PostgreSQL + Auth + Edge Functions + Realtime + Storage
+- **Violet.io**: Multi-merchant commerce API (products, cart, checkout, orders) — called exclusively from web backend via `VioletTokenManager` + `violetAdapter`
+- **Supabase**: PostgreSQL + Auth (anonymous + OTP) + Edge Functions (webhook processing only) + Realtime + Storage
 - **Stripe**: Payment processing via Violet-provided payment intents
 - **OpenAI**: Embeddings for semantic product search (pgvector)
 
@@ -103,6 +116,11 @@ Ne jamais coder contre l'API Violet sans avoir consulté ce fichier.
 Single source of truth: `.env.example` at repo root. Copy to `.env.local` and fill in values.
 Do NOT create additional `.env.*.example` files.
 
+Key env vars by app:
+- **Web** (`apps/web`): `VIOLET_APP_ID`, `VIOLET_APP_SECRET`, `VIOLET_USERNAME`, `VIOLET_PASSWORD`, `VIOLET_API_BASE`, Supabase vars, Stripe keys
+- **Mobile** (`apps/mobile`): `EXPO_PUBLIC_API_URL` (web backend URL — `http://10.0.2.2:3000` Android emulator, `http://localhost:3000` iOS, `https://maisonemile.com` prod), `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (auth + direct REST only)
+- **Supabase** (`supabase/`): Same Violet + Supabase vars as web (used by Edge Functions for webhooks)
+
 ## Code Style
 
 - **Prettier**: double quotes, semicolons, trailing commas, 100 char width
@@ -115,4 +133,5 @@ Do NOT create additional `.env.*.example` files.
 - **No Tailwind CSS** — architectural decision. Use Vanilla CSS + BEM exclusively
 - **Expo version pinning** — never update react, react-native, or reanimated versions without an Expo SDK upgrade
 - Deferred major bumps: `vite-tsconfig-paths` v5->v6, `vitest` v3->v4 (need dedicated testing)
+- **Single backend for both platforms** — mobile calls web API Routes, NOT Supabase Edge Functions for e-commerce operations
 - All commits use conventional format with `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`

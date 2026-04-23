@@ -26,6 +26,7 @@ import AppTabs from "@/components/app-tabs";
 import { BiometricPrompt } from "@/components/BiometricPrompt";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { initSupabaseMobile } from "@/utils/authInit";
+import { apiGet } from "@/server/apiClient";
 
 // Configure environment variables and Supabase client (with SecureStore) at module load.
 // Must run before any Supabase usage — order matters.
@@ -73,13 +74,10 @@ function AppContent() {
     }
   });
 
-  // Fetch live exchange rates from Violet at startup (fire-and-forget).
+  // Fetch live exchange rates from the web backend at startup (fire-and-forget).
   // Falls back to hardcoded rates if the API is unavailable.
   React.useEffect(() => {
-    const supabaseUrl =
-      Constants.expoConfig?.extra?.supabaseUrl ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-    fetch(`${supabaseUrl}/functions/v1/get-exchange-rates`)
-      .then((res) => (res.ok ? res.json() : null))
+    apiGet<{ data?: { rates?: Record<string, number>; date?: string } }>("/api/exchange-rates")
       .then((json) => {
         if (json?.data?.rates && json.data.date) {
           setLiveExchangeRates(json.data.rates, json.data.date);

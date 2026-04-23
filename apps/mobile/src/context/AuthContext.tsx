@@ -11,6 +11,7 @@ import {
   hasBiometricCredentials,
   resetBiometricFailCount,
 } from "../services/biometricService";
+import { apiGet, apiPost } from "@/server/apiClient";
 
 /** Extended auth context with biometric state and actions. */
 interface BiometricAuthSession extends AuthSession {
@@ -34,10 +35,6 @@ const defaultBiometricSession: BiometricAuthSession = {
 };
 
 const AuthContext = createContext<BiometricAuthSession>(defaultBiometricSession);
-
-const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
-  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/cart`
-  : null;
 
 const VIOLET_CART_KEY = "violet_cart_id";
 
@@ -93,45 +90,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         !isAnonymous &&
         wasAnonymousRef.current &&
         !mergeInProgressRef.current &&
-        EDGE_FN_BASE &&
         session?.access_token
       ) {
         mergeInProgressRef.current = true;
-        const token = session.access_token;
-        const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
         try {
           const currentVioletCartId = await SecureStore.getItemAsync(VIOLET_CART_KEY);
           if (currentVioletCartId) {
             // Check if user has an existing authenticated cart
-            const userCartRes = await fetch(`${EDGE_FN_BASE}/user`, {
-              method: "GET",
-              headers,
-            });
-            const { violetCartId: existingCartId } = await userCartRes.json();
+            const userCart = await apiGet<{ violetCartId?: string | null }>("/api/cart/user");
+            const existingCartId = userCart.violetCartId;
 
             if (existingCartId && existingCartId !== currentVioletCartId) {
               // Merge anonymous items into existing cart
-              const mergeRes = await fetch(`${EDGE_FN_BASE}/merge`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({
-                  anonymousVioletCartId: currentVioletCartId,
-                  targetVioletCartId: existingCartId,
-                }),
+              const mergeResult = await apiPost<{ success?: boolean }>("/api/cart/merge", {
+                anonymousVioletCartId: currentVioletCartId,
+                targetVioletCartId: existingCartId,
               });
-              const mergeResult = await mergeRes.json();
               if (mergeResult.success) {
                 await SecureStore.setItemAsync(VIOLET_CART_KEY, existingCartId);
               }
             } else if (!existingCartId) {
               // No existing cart → claim the anonymous cart
-              await fetch(`${EDGE_FN_BASE}/claim`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({ violetCartId: currentVioletCartId }),
+              await apiPost("/api/cart/claim", {
+                violetCartId: currentVioletCartId,
               });
-              // Keep same violet_cart_id in SecureStore
             }
           }
         } catch (err) {

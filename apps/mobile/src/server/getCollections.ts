@@ -1,13 +1,14 @@
 /**
- * Mobile fetch functions for collections.
+ * Mobile fetch functions for collections via the web backend API.
  *
  * - Collections list: queries Supabase `collections` table directly (public read, RLS SELECT true).
- * - Collection products: calls `get-collection-products` Edge Function (Violet creds stay server-side).
+ * - Collection products: calls web backend `/api/collections/{id}/products`.
+ *
+ * @see audit-dual-backend.md — Phase 3 migration
  */
 import Constants from "expo-constants";
 import type { ApiResponse, CollectionItem, PaginatedResult, Product } from "@ecommerce/shared";
-import { getCurrencyForCountry } from "@ecommerce/shared";
-import * as Localization from "expo-localization";
+import { apiGet } from "./apiClient";
 
 function getSupabaseUrl(): string {
   return (
@@ -153,47 +154,16 @@ export async function fetchCollectionByIdMobile(id: string): Promise<ApiResponse
   }
 }
 
-/** Fetch products for a collection via get-collection-products Edge Function. */
+/** Fetch products for a collection via the web backend API. */
 export async function fetchCollectionProductsMobile(
   collectionId: string,
   page = 1,
   pageSize = 12,
 ): Promise<ApiResponse<PaginatedResult<Product>>> {
-  const supabaseUrl = getSupabaseUrl();
-  const anonKey = getAnonKey();
-
-  // Contextual pricing: derive base currency from device locale
-  const region = Localization.getLocales()[0]?.regionCode;
-  const baseCurrency = region ? getCurrencyForCountry(region) : "USD";
-  const currencyQs = baseCurrency && baseCurrency !== "USD" ? `&baseCurrency=${baseCurrency}` : "";
-
-  const qs = new URLSearchParams({
-    collection_id: collectionId,
-    page: String(page),
-    pageSize: String(pageSize),
-  });
-
-  const url = `${supabaseUrl}/functions/v1/get-collection-products?${qs}${currencyQs}`;
-
   try {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${anonKey}`,
-        apikey: anonKey,
-      },
-    });
-
-    if (!res.ok) {
-      return {
-        data: null,
-        error: {
-          code: "COLLECTION_PRODUCTS.HTTP_ERROR",
-          message: `Edge Function returned ${res.status}`,
-        },
-      };
-    }
-
-    return res.json();
+    return await apiGet(
+      `/api/collections/${collectionId}/products?page=${page}&pageSize=${pageSize}`,
+    );
   } catch (err) {
     return {
       data: null,

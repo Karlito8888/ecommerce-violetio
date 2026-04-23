@@ -2,8 +2,8 @@
  * Checkout screen — full checkout flow: address → methods → guest info → payment.
  *
  * ## Architecture
- * Calls the Supabase Edge Function `/cart/{id}/...` for all Violet API calls.
- * The Violet token NEVER reaches this client — it stays in the Edge Function.
+ * Calls the web backend API Routes (`/api/cart/{cartId}/...`) for all Violet API calls.
+ * The Violet token NEVER reaches this client — it stays in the web backend.
  *
  * ## Flow (enforced by component state)
  * Story 4.3: address → methods (shipping)
@@ -14,7 +14,7 @@
  * handles card input, Apple Pay, and Google Pay. Much simpler than web's
  * PaymentElement because it's a pre-built modal.
  *
- * @see supabase/functions/cart/index.ts — Edge Function routes
+ * @see apps/web/src/routes/api/cart/ — API Routes
  * @see apps/web/src/routes/checkout/index.tsx — web equivalent
  */
 
@@ -36,34 +36,16 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import {
-  createSupabaseClient,
   formatPrice,
   COUNTRIES_WITHOUT_POSTAL_CODE,
   BLOCKED_ADDRESS_USER_MESSAGE,
 } from "@ecommerce/shared";
 import type { ShippingMethodsAvailable } from "@ecommerce/shared";
 import { useSetStripeKey } from "./_layout";
+import { apiGet, apiPost } from "@/server/apiClient";
 
 /** SecureStore key for the Violet cart ID (set by the cart screen on cart creation). */
 const CART_KEY = "violet_cart_id";
-
-/** Supabase Edge Function base URL for cart/shipping operations. */
-const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
-  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/cart`
-  : null;
-
-/**
- * Retrieves the Supabase session access token for Edge Function authorization.
- * Anonymous users have a real token via Supabase anonymous auth.
- *
- * Uses `createSupabaseClient()` which returns a singleton instance — the shared
- * package memoizes the client so we don't create a new connection per call.
- */
-async function getSessionToken(): Promise<string | null> {
-  const supabase = createSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
 
 interface AddressFields {
   address1: string;
@@ -142,30 +124,21 @@ export default function CheckoutScreen() {
 
   // ── Fetch available shipping methods ────────────────────────────────
   const fetchAvailableShippingMethods = useCallback(async (violetCartId: string) => {
-    if (!EDGE_FN_BASE) return;
-    const token = await getSessionToken();
-    if (!token) {
-      setMethodsError("Not authenticated. Please restart the app.");
-      return;
-    }
-
     setIsLoadingMethods(true);
     setMethodsError(null);
     setBagErrorState({});
 
     try {
-      const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping/available`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const json = await apiGet<{
+        data?: ShippingMethodsAvailable[];
+        error?: { message?: string };
+      }>(`/api/cart/${violetCartId}/shipping/available`);
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        setMethodsError(`Failed to load shipping options (${res.status}): ${text}`);
+      if (json.error) {
+        setMethodsError(json.error.message ?? "Failed to load shipping options");
         return;
       }
 
-      const json = await res.json();
       const methods: ShippingMethodsAvailable[] = json.data ?? [];
       setAvailableMethods(methods);
 
@@ -210,20 +183,9 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (!EDGE_FN_BASE) {
-      setAddressError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
-      return;
-    }
-
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
     if (!violetCartId) {
       setAddressError("No active cart found. Please add items to your cart first.");
-      return;
-    }
-
-    const token = await getSessionToken();
-    if (!token) {
-      setAddressError("Not authenticated. Please restart the app.");
       return;
     }
 
@@ -242,24 +204,22 @@ export default function CheckoutScreen() {
         body.phone = address.phone.trim();
       }
 
-      const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping_address`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const json = await apiPost<{ error?: { message?: string; code?: string } }>(
+        `/api/cart/${violetCartId}/shipping_address`,
+        body,
+      );
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        // Detect Violet's blocked address error (code 4236) and show a user-friendly message.
-        // @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/customers — Blocked Addresses
+      if (json.error) {
+        const errMsg = json.error.message ?? "";
+        // Detect Violet's blocked address error (code 4236)
         if (
-          text.includes("blocked_address") ||
-          text.includes("blocked due to a history") ||
-          text.includes('"code":4236')
+          errMsg.includes("blocked_address") ||
+          errMsg.includes("blocked due to a history") ||
+          json.error.code === "VIOLET.BLOCKED_ADDRESS"
         ) {
           setAddressError(BLOCKED_ADDRESS_USER_MESSAGE);
         } else {
-          setAddressError(`Address not accepted (${res.status}): ${text}`);
+          setAddressError(errMsg);
         }
         return;
       }
@@ -286,20 +246,10 @@ export default function CheckoutScreen() {
    */
   const handleContinueToGuestInfo = useCallback(async () => {
     if (!allBagsSelected) return;
-    if (!EDGE_FN_BASE) {
-      setShippingError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
-      return;
-    }
 
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
     if (!violetCartId) {
       setShippingError("Cart session expired. Please return to your cart.");
-      return;
-    }
-
-    const token = await getSessionToken();
-    if (!token) {
-      setShippingError("Not authenticated. Please restart the app.");
       return;
     }
 
@@ -312,15 +262,13 @@ export default function CheckoutScreen() {
         shipping_method_id: shippingMethodId,
       }));
 
-      const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/shipping`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(selections),
-      });
+      const json = await apiPost<{ error?: { message?: string } }>(
+        `/api/cart/${violetCartId}/shipping`,
+        selections,
+      );
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        setShippingError(`Failed to confirm shipping (${res.status}): ${text}`);
+      if (json.error) {
+        setShippingError(json.error.message ?? "Failed to confirm shipping");
         return;
       }
 
@@ -343,20 +291,9 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (!EDGE_FN_BASE) {
-      setGuestError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
-      return;
-    }
-
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
     if (!violetCartId) {
       setGuestError("Cart session expired. Please return to your cart.");
-      return;
-    }
-
-    const token = await getSessionToken();
-    if (!token) {
-      setGuestError("Not authenticated. Please restart the app.");
       return;
     }
 
@@ -373,15 +310,13 @@ export default function CheckoutScreen() {
         customerBody.communication_preferences = [{ enabled: true }];
       }
 
-      const customerRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/customer`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(customerBody),
-      });
+      const customerJson = await apiPost<{ error?: { message?: string } }>(
+        `/api/cart/${violetCartId}/customer`,
+        customerBody,
+      );
 
-      if (!customerRes.ok) {
-        const text = await customerRes.text().catch(() => "");
-        setGuestError(`Failed to save customer info (${customerRes.status}): ${text}`);
+      if (customerJson.error) {
+        setGuestError(customerJson.error.message ?? "Failed to save customer info");
         return;
       }
 
@@ -399,20 +334,9 @@ export default function CheckoutScreen() {
    * state so the user always knows why the action failed.
    */
   const handleBillingConfirm = useCallback(async () => {
-    if (!EDGE_FN_BASE) {
-      setBillingError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
-      return;
-    }
-
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
     if (!violetCartId) {
       setBillingError("Cart session expired. Please return to your cart.");
-      return;
-    }
-
-    const token = await getSessionToken();
-    if (!token) {
-      setBillingError("Not authenticated. Please restart the app.");
       return;
     }
 
@@ -435,60 +359,45 @@ export default function CheckoutScreen() {
           return;
         }
 
-        const billingRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/billing_address`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const billingJson = await apiPost<{ error?: { message?: string } }>(
+          `/api/cart/${violetCartId}/billing_address`,
+          {
             address_1: billingAddress.address1,
             city: billingAddress.city,
             state: billingAddress.state,
             postal_code: billingAddress.postalCode,
             country: billingAddress.country,
-          }),
-        });
+          },
+        );
 
-        if (!billingRes.ok) {
-          const text = await billingRes.text().catch(() => "");
-          setBillingError(`Failed to set billing address (${billingRes.status}): ${text}`);
+        if (billingJson.error) {
+          setBillingError(billingJson.error.message ?? "Failed to set billing address");
           setIsBillingSubmitting(false);
           return;
         }
       }
 
-      // Get cart to extract payment_intent_client_secret
-      const cartRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Get payment intent (client secret + stripe key)
+      const piJson = await apiGet<{
+        data?: { clientSecret?: string; stripePublishableKey?: string };
+        error?: { message?: string };
+      }>(`/api/cart/${violetCartId}/payment-intent`);
 
-      if (!cartRes.ok) {
-        setBillingError("Failed to load payment information.");
+      if (piJson.error || !piJson.data) {
+        setBillingError(piJson.error?.message ?? "Failed to load payment information.");
         setIsBillingSubmitting(false);
         return;
       }
 
-      const cartJson = await cartRes.json();
-      const clientSecret = cartJson.data?.paymentIntentClientSecret;
-
+      const clientSecret = piJson.data.clientSecret;
       if (!clientSecret) {
         setBillingError("Payment not available. Cart may need to be recreated.");
         setIsBillingSubmitting(false);
         return;
       }
 
-      /**
-       * Use the Stripe publishable key from Violet's cart response.
-       *
-       * In Demo/Test Mode, Violet creates PaymentIntents on their own Stripe account.
-       * The local `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` (our Stripe account) won't work —
-       * PaymentSheet will fail. We extract `stripe_key` from the Violet cart response
-       * (returned by the Edge Function as `stripePublishableKey`) and update the
-       * StripeProvider dynamically so PaymentSheet uses the correct key.
-       *
-       * @see Bug fix — mobile PaymentSheet needs Violet's Stripe key
-       * @see apps/web/src/routes/checkout/index.tsx — getStripePromise() cache
-       */
-      const violetStripeKey = cartJson.data?.stripePublishableKey;
+      // Use the Stripe publishable key from Violet's cart response
+      const violetStripeKey = piJson.data.stripePublishableKey;
       if (violetStripeKey) {
         setStripePublishableKey(violetStripeKey);
       }
@@ -521,21 +430,10 @@ export default function CheckoutScreen() {
    * submitted — the worst possible UX outcome.
    */
   const handlePayment = useCallback(async () => {
-    if (!EDGE_FN_BASE) {
-      setPaymentError("App not configured. Check EXPO_PUBLIC_SUPABASE_URL.");
-      return;
-    }
-
-    // Validate cart ID and auth token BEFORE presenting PaymentSheet
+    // Validate cart ID BEFORE presenting PaymentSheet
     const violetCartId = await SecureStore.getItemAsync(CART_KEY);
     if (!violetCartId) {
       setPaymentError("Cart session expired. Please return to your cart.");
-      return;
-    }
-
-    const token = await getSessionToken();
-    if (!token) {
-      setPaymentError("Authentication expired. Please restart the app.");
       return;
     }
 
@@ -543,14 +441,6 @@ export default function CheckoutScreen() {
     setPaymentError(null);
 
     try {
-      /**
-       * Present the native Stripe PaymentSheet modal.
-       *
-       * PaymentSheet handles card input and 3DS natively — unlike web,
-       * we don't need to call `handleNextAction()` separately.
-       *
-       * If the user cancels, `error` is set with `code: "Canceled"`.
-       */
       const { error: sheetError } = await presentPaymentSheet();
 
       if (sheetError) {
@@ -561,13 +451,14 @@ export default function CheckoutScreen() {
         return;
       }
 
-      const submitRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/submit`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ app_order_id: appOrderIdRef.current }),
+      const submitJson = await apiPost<{
+        data?: { status?: string; id?: string };
+        error?: { message?: string };
+      }>(`/api/cart/${violetCartId}/submit`, {
+        app_order_id: appOrderIdRef.current,
       });
 
-      if (!submitRes.ok) {
+      if (submitJson.error) {
         setPaymentError(
           "Payment was authorized but order submission failed. Your card was not charged. Please try again or contact support.",
         );
@@ -575,7 +466,6 @@ export default function CheckoutScreen() {
         return;
       }
 
-      const submitJson = await submitRes.json();
       const orderData = submitJson.data;
 
       if (orderData?.status === "REJECTED") {
@@ -585,13 +475,6 @@ export default function CheckoutScreen() {
       }
 
       if (orderData?.status === "REQUIRES_ACTION") {
-        /**
-         * REQUIRES_ACTION from submit is rare with PaymentSheet (it handles 3DS
-         * natively). If it does occur, we can't call handleNextAction from
-         * PaymentSheet — show error and ask user to retry.
-         *
-         * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states
-         */
         setPaymentError(
           "Additional verification was required. Your payment may still be processing. Please check your email for confirmation.",
         );
@@ -599,10 +482,6 @@ export default function CheckoutScreen() {
         return;
       }
 
-      /**
-       * Handle CANCELED status — merchant canceled the order after acceptance.
-       * The user was NOT charged (Stripe authorization falls off in a few days).
-       */
       if (orderData?.status === "CANCELED") {
         setPaymentError(
           "Your order was canceled by the merchant. Your card was not charged. Please try again.",
@@ -611,7 +490,7 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Success — clear cart and navigate to confirmation page (Story 4.5)
+      // Success — clear cart and navigate to confirmation page
       await SecureStore.deleteItemAsync("violet_cart_id");
       const orderId = String(orderData?.id ?? "");
       router.push(`/order/${orderId}/confirmation` as never);

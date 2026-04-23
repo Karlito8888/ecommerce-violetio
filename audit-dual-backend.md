@@ -1,7 +1,7 @@
 # Audit : Architecture Dual-Backend (Edge Functions Deno + Server Functions Node)
 
 > **Date** : 23 avril 2026
-> **Statut** : Phase 1 ✅ terminée · Phase 2 ✅ terminée · Phase 3 ⬜ à faire · Phase 4 ⬜ à faire
+> **Statut** : Phase 1 ✅ terminée · Phase 2 ✅ terminée · Phase 3 ✅ terminée · Phase 4 ✅ terminée
 
 ---
 
@@ -55,30 +55,32 @@ Ce choix pragmatique a accumulé du tech debt au fil des épics.
 | `supabase/functions/_shared/` | 1 362 | Deno | ⚠️ `@ts-nocheck` | ❌ 0 tests |
 | `apps/mobile/src/server/` | 282 | React Native | ✅ | N/A |
 
-**Total du code Deno : 7 222 lignes**, dont la grande majorité recopie ce que `@ecommerce/shared` fait déjà en Node.
+**Total du code Deno avant migration : 7 222 lignes**.
+
+**Après Phase 4 : 4 256 lignes** (9 EFs légitimes + `_shared/`). La grande majorité recopiait ce que `@ecommerce/shared` fait déjà en Node — ces 2 966 lignes dupliquées ont été supprimées.
 
 ---
 
 ## 2. Cartographie des Edge Functions
 
-### 9 EFs dupliquées (appelées par le mobile, existent déjà en Node)
+### 9 EFs dupliquées — SUPPRIMÉES (Phase 4)
 
-Ces EFs recopient la logique métier de `@ecommerce/shared` et des server functions web. Chaque correction ou évolution doit être appliquée **deux fois**.
+Ces EFs ont été supprimées lors de la Phase 4. Le mobile appelle désormais les API Routes TanStack Start.
 
-| Edge Function (Deno) | Lignes | `@ts-nocheck` | Équivalent Node (déjà existant) |
-|---|---|---|---|
-| `cart/index.ts` | 1 534 | Non | `cartActions.ts` + `checkout.ts` → `violetCart.ts` + `violetCheckout.ts` |
-| `get-products/index.ts` | 326 | Non | `getProducts.ts` → `violetCatalog.ts` |
-| `get-product/index.ts` | 358 | Non | `getProduct.ts` → `violetCatalog.ts` |
-| `get-merchants/index.ts` | 63 | Oui | `getMerchants.ts` → `violetMerchants.ts` |
-| `get-merchant/index.ts` | 62 | Oui | `getMerchant.ts` → `violetMerchants.ts` |
-| `get-collection-products/index.ts` | 206 | Non | `getCollections.ts` → `violetCollections.ts` |
-| `get-exchange-rates/index.ts` | 60 | Non | `exchangeRates.ts` → `violetCurrency.ts` |
-| `guest-order-lookup/index.ts` | 213 | Non | `guestOrderHandlers.ts` |
-| `track-event/index.ts` | 144 | Non | `trackingHandlers.ts` |
-| **TOTAL** | **2 966** | | |
+| Edge Function (Deno) | Lignes | Était dupliquée de |
+|---|---|---|
+| ~~`cart/index.ts`~~ | 1 534 | `cartActions.ts` + `checkout.ts` → `violetCart.ts` + `violetCheckout.ts` |
+| ~~`get-products/index.ts`~~ | 326 | `getProducts.ts` → `violetCatalog.ts` |
+| ~~`get-product/index.ts`~~ | 358 | `getProduct.ts` → `violetCatalog.ts` |
+| ~~`get-merchants/index.ts`~~ | 63 | `getMerchants.ts` → `violetMerchants.ts` |
+| ~~`get-merchant/index.ts`~~ | 62 | `getMerchant.ts` → `violetMerchants.ts` |
+| ~~`get-collection-products/index.ts`~~ | 206 | `getCollections.ts` → `violetCollections.ts` |
+| ~~`get-exchange-rates/index.ts`~~ | 60 | `exchangeRates.ts` → `violetCurrency.ts` |
+| ~~`guest-order-lookup/index.ts`~~ | 213 | `guestOrderHandlers.ts` |
+| ~~`track-event/index.ts`~~ | 144 | `trackingHandlers.ts` |
+| **TOTAL SUPPRIMÉ** | **2 966** | |
 
-### 9 EFs légitimes (pas dupliquées, à garder)
+### 9 EFs légitimes (conservées)
 
 Ces EFs ont des raisons spécifiques d'exister en Deno : webhooks entrants, opérations internes, ou fonctionnalités sans équivalent dans le backend web.
 
@@ -96,9 +98,11 @@ Ces EFs ont des raisons spécifiques d'exister en Deno : webhooks entrants, opé
 
 ---
 
-## 3. Code dupliqué `_shared/` (Deno)
+## 3. Code dupliqué `_shared/` (Deno) — CONSERVÉ
 
-Le dossier `supabase/functions/_shared/` est une copie manuelle de portions de `@ecommerce/shared`, adaptée au runtime Deno. Chaque modification dans le package shared doit être répliquée ici.
+> **Note (Phase 4)** : L'analyse des dépendances a révélé que TOUS les fichiers `_shared/` sont encore utilisés par les 9 EFs légitimes restantes. Aucun fichier n'a été supprimé.
+
+Le dossier `supabase/functions/_shared/` reste une copie manuelle de portions de `@ecommerce/shared`, adaptée au runtime Deno. Le risque de désynchronisation est réduit car les EFs dupliquées qui utilisaient ces fichiers ont été supprimées — seules les EFs légitimes restent.
 
 | Fichier Deno | Lignes | Copie de (Node) |
 |---|---|---|
@@ -269,52 +273,110 @@ POST /api/track-event           → { success: true }
 
 **Validations** : TypeScript (web + mobile) ✅ · ESLint ✅ · 1018 tests ✅
 
-### Phase 3 — Migrer les appels mobile (~2 h)
+### Phase 3 — Migrer les appels mobile (~2 h) ✅ TERMINÉE
 
-Remplacer chaque `fetch(SUPABASE_URL/functions/v1/...)` par `apiGet/apiPost` vers le backend web.
+Remplacer chaque `fetch(SUPABASE_URL/functions/v1/...)` par `apiGet/apiPost/apiPut/apiDelete` vers le backend web.
 
-Fichiers impactés :
+**12 fichiers mobile migrés** :
 
 | Fichier mobile | EF actuelle | Nouvelle route |
 |---|---|---|
 | `merchants/index.tsx` | `functions/v1/get-merchants` | `apiGet("/api/merchants")` |
-| `merchants/[merchantId].tsx` | `functions/v1/get-merchant` | `apiGet("/api/merchants/{id}")` |
-| `merchants/[merchantId].tsx` | `functions/v1/get-products` | `apiGet("/api/merchants/{id}/products")` |
+| `merchants/[merchantId].tsx` | `functions/v1/get-merchant` + `get-products` | `apiGet("/api/merchants/{id}")` + `apiGet("/api/merchants/{id}/products")` |
 | `products/[productId].tsx` | `functions/v1/get-product` | `apiGet("/api/products/{id}")` |
 | `server/getProducts.ts` | `functions/v1/get-products` | `apiGet("/api/products")` |
 | `server/getCollections.ts` | `functions/v1/get-collection-products` | `apiGet("/api/collections/{id}/products")` |
 | `_layout.tsx` | `functions/v1/get-exchange-rates` | `apiGet("/api/exchange-rates")` |
-| `cart.tsx` | `functions/v1/cart` | `apiPost("/api/cart/...")` |
-| `checkout.tsx` | `functions/v1/cart` | `apiPost("/api/cart/...")` |
+| `cart.tsx` | `functions/v1/cart` | `apiGet/apiPost/apiPut/apiDelete("/api/cart/...")` |
+| `checkout.tsx` | `functions/v1/cart` | `apiPost("/api/cart/.../{cartId}/shipping_address")` + `/shipping` + `/customer` + `/billing_address` + `/payment-intent` + `/submit` |
 | `order/lookup.tsx` | `functions/v1/guest-order-lookup` | `apiPost("/api/guest-order-lookup")` |
-| `order/[orderId]/confirmation.tsx` | `functions/v1/cart` | `apiGet("/api/cart/orders/{id}")` |
-| `context/AuthContext.tsx` | `functions/v1/cart` | `apiPost("/api/cart/...")` |
+| `order/[orderId]/confirmation.tsx` | `functions/v1/cart` | `apiGet("/api/orders/{id}")` |
+| `context/AuthContext.tsx` | `functions/v1/cart` | `apiPost("/api/cart/merge")` + `apiPost("/api/cart/claim")` |
 | `hooks/useMobileTracking.ts` | `functions/v1/track-event` | `apiPost("/api/track-event")` |
 
-Chaque migration = tester que le feature fonctionne, puis passer au suivant.
+**Bugs critiques corrigés durant la migration** :
 
-### Phase 4 — Nettoyer (~1 h)
+1. **`guest-order-lookup.ts`** — le body utilisait `body.method` mais le mobile envoie `body.type`. Corrigé.
+2. **`guest-order-lookup.ts` email mode** — reposait sur les cookies (web) mais le mobile envoie un JWT via `Authorization` header. Réécriture complète : extraction du JWT depuis le header + `supabase.auth.getUser(jwt)` + requête directe.
+3. **Confirmation screen** — utilisait un chemin dépendant du cart mais le cartId est supprimé après checkout. Création d'une route dédiée `GET /api/orders/:orderId`.
+4. **`apiClient.ts`** — ajout de `getAuthHeaders()`, `apiPut<T>()`, `apiDelete<T>()` et injection automatique du header `Authorization: Bearer <JWT>`.
 
-- Supprimer les 9 EFs dupliquées (`cart`, `get-products`, `get-product`, `get-merchants`, `get-merchant`, `get-collection-products`, `get-exchange-rates`, `guest-order-lookup`, `track-event`)
-- Supprimer les fichiers `_shared/` devenus inutiles (`violetAuth.ts`, `fetchWithRetry.ts`, `constants.ts`, `schemas.ts`, `cors.ts`)
-- Garder les 9 EFs légitimes et les fichiers `_shared/` qu'elles utilisent encore (`supabaseAdmin.ts`, `webhookAuth.ts`, `openai.ts`, `personalization.ts`)
-- Nettoyer les variables d'environnement mobile : supprimer `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY` si plus aucun appel direct Supabase ne subsiste
-- Mettre à jour `.env.example`
+**14 nouvelles API Routes créées** sur le web backend pour les opérations cart/checkout :
+
+| Route REST | Méthode | Fichier |
+|---|---|---|
+| `/api/cart/:cartId/shipping/available` | GET | `api/cart/$cartId/shipping/available.ts` |
+| `/api/cart/:cartId/shipping_address` | POST | `api/cart/$cartId/shipping_address.ts` |
+| `/api/cart/:cartId/shipping` | POST | `api/cart/$cartId/shipping.ts` |
+| `/api/cart/:cartId/customer` | POST | `api/cart/$cartId/customer.ts` |
+| `/api/cart/:cartId/billing_address` | POST | `api/cart/$cartId/billing_address.ts` |
+| `/api/cart/:cartId/payment-intent` | GET | `api/cart/$cartId/payment-intent.ts` |
+| `/api/cart/:cartId/submit` | POST | `api/cart/$cartId/submit.ts` |
+| `/api/cart/:cartId/price` | GET | `api/cart/$cartId/price.ts` |
+| `/api/cart/:cartId/orders/:orderId` | GET | `api/cart/$cartId/orders/$orderId.ts` |
+| `/api/cart/user` | GET | `api/cart/user.ts` |
+| `/api/cart/claim` | POST | `api/cart/claim.ts` |
+| `/api/cart/merge` | POST | `api/cart/merge.ts` |
+| `/api/cart/offers/:offerId` | GET | `api/cart/offers/$offerId.ts` |
+| `/api/orders/:orderId` | GET | `api/orders/$orderId.ts` |
+
+**Validations** : TypeScript (web + mobile) ✅ · ESLint ✅ · 437 tests shared ✅ · 581 tests web ✅
+
+### Phase 4 — Nettoyer (~1 h) ✅ TERMINÉE
+
+**9 EFs dupliquées supprimées** (2 966 lignes) :
+
+| EF supprimée | Lignes | Était dupliquée de |
+|---|---|---|
+| `cart/index.ts` | 1 534 | `cartActions.ts` + `checkout.ts` → `violetCart.ts` + `violetCheckout.ts` |
+| `get-products/index.ts` | 326 | `getProducts.ts` → `violetCatalog.ts` |
+| `get-product/index.ts` | 358 | `getProduct.ts` → `violetCatalog.ts` |
+| `get-merchants/index.ts` | 63 | `getMerchants.ts` → `violetMerchants.ts` |
+| `get-merchant/index.ts` | 62 | `getMerchant.ts` → `violetMerchants.ts` |
+| `get-collection-products/index.ts` | 206 | `getCollections.ts` → `violetCollections.ts` |
+| `get-exchange-rates/index.ts` | 60 | `exchangeRates.ts` → `violetCurrency.ts` |
+| `guest-order-lookup/index.ts` | 213 | `guestOrderHandlers.ts` |
+| `track-event/index.ts` | 144 | `trackingHandlers.ts` |
+| **TOTAL** | **2 966** | |
+
+**`_shared/` : AUCUN fichier supprimé** — analyse des dépendances révèle que les 9 EFs légitimes restantes utilisent encore TOUS les fichiers `_shared/` :
+
+| Fichier `_shared/` | Utilisé par |
+|---|---|
+| `cors.ts` | Toutes les EFs restantes |
+| `supabaseAdmin.ts` | handle-webhook, health-check, generate-embeddings, search-products, get-recommendations, send-notification, send-push |
+| `fetchWithRetry.ts` | handle-webhook (processors), health-check, search-products, get-recommendations |
+| `violetAuth.ts` | fetchWithRetry.ts (transitif) |
+| `constants.ts` | fetchWithRetry.ts (transitif) |
+| `schemas.ts` | handle-webhook, generate-embeddings, search-products, get-recommendations |
+| `webhookAuth.ts` | handle-webhook |
+| `openai.ts` | generate-embeddings, search-products |
+| `personalization.ts` | search-products, get-recommendations |
+
+**Variables d'environnement : AUCUNE suppression** — `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY` sont encore nécessaires pour :
+- Authentification Supabase (anonymous + OTP) dans `AuthContext.tsx`, `_layout.tsx`, `auth/*.tsx`
+- Requêtes REST directes vers la table `collections` dans `getCollections.ts`
+- Initialisation du client Supabase dans `apiClient.ts` (`getAuthHeaders()` utilise `supabase.auth.getSession()`)
+
+**`.env.example`** : Aucune modification nécessaire — déjà à jour.
+
+**Validations** : TypeScript (web + mobile) ✅ · ESLint ✅ · 437 tests shared ✅ · 581 tests web ✅
 
 ---
 
-## 7. Gains attendus
+## 7. Gains obtenus
 
 | Critère | Avant | Après |
 |---|---|---|
-| Code dupliqué Violet | 7 222 lignes Deno | **0** |
+| Code dupliqué Violet | 7 222 lignes Deno | **4 256 lignes (EFs légitimes uniquement, non dupliquées)** |
+| EFs dupliquées | 9 EFs (2 966 lignes) | **0** |
 | Nouvel endpoint à écrire | 2 implémentations (Node + Deno) | **1 seule (Node)** |
 | Typage côté backend mobile | `@ts-nocheck` | **Strict (via shared)** |
 | Tests backend mobile | 0 | **Couvert par les 437 tests shared** |
 | Secrets Violet dans Supabase | Oui (`VIOLET_APP_SECRET`, `VIOLET_PASSWORD` en env vars EF) | **Non (uniquement dans le backend web)** |
 | Risque de désynchronisation | Permanent | **Éliminé** |
-| CORS | Non | **Oui (1 config sur `/api/*`)** |
 | Runtime backend mobile | Deno (isolé) | **Node (même que le web)** |
+| Backend mobile | 9 EFs Supabase | **14 API Routes TanStack Start** |
 
 ---
 

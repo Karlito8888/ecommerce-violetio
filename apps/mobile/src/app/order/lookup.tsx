@@ -7,8 +7,7 @@
  * React Native implementation of the guest order lookup feature (AC: #1, #2, #3, #6, #7).
  * Allows guest users (who checked out without creating an account) to find and view
  * their order details. Mirrors the web route `/order/lookup` but uses React Native
- * components and calls the `guest-order-lookup` Supabase Edge Function directly
- * (mobile cannot call TanStack Start Server Functions).
+ * components and calls the web backend API `/api/guest-order-lookup`.
  *
  * ## Navigation flow
  * - **Entry point 1**: Profile/Settings screen -> "Track an Order" link
@@ -21,10 +20,10 @@
  *
  * ## Two entry paths (data flow)
  * 1. **Token-based**: URL param `?token=<value>` triggers auto-lookup on mount.
- *    Calls the Edge Function with `{ type: "token", token }` — no auth required.
+ *    Calls the web backend with `{ type: "token", token }` — no auth required.
  *    Displays a single order detail view directly.
  * 2. **Email-based**: Guest enters email -> Supabase OTP sent -> user enters 6-digit
- *    code -> OTP verified -> Edge Function called with `{ type: "email" }` + Bearer token
+ *    code -> OTP verified -> web backend called with `{ type: "email" }` + Bearer token
  *    -> displays list of all orders for that email.
  *
  * ## State machine (LookupStep)
@@ -36,8 +35,8 @@
  * ```
  *
  * ## Data dependencies
- * - `EXPO_PUBLIC_SUPABASE_URL` environment variable for Edge Function URL
- * - `guest-order-lookup` Supabase Edge Function (handles both token and email lookups)
+ * - `EXPO_PUBLIC_API_URL` environment variable for web backend URL
+ * - `POST /api/guest-order-lookup` web backend API Route (handles both token and email lookups)
  * - Supabase Auth OTP flow for email verification
  * - Shared utilities: `formatPrice()`, `formatDate()`, `ORDER_STATUS_LABELS`,
  *   `BAG_STATUS_LABELS` from `@ecommerce/shared`
@@ -46,7 +45,7 @@
  * ## Relationship with shared hooks
  * This screen does NOT use the shared `useOrders` hook or TanStack Query because:
  * 1. Guest lookups are transient — no persistent cache needed
- * 2. The data comes from the `guest-order-lookup` Edge Function with a different
+ * 2. The data comes from the web backend API with a different
  *    shape (snake_case from Supabase) than the Violet-proxied `OrderDetail` type
  * 3. The OTP auth flow is unique to guest lookup and doesn't fit the query pattern
  *
@@ -104,13 +103,13 @@
  * immediately performs a token-based lookup.
  *
  * ## Differences from web counterpart
- * - Web uses TanStack Start Server Functions; mobile uses Edge Function directly
+ * - Web uses TanStack Start Server Functions; mobile uses web backend API
  * - Web uses CSS + BEM styling; mobile uses StyleSheet with design tokens
- * - Both share the same Edge Function backend and OTP verification flow
+ * - Both share the same business logic via guestOrderHandlers
  * - Mobile includes refund display (from Story 5.5) inline within bag cards
  *
  * @see {@link file://apps/web/src/routes/order/lookup.tsx} — web equivalent
- * @see {@link file://supabase/functions/guest-order-lookup/index.ts} — Edge Function
+ * @see {@link file://apps/web/src/routes/api/guest-order-lookup.ts} — API Route
  * @see {@link file://packages/shared/src/hooks/useOrders.ts} — shared query options (unused here)
  * @see {@link file://apps/mobile/src/app/profile.tsx} — navigation entry point
  * @see Story 5.4 — Guest Order Lookup
@@ -129,6 +128,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
+import Constants from "expo-constants";
 import {
   createSupabaseClient,
   formatPrice,
@@ -139,12 +139,13 @@ import {
 import { colors, spacing, typography } from "@ecommerce/ui";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { apiPost } from "@/server/apiClient";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 /**
  * Line item within an order bag, as returned by the Supabase `guest-order-lookup`
- * Edge Function. Uses snake_case to match Supabase table columns directly.
+ * web backend API. Uses snake_case to match Supabase table columns directly.
  */
 interface OrderItem {
   id: string;
@@ -181,7 +182,7 @@ interface OrderBag {
 
 /**
  * Top-level guest order with nested bags. Returned by the `guest-order-lookup`
- * Edge Function for both token-based and email-based lookups.
+ * web backend API for both token-based and email-based lookups.
  */
 interface GuestOrder {
   id: string;
@@ -205,41 +206,32 @@ type LookupStep =
   | { step: "results"; orders: GuestOrder[] }
   | { step: "token-result"; order: GuestOrder };
 
-// ─── Edge Function client ──────────────────────────────────────────────────────
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-const EDGE_FN_URL = `${SUPABASE_URL}/functions/v1/guest-order-lookup`;
+// ─── API client ────────────────────────────────────────────────────────────
 
 /**
  * Looks up a single order by its guest tracking token.
  * No authentication required — the token itself is the secret.
- *
- * @param token - The guest tracking token from the confirmation screen
- * @returns The order if found, or `null` if the token is invalid/expired
- * @throws Error if the HTTP request fails (non-2xx status)
  */
 async function lookupByToken(token: string): Promise<GuestOrder | null> {
-  const res = await fetch(EDGE_FN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "token", token }),
+  const json = await apiPost<{ data?: GuestOrder }>("/api/guest-order-lookup", {
+    type: "token",
+    token,
   });
-  if (!res.ok) throw new Error(`Token lookup failed: ${res.status}`);
-  const json = await res.json();
   return json.data ?? null;
 }
 
 /**
  * Looks up all orders associated with the authenticated email.
  * Requires a valid Supabase JWT obtained after OTP verification.
- * The Edge Function uses the JWT's email claim to query orders.
- *
- * @param accessToken - Supabase session JWT from OTP verification
- * @returns Array of orders (empty if none found for the email)
- * @throws Error if the HTTP request fails (non-2xx status)
  */
 async function lookupByEmail(accessToken: string): Promise<GuestOrder[]> {
-  const res = await fetch(EDGE_FN_URL, {
+  // Direct fetch needed here — we need to pass the OTP session token,
+  // not the apiClient's auto-resolved token
+  const apiUrl =
+    Constants.expoConfig?.extra?.apiUrl ??
+    process.env.EXPO_PUBLIC_API_URL ??
+    "http://10.0.2.2:3000";
+  const res = await fetch(`${apiUrl}/api/guest-order-lookup`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -274,7 +266,7 @@ async function lookupByEmail(accessToken: string): Promise<GuestOrder[]> {
  * Uses `ThemedText` and `ThemedView` for dark mode support. Colors from `@ecommerce/ui`
  * are applied via StyleSheet for fine-grained control over typography and layout.
  *
- * @param props.order - The guest order data from the Edge Function
+ * @param props.order - The guest order data from the web backend API
  */
 function OrderDetailView({ order }: { order: GuestOrder }) {
   return (
@@ -320,7 +312,7 @@ function OrderDetailView({ order }: { order: GuestOrder }) {
             </ThemedText>
           )}
 
-          {/* Refund notice — optional chaining because older data from the Edge Function
+          {/* Refund notice — optional chaining because older data from the API
               may not include order_refunds yet. Per Violet docs, CANCELED bags never
               have refund data; only REFUNDED/PARTIALLY_REFUNDED bags do.
               @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md */}
@@ -484,7 +476,7 @@ export default function GuestLookupScreen() {
         return;
       }
 
-      // Get session for Edge Function auth header
+      // Get session for web backend auth header
       const {
         data: { session },
       } = await supabase.auth.getSession();

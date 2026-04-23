@@ -4,8 +4,7 @@ import { ThemedText } from "../../components/themed-text";
 import ProductCard from "../../components/product/ProductCard";
 import type { Product } from "@ecommerce/shared";
 import { useState, useEffect, useCallback } from "react";
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+import { apiGet } from "@/server/apiClient";
 
 interface MerchantDetail {
   id: string;
@@ -32,10 +31,7 @@ export default function MerchantScreen() {
 
     (async () => {
       try {
-        const res = await fetch(
-          `${SUPABASE_URL}/functions/v1/get-merchant?merchantId=${merchantId}`,
-        );
-        const json = await res.json();
+        const json = await apiGet<{ data?: MerchantDetail }>(`/api/merchants/${merchantId}`);
         if (json.data) setMerchant(json.data);
       } catch {
         // Merchant details are non-blocking
@@ -47,10 +43,9 @@ export default function MerchantScreen() {
   const fetchProducts = useCallback(
     async (pageNum: number) => {
       try {
-        const res = await fetch(
-          `${SUPABASE_URL}/functions/v1/get-products?merchantId=${merchantId}&page=${pageNum}&pageSize=12`,
-        );
-        const json = await res.json();
+        const json = await apiGet<{
+          data?: { data?: Product[]; hasNext?: boolean };
+        }>(`/api/merchants/${merchantId}/products?page=${pageNum}&pageSize=12`);
         const newProducts = (json.data?.data ?? []) as Product[];
         setHasNext(json.data?.hasNext ?? false);
         return newProducts;

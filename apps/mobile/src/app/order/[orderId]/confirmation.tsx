@@ -20,8 +20,8 @@
  *   checkout after payment would be confusing.
  *
  * ## Data dependencies
- * - Fetches order via Supabase Edge Function: `GET {SUPABASE_URL}/functions/v1/cart/orders/{orderId}`
- * - Requires a valid Supabase JWT (obtained via `getSessionAccessToken()`)
+ * - Fetches order via web backend API: `GET /api/cart/{cartId}/orders/{orderId}`
+ * - Auth handled automatically by apiClient (Supabase JWT in Authorization header)
  * - Uses the shared `OrderDetail` type from `@ecommerce/shared`
  * - Uses `formatPrice()` from `@ecommerce/shared` for consistent currency formatting
  *
@@ -37,11 +37,11 @@
  *
  * ## Architecture differences from web
  * - **Web**: Uses TanStack Start loader for SSR prefetching of order data
- * - **Mobile**: Client-side fetch on mount (no SSR), same Edge Function endpoint
+ * - **Mobile**: Client-side fetch on mount (no SSR), same web backend API
  * - Both share the `OrderDetail` type and `formatPrice` utility
  *
  * ## Error handling
- * - Missing `orderId` or `EDGE_FN_BASE` config: Shows error immediately
+ * - Missing `orderId` or API error: Shows error immediately
  * - Auth failure (no session): Shows "Not authenticated" error
  * - HTTP errors: Shows status code in error message
  * - Network errors: Caught by try/catch, shows generic connectivity message
@@ -73,8 +73,7 @@
  * Supports deep links via Expo Router path: `order/{orderId}/confirmation?token={token}`.
  * The `useLocalSearchParams` hook extracts both `orderId` (path) and `token` (query).
  *
- * @see {@link file://supabase/functions/cart/index.ts} — Edge Function routes
- * @see {@link file://apps/web/src/routes/order/$orderId/confirmation.tsx} — web equivalent
+ * @see {@link file://apps/web/src/routes/api/cart/$cartId/orders/$orderId.ts} — API Route
  * @see {@link file://packages/shared/src/hooks/useOrders.ts} — shared query options (unused here)
  * @see Story 4.5 — Payment Confirmation & 3D Secure Handling
  */
@@ -94,32 +93,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import { createSupabaseClient, formatPrice } from "@ecommerce/shared";
+import { formatPrice } from "@ecommerce/shared";
 import type { OrderDetail } from "@ecommerce/shared";
-
-/** Edge Function base URL for order API calls. */
-const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
-  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/cart`
-  : "";
-
-/**
- * Retrieves the Supabase session access token for Edge Function authorization.
- * The Edge Function requires a valid JWT for ALL routes, including GET /orders.
- *
- * ## Naming: `getSessionAccessToken` (not `getSessionToken`)
- * Code Review Fix H1: Renamed from `getSessionToken` to avoid shadowing the
- * `token` search param from `useLocalSearchParams` (guest lookup token) inside
- * the `fetchOrder` callback. The two tokens serve completely different purposes:
- * - **accessToken**: Supabase JWT for Edge Function auth headers
- * - **token** (search param): Guest order lookup token for tracking
- *
- * @see supabase/functions/cart/index.ts — validateUser() gate
- */
-async function getSessionAccessToken(): Promise<string | null> {
-  const supabase = createSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
+import { apiGet } from "@/server/apiClient";
 
 export default function OrderConfirmationScreen() {
   const { orderId, token } = useLocalSearchParams<{ orderId: string; token?: string }>();
@@ -148,35 +124,24 @@ export default function OrderConfirmationScreen() {
   };
 
   const fetchOrder = useCallback(async () => {
-    if (!orderId || !EDGE_FN_BASE) {
-      setError("Order ID or configuration missing.");
+    if (!orderId) {
+      setError("Order ID missing.");
       setIsLoading(false);
       return;
     }
 
     try {
-      const accessToken = await getSessionAccessToken();
-      if (!accessToken) {
-        setError("Not authenticated. Please restart the app.");
-        setIsLoading(false);
-        return;
-      }
+      const json = await apiGet<{ data?: OrderDetail; error?: { message?: string } }>(
+        `/api/orders/${orderId}`,
+      );
 
-      const res = await fetch(`${EDGE_FN_BASE}/orders/${orderId}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) {
-        setError(`Failed to load order (${res.status}).`);
-        setIsLoading(false);
-        return;
-      }
-
-      const json = await res.json();
       if (json.error) {
         setError(json.error.message ?? "Order not found.");
       } else {
-        setOrder(json.data);
+        setOrder(json.data ?? null);
+        if (!json.data) {
+          setError("Order not found.");
+        }
       }
     } catch {
       setError("Network error. Please check your connection.");

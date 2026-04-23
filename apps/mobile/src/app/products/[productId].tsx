@@ -21,9 +21,7 @@ import {
   useRecommendations,
   useUser,
   optimizeWithPreset,
-  getCurrencyForCountry,
 } from "@ecommerce/shared";
-import * as Localization from "expo-localization";
 import type { Product, RecommendationItem } from "@ecommerce/shared";
 
 import { ThemedText } from "@/components/themed-text";
@@ -31,16 +29,11 @@ import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useTrackProductView } from "@/hooks/useMobileTracking";
+import { apiGet, apiPost } from "@/server/apiClient";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const CART_KEY = "violet_cart_id";
-const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
-  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/cart`
-  : null;
-const GET_PRODUCT_URL = process.env.EXPO_PUBLIC_SUPABASE_URL
-  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/get-product`
-  : null;
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -53,33 +46,14 @@ async function getSessionToken(): Promise<string | null> {
 }
 
 /**
- * Derives the user's base currency from device locale region.
- * Falls back to null (Violet will use merchant default currency = USD).
- */
-function getDeviceCurrency(): string | null {
-  const region = Localization.getLocales()[0]?.regionCode;
-  if (!region) return null;
-  const currency = getCurrencyForCountry(region);
-  return currency !== "USD" ? currency : null;
-}
-
-/**
- * Fetches full product data from the get-product Edge Function.
+ * Fetches full product data from the web backend API.
  *
- * The Edge Function calls Violet's GET /catalog/offers/{id} server-side
+ * The web backend calls Violet's GET /catalog/offers/{id} server-side
  * and transforms the response to our internal camelCase Product shape.
- * Includes base_currency for contextual pricing when available.
- *
- * @see supabase/functions/get-product/index.ts
  */
 async function fetchProduct(offerId: string): Promise<Product | null> {
-  if (!GET_PRODUCT_URL) return null;
   try {
-    const baseCurrency = getDeviceCurrency();
-    const currencyQs = baseCurrency ? `&baseCurrency=${baseCurrency}` : "";
-    const res = await fetch(`${GET_PRODUCT_URL}?id=${offerId}${currencyQs}`);
-    if (!res.ok) return null;
-    const json = await res.json();
+    const json = await apiGet<{ data?: Product }>(`/api/products/${offerId}`);
     return json.data ?? null;
   } catch {
     return null;
@@ -90,25 +64,15 @@ async function fetchProduct(offerId: string): Promise<Product | null> {
  * Resolves a Violet offer ID to its first available SKU ID.
  *
  * Violet's cart API requires a SKU id (the purchasable variant), not an offer id
- * (the product listing). This calls GET /cart/offers/{offerId} which fetches
- * the offer from Violet server-side and returns the first available SKU id.
- *
- * @see supabase/functions/cart/index.ts — GET /offers/{offerId} route
+ * (the product listing). This calls the web backend which resolves the SKU.
  */
-async function resolveSkuId(
-  offerId: string,
-  token: string,
-): Promise<{ skuId: string; name: string } | null> {
-  if (!EDGE_FN_BASE) return null;
+async function resolveSkuId(offerId: string): Promise<{ skuId: string; name: string } | null> {
   try {
-    const res = await fetch(`${EDGE_FN_BASE}/offers/${offerId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const data = json.data as { skuId: string | null; name: string } | null;
-    if (!data?.skuId) return null;
-    return { skuId: data.skuId, name: data.name };
+    const json = await apiGet<{ data?: { skuId: string; name: string } }>(
+      `/api/cart/offers/${offerId}`,
+    );
+    if (!json.data?.skuId) return null;
+    return { skuId: json.data.skuId, name: json.data.name };
   } catch {
     return null;
   }
@@ -153,16 +117,15 @@ export default function ProductDetailScreen() {
   }, [productId]);
 
   /**
-   * Add to cart via the Supabase Edge Function.
+   * Add to cart via the web backend API.
    *
    * Flow:
-   * 1. Get session token
-   * 2. Resolve offer ID → first available SKU id via GET /cart/offers/{offerId}
-   * 3. Get or create Violet cart
-   * 4. POST sku_id to /cart/{cartId}/skus
+   * 1. Resolve offer ID → first available SKU id
+   * 2. Get or create Violet cart
+   * 3. POST sku_id to /api/cart/{cartId}/skus
    */
   const handleAddToCart = async () => {
-    if (!EDGE_FN_BASE || addState !== "idle") return;
+    if (addState !== "idle") return;
     setAddState("loading");
 
     try {
@@ -174,7 +137,7 @@ export default function ProductDetailScreen() {
       }
 
       // Step 1: Resolve offer ID → first available SKU id
-      const resolved = await resolveSkuId(productId, token);
+      const resolved = await resolveSkuId(productId);
       if (!resolved) {
         Alert.alert("Error", "Could not add this product. It may be unavailable.");
         setAddState("error");
@@ -185,16 +148,8 @@ export default function ProductDetailScreen() {
       // Step 2: Get or create cart
       let violetCartId = await SecureStore.getItemAsync(CART_KEY);
       if (!violetCartId) {
-        const createRes = await fetch(EDGE_FN_BASE, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        });
-        if (!createRes.ok) {
-          setAddState("idle");
-          return;
-        }
-        const createJson = await createRes.json();
-        violetCartId = createJson.data?.violetCartId;
+        const createJson = await apiPost<{ data?: { violetCartId?: string } }>("/api/cart", {});
+        violetCartId = createJson.data?.violetCartId ?? null;
         if (!violetCartId) {
           setAddState("idle");
           return;
@@ -203,18 +158,15 @@ export default function ProductDetailScreen() {
       }
 
       // Step 3: Add SKU to cart using the resolved sku_id
-      const addRes = await fetch(`${EDGE_FN_BASE}/${violetCartId}/skus`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sku_id: Number(resolved.skuId),
+      const addJson = await apiPost<{ data?: unknown; error?: unknown }>(
+        `/api/cart/${violetCartId}/skus`,
+        {
+          skuId: Number(resolved.skuId),
           quantity: 1,
-          productName: product?.name ?? resolved.name,
-          thumbnailUrl: product?.thumbnailUrl ?? null,
-        }),
-      });
+        },
+      );
 
-      if (addRes.ok) {
+      if (!addJson.error) {
         setAddState("added");
         setTimeout(() => setAddState("idle"), 1500);
       } else {

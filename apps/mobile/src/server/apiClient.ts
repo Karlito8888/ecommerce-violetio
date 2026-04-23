@@ -19,6 +19,7 @@
  */
 
 import Constants from "expo-constants";
+import { createSupabaseClient } from "@ecommerce/shared";
 
 function getApiUrl(): string {
   return (
@@ -27,13 +28,26 @@ function getApiUrl(): string {
 }
 
 /**
+ * Returns Authorization headers if the user has an active Supabase session.
+ * Anonymous users have a real JWT via Supabase anonymous auth.
+ */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const supabase = createSupabaseClient();
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/**
  * GET request to the web backend API.
  *
+ * Sends Authorization header if user has an active session.
  * Returns parsed JSON response. Throws on non-2xx status.
  */
 export async function apiGet<T>(path: string): Promise<T> {
   const url = `${getApiUrl()}${path}`;
-  const res = await fetch(url);
+  const headers = await getAuthHeaders();
+  const res = await fetch(url, { headers });
 
   if (!res.ok) {
     throw new Error(`API GET ${path} → ${res.status}`);
@@ -45,18 +59,63 @@ export async function apiGet<T>(path: string): Promise<T> {
 /**
  * POST request to the web backend API.
  *
- * Sends JSON body. Returns parsed JSON response. Throws on non-2xx status.
+ * Sends JSON body + Authorization header if user has an active session.
+ * Returns parsed JSON response. Throws on non-2xx status.
  */
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const url = `${getApiUrl()}${path}`;
+  const headers = await getAuthHeaders();
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json", ...headers },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {
     throw new Error(`API POST ${path} → ${res.status}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/**
+ * PUT request to the web backend API.
+ *
+ * Sends JSON body + Authorization header if user has an active session.
+ * Returns parsed JSON response. Throws on non-2xx status.
+ */
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const url = `${getApiUrl()}${path}`;
+  const headers = await getAuthHeaders();
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (!res.ok) {
+    throw new Error(`API PUT ${path} → ${res.status}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/**
+ * DELETE request to the web backend API.
+ *
+ * Sends Authorization header if user has an active session.
+ * Returns parsed JSON response. Throws on non-2xx status.
+ */
+export async function apiDelete<T>(path: string): Promise<T> {
+  const url = `${getApiUrl()}${path}`;
+  const headers = await getAuthHeaders();
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    throw new Error(`API DELETE ${path} → ${res.status}`);
   }
 
   return res.json() as Promise<T>;

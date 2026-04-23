@@ -8,10 +8,10 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import type { Cart, Bag, CartItem } from "@ecommerce/shared";
-import { createSupabaseClient } from "@ecommerce/shared";
+import { apiGet, apiPut, apiDelete } from "@/server/apiClient";
 
-/** Structured result type for Edge Function calls. */
-interface EdgeResult<T> {
+/** Structured result type for API calls. */
+interface ApiResult<T> {
   data: T | null;
   error: string | null;
 }
@@ -19,114 +19,53 @@ interface EdgeResult<T> {
 /** Key for persisting the Violet cart ID in SecureStore. */
 const CART_KEY = "violet_cart_id";
 
-/** Supabase Edge Function base URL for cart operations. */
-const EDGE_FN_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL
-  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/cart`
-  : null;
-
 /** Formats integer cents to a dollar string. */
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
 /**
- * Gets the current Supabase session access token.
- *
- * Uses `createSupabaseClient()` which returns a singleton instance — the shared
- * package memoizes the client so we don't create a new connection per call.
- *
- * The Edge Function validates a Supabase user JWT (not the project anon key).
- * Anonymous users are authenticated via Supabase anonymous auth (`initAnonymousSession`
- * in the app's _layout.tsx), so they have a real user ID and access token.
- *
- * @see supabase/functions/cart/index.ts — validateUser() for the server-side check
+ * Fetches the current cart from the web backend API.
  */
-async function getSessionToken(): Promise<string | null> {
-  const supabase = createSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
-/**
- * Fetches the current cart from the Edge Function.
- *
- * Returns structured { data, error } to ensure every failure path provides
- * user-visible feedback. Silent null returns are a critical UX bug — users
- * must always know why an action failed.
- */
-async function fetchCartFromEdge(violetCartId: string): Promise<EdgeResult<Cart>> {
-  if (!EDGE_FN_BASE) return { data: null, error: "Configuration error: Edge Function URL not set" };
-  const token = await getSessionToken();
-  if (!token) return { data: null, error: "Authentication required" };
-
+async function fetchCartFromApi(violetCartId: string): Promise<ApiResult<Cart>> {
   try {
-    const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!res.ok) return { data: null, error: `Server error (${res.status})` };
-    const json = await res.json();
-    return { data: json.data ?? null, error: null };
+    const json = await apiGet<{ data?: Cart; error?: { message?: string } }>(
+      `/api/cart/${violetCartId}`,
+    );
+    return { data: json.data ?? null, error: json.error?.message ?? null };
   } catch {
     return { data: null, error: "Network error. Check your connection." };
   }
 }
 
 /**
- * Updates a cart item quantity via the Edge Function.
- *
- * Returns structured { data, error } to ensure every failure path provides
- * user-visible feedback. Silent null returns are a critical UX bug — users
- * must always know why an action failed.
+ * Updates a cart item quantity via the web backend API.
  */
-async function updateItemEdge(
+async function updateItemApi(
   violetCartId: string,
   skuId: string,
   quantity: number,
-): Promise<EdgeResult<Cart>> {
-  if (!EDGE_FN_BASE) return { data: null, error: "Configuration error: Edge Function URL not set" };
-  const token = await getSessionToken();
-  if (!token) return { data: null, error: "Authentication required" };
-
+): Promise<ApiResult<Cart>> {
   try {
-    const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/skus/${skuId}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ quantity }),
-    });
-    if (!res.ok) return { data: null, error: `Server error (${res.status})` };
-    const json = await res.json();
-    return { data: json.data ?? null, error: null };
+    const json = await apiPut<{ data?: Cart; error?: { message?: string } }>(
+      `/api/cart/${violetCartId}/skus/${skuId}`,
+      { quantity },
+    );
+    return { data: json.data ?? null, error: json.error?.message ?? null };
   } catch {
     return { data: null, error: "Network error. Check your connection." };
   }
 }
 
 /**
- * Removes a cart item via the Edge Function.
- *
- * Returns structured { data, error } to ensure every failure path provides
- * user-visible feedback. Silent null returns are a critical UX bug — users
- * must always know why an action failed.
+ * Removes a cart item via the web backend API.
  */
-async function removeItemEdge(violetCartId: string, skuId: string): Promise<EdgeResult<Cart>> {
-  if (!EDGE_FN_BASE) return { data: null, error: "Configuration error: Edge Function URL not set" };
-  const token = await getSessionToken();
-  if (!token) return { data: null, error: "Authentication required" };
-
+async function removeItemApi(violetCartId: string, skuId: string): Promise<ApiResult<Cart>> {
   try {
-    const res = await fetch(`${EDGE_FN_BASE}/${violetCartId}/skus/${skuId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return { data: null, error: `Server error (${res.status})` };
-    const json = await res.json();
-    return { data: json.data ?? null, error: null };
+    const json = await apiDelete<{ data?: Cart; error?: { message?: string } }>(
+      `/api/cart/${violetCartId}/skus/${skuId}`,
+    );
+    return { data: json.data ?? null, error: json.error?.message ?? null };
   } catch {
     return { data: null, error: "Network error. Check your connection." };
   }
@@ -269,7 +208,7 @@ export default function CartScreen() {
         const savedId = await SecureStore.getItemAsync(CART_KEY);
         if (savedId) {
           setVioletCartId(savedId);
-          const result = await fetchCartFromEdge(savedId);
+          const result = await fetchCartFromApi(savedId);
           if (result.error) {
             setError(result.error);
           } else {
@@ -284,7 +223,7 @@ export default function CartScreen() {
   }, []);
 
   /**
-   * Updates item quantity in the cart via Edge Function.
+   * Updates item quantity in the cart via the web backend API.
    * Uses isUpdatingRef to guard against concurrent mutations without
    * adding isUpdating to the dependency array (which would cause re-renders).
    */
@@ -295,7 +234,7 @@ export default function CartScreen() {
       setIsUpdating(true);
       setError(null);
       try {
-        const result = await updateItemEdge(violetCartId, skuId, quantity);
+        const result = await updateItemApi(violetCartId, skuId, quantity);
         if (result.error) {
           Alert.alert("Error", result.error);
         } else if (result.data) {
@@ -310,7 +249,7 @@ export default function CartScreen() {
   );
 
   /**
-   * Removes an item from the cart via Edge Function.
+   * Removes an item from the cart via the web backend API.
    * Uses isUpdatingRef to guard against concurrent mutations without
    * adding isUpdating to the dependency array (which would cause re-renders).
    */
@@ -321,7 +260,7 @@ export default function CartScreen() {
       setIsUpdating(true);
       setError(null);
       try {
-        const result = await removeItemEdge(violetCartId, skuId);
+        const result = await removeItemApi(violetCartId, skuId);
         if (result.error) {
           Alert.alert("Error", result.error);
         } else if (result.data) {
