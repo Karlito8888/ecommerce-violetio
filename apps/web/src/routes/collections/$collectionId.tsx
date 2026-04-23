@@ -7,7 +7,8 @@ import {
 } from "@tanstack/react-query";
 import type { Product } from "@ecommerce/shared";
 import { optimizeWithPreset } from "@ecommerce/shared";
-import { getCollectionByIdFn, getCollectionProductsFn } from "../../server/getCollections";
+import { getAdapter } from "../../server/violetAdapter";
+import { getCollectionProductsFn } from "../../server/getCollections";
 import ProductGrid from "../../components/product/ProductGrid";
 import ProductGridSkeleton from "../../components/product/ProductGridSkeleton";
 
@@ -20,7 +21,13 @@ const PAGE_SIZE = 12;
 function collectionQueryOptions(collectionId: string) {
   return queryOptions({
     queryKey: ["collection", collectionId],
-    queryFn: () => getCollectionByIdFn({ data: collectionId }),
+    queryFn: async () => {
+      const result = await getAdapter().getCollections();
+      const collection = (result.data ?? []).find((c) => c.id === collectionId);
+      return collection
+        ? { data: collection, error: null }
+        : { data: null, error: { code: "NOT_FOUND", message: `Collection ${collectionId} not found` } };
+    },
     staleTime: 5 * 60 * 1000,
   });
 }

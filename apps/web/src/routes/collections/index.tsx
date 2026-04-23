@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import type { CollectionItem } from "@ecommerce/shared";
 import { optimizeWithPreset } from "@ecommerce/shared";
-import { getCollectionsFn } from "../../server/getCollections";
+import { getAdapter } from "../../server/violetAdapter";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
@@ -10,7 +10,7 @@ const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
 const collectionsQueryOptions = queryOptions({
   queryKey: ["collections"],
-  queryFn: () => getCollectionsFn(),
+  queryFn: () => getAdapter().getCollections(),
   staleTime: 5 * 60 * 1000, // 5 min — collections are synced daily by Violet
 });
 
