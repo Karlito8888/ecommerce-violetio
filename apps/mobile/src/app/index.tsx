@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useMobileTracking } from "@/hooks/useMobileTracking";
@@ -15,7 +14,8 @@ import { useAuth } from "@/context/AuthContext";
 
 import { ThemedView } from "@/components/themed-view";
 import ProductList from "@/components/product/ProductList";
-import { Colors, Fonts, Spacing, MaxContentWidth } from "@/constants/theme";
+import { Fonts, Spacing, MaxContentWidth } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useRecentlyViewed, productsInfiniteQueryOptions } from "@ecommerce/shared";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { fetchProductsMobile } from "@/server/getProducts";
@@ -34,8 +34,7 @@ const FALLBACK_CATEGORIES = [
 ];
 
 export default function HomeScreen() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : (scheme ?? "light")];
+  const theme = useTheme();
   const [activeCategory, setActiveCategory] = useState<string | undefined>(undefined);
 
   const { trackEvent } = useMobileTracking();
@@ -64,14 +63,14 @@ export default function HomeScreen() {
   const total: number = (data?.pages[0] as any)?.data?.total ?? 0;
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView ambient style={styles.container}>
       <View style={styles.safeArea}>
         {/* Category chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chips}
-          style={[styles.chipsRow, { borderBottomColor: colors.backgroundElement }]}
+          style={[styles.chipsRow, { borderBottomColor: theme.backgroundElement }]}
         >
           {FALLBACK_CATEGORIES.map(({ slug, label, filter }) => {
             const isActive = activeCategory === filter || (slug === "all" && !activeCategory);
@@ -81,8 +80,8 @@ export default function HomeScreen() {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: isActive ? colors.tint : "transparent",
-                    borderColor: isActive ? colors.tint : colors.backgroundSelected,
+                    backgroundColor: isActive ? theme.accent : "transparent",
+                    borderColor: isActive ? theme.accent : theme.backgroundSelected,
                   },
                 ]}
                 onPress={() => setActiveCategory(filter)}
@@ -93,7 +92,7 @@ export default function HomeScreen() {
                   style={[
                     styles.chipText,
                     {
-                      color: isActive ? colors.buttonText : colors.text,
+                      color: isActive ? theme.textInverse : theme.text,
                       fontFamily: isActive ? Fonts?.sans : undefined,
                     },
                   ]}
@@ -121,8 +120,7 @@ export default function HomeScreen() {
 
 function RecentlyViewedSection() {
   const { user, isAnonymous } = useAuth();
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : (scheme ?? "light")];
+  const theme = useTheme();
   const userId = user && !isAnonymous ? user.id : undefined;
   const { data: productIds, isLoading } = useRecentlyViewed({ userId });
   const router = useRouter();
@@ -130,8 +128,8 @@ function RecentlyViewedSection() {
   if (isLoading) {
     return (
       <View style={styles.recentSection}>
-        <Text style={[styles.recentHeading, { color: colors.text }]}>Recently Viewed</Text>
-        <ActivityIndicator size="small" style={styles.recentLoader} color={colors.tint} />
+        <Text style={[styles.recentHeading, { color: theme.text }]}>Recently Viewed</Text>
+        <ActivityIndicator size="small" style={styles.recentLoader} color={theme.accent} />
       </View>
     );
   }
@@ -140,7 +138,7 @@ function RecentlyViewedSection() {
 
   return (
     <View style={styles.recentSection}>
-      <Text style={[styles.recentHeading, { color: colors.text }]}>Recently Viewed</Text>
+      <Text style={[styles.recentHeading, { color: theme.text }]}>Recently Viewed</Text>
       <FlatList
         data={productIds}
         horizontal
@@ -149,15 +147,13 @@ function RecentlyViewedSection() {
         keyExtractor={(id) => id}
         renderItem={({ item: productId }) => (
           <Pressable
-            style={[styles.recentCard, { backgroundColor: colors.backgroundElement }]}
+            style={[styles.recentCard, { backgroundColor: theme.backgroundElement }]}
             onPress={() => router.push(`/products/${productId}` as never)}
             accessibilityRole="button"
             accessibilityLabel="View recently viewed product"
           >
-            <View
-              style={[styles.recentPlaceholder, { backgroundColor: colors.backgroundSelected }]}
-            >
-              <Text style={[styles.recentPlaceholderText, { color: colors.textSecondary }]}>
+            <View style={[styles.recentPlaceholder, { backgroundColor: theme.backgroundSelected }]}>
+              <Text style={[styles.recentPlaceholderText, { color: theme.textSecondary }]}>
                 View
               </Text>
             </View>

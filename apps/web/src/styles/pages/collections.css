@@ -69,7 +69,7 @@
 
 .collection-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-lg);
 }
 
 .collection-card:focus-visible {
@@ -116,7 +116,7 @@
   right: var(--space-2);
   padding: 2px var(--space-2);
   border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--surface-backdrop);
   backdrop-filter: blur(4px);
   font-family: var(--font-body);
   font-size: 0.625rem;

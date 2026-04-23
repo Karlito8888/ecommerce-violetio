@@ -9,7 +9,7 @@
   font-weight: 600;
   color: var(--color-ink);
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(26, 26, 26, 0.06);
+  box-shadow: var(--shadow-md);
   transition:
     background-color 180ms ease,
     color 180ms ease,

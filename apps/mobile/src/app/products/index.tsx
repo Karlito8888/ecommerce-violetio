@@ -114,7 +114,7 @@ export default function ProductListingScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Products" }} />
-      <ThemedView style={styles.container}>
+      <ThemedView ambient style={styles.container}>
         {/* Filter chips — horizontal scroll */}
         <ScrollView
           horizontal
@@ -133,7 +133,7 @@ export default function ProductListingScreen() {
                 accessibilityLabel={`${option.label} filter`}
                 style={[
                   styles.chip,
-                  active && { backgroundColor: theme.tint, borderColor: theme.tint },
+                  active && { backgroundColor: theme.accent, borderColor: theme.accent },
                 ]}
               >
                 <ThemedText style={[styles.chipText, active && styles.chipTextActive]}>
@@ -162,7 +162,7 @@ export default function ProductListingScreen() {
                 accessibilityLabel={`Sort by ${option.label}`}
                 style={[
                   styles.chip,
-                  active && { backgroundColor: theme.tint, borderColor: theme.tint },
+                  active && { backgroundColor: theme.accent, borderColor: theme.accent },
                 ]}
               >
                 <ThemedText style={[styles.chipText, active && styles.chipTextActive]}>
@@ -175,7 +175,7 @@ export default function ProductListingScreen() {
 
         {/* Placeholder content */}
         <View style={styles.placeholder}>
-          <ActivityIndicator size="large" color={theme.tint} />
+          <ActivityIndicator size="large" color={theme.accent} />
           <ThemedText themeColor="textSecondary" style={styles.placeholderText}>
             Product listing coming soon — pending Edge Function integration.
           </ThemedText>

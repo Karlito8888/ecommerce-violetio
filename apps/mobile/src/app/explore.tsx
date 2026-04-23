@@ -34,7 +34,7 @@ export default function ExploreScreen() {
       contentInset={insets}
       contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}
     >
-      <ThemedView style={styles.container}>
+      <ThemedView ambient style={styles.container}>
         <ThemedView style={styles.titleContainer}>
           <ThemedText type="small" themeColor="textSecondary" style={styles.kicker}>
             Our Story

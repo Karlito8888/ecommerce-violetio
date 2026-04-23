@@ -1,10 +1,12 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import Constants from "expo-constants";
 import React, { createContext, useCallback, useContext, useState } from "react";
-import { useColorScheme } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import { ThemePreferenceProvider, useThemePreference } from "@/hooks/use-theme-preference";
+import { ColorSchemeContext } from "@/hooks/use-color-scheme-context";
 
 const queryClient = new QueryClient();
 
@@ -176,26 +178,34 @@ function DynamicStripeProvider({
 /**
  * Root layout — wraps the app with required providers.
  *
- * ## StripeProvider (Story 4.4)
- * Wraps the entire app so that `useStripe()` hooks work in the checkout screen.
- * Uses `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` from the environment — this is the
- * Stripe publishable key (pk_test_... or pk_live_...), safe for client-side use.
- *
- * @see https://stripe.com/docs/payments/accept-a-payment?platform=react-native
+ * ## Theme system (mirrors web dark/light mode)
+ * ThemePreferenceProvider handles user preference + persistence.
+ * ColorSchemeContext provides the resolved scheme to useColorScheme().
+ * React Navigation ThemeProvider switches between DarkTheme/DefaultTheme.
  */
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemePreferenceProvider>
+        <LayoutInner />
+      </ThemePreferenceProvider>
+    </QueryClientProvider>
+  );
+}
+
+function LayoutInner() {
+  const { resolvedScheme } = useThemePreference();
   const stripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <DynamicStripeProvider fallbackKey={stripeKey}>
-          <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <AuthProvider>
+      <DynamicStripeProvider fallbackKey={stripeKey}>
+        <ColorSchemeContext.Provider value={resolvedScheme}>
+          <ThemeProvider value={resolvedScheme === "dark" ? DarkTheme : DefaultTheme}>
             <AppContent />
           </ThemeProvider>
-        </DynamicStripeProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+        </ColorSchemeContext.Provider>
+      </DynamicStripeProvider>
+    </AuthProvider>
   );
 }

@@ -1,13 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import {
-  AccessibilityInfo,
-  Animated,
-  StyleSheet,
-  useColorScheme,
-  type ViewStyle,
-} from "react-native";
+import { AccessibilityInfo, Animated, StyleSheet, type ViewStyle } from "react-native";
 
-import { Colors } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 interface SkeletonProps {
   width?: number;
@@ -17,8 +11,7 @@ interface SkeletonProps {
 }
 
 export default function Skeleton({ width, height = 16, borderRadius = 8, style }: SkeletonProps) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : scheme];
+  const theme = useTheme();
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -58,7 +51,7 @@ export default function Skeleton({ width, height = 16, borderRadius = 8, style }
       accessibilityLabel="Loading"
       style={[
         styles.base,
-        { backgroundColor: colors.backgroundElement, width, height, borderRadius, opacity },
+        { backgroundColor: theme.backgroundElement, width, height, borderRadius, opacity },
         style,
       ]}
     />

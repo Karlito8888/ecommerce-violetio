@@ -28,16 +28,16 @@ export default function CollectionsScreen() {
 
   if (isLoading) {
     return (
-      <ThemedView style={styles.centered}>
+      <ThemedView ambient style={styles.centered}>
         <Stack.Screen options={{ title: "Collections" }} />
-        <ActivityIndicator size="large" color={theme.tint} />
+        <ActivityIndicator size="large" color={theme.accent} />
       </ThemedView>
     );
   }
 
   if (isError || result?.error) {
     return (
-      <ThemedView style={styles.centered}>
+      <ThemedView ambient style={styles.centered}>
         <Stack.Screen options={{ title: "Collections" }} />
         <ThemedText themeColor="textSecondary" style={styles.emptyText}>
           Unable to load collections.
@@ -48,7 +48,7 @@ export default function CollectionsScreen() {
 
   if (collections.length === 0) {
     return (
-      <ThemedView style={styles.centered}>
+      <ThemedView ambient style={styles.centered}>
         <Stack.Screen options={{ title: "Collections" }} />
         <ThemedText themeColor="textSecondary" style={styles.emptyText}>
           No collections available yet.

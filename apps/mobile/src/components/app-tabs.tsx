@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
-import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Fonts, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { HamburgerMenu } from "./HamburgerMenu";
 
 /**
@@ -12,8 +13,7 @@ import { HamburgerMenu } from "./HamburgerMenu";
  * HamburgerMenu or programmatic navigation.
  */
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : (scheme ?? "light")];
+  const theme = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
 
   const headerRight = () => (
@@ -23,12 +23,12 @@ export default function AppTabs() {
       accessibilityLabel="Ouvrir le menu"
       accessibilityRole="button"
     >
-      <Ionicons name="menu-outline" size={26} color={colors.text} />
+      <Ionicons name="menu-outline" size={26} color={theme.text} />
     </Pressable>
   );
 
   const headerTitle = () => (
-    <Text style={[styles.headerBrand, { color: colors.text, fontFamily: Fonts?.serif }]}>
+    <Text style={[styles.headerBrand, { color: theme.text, fontFamily: Fonts?.serif }]}>
       Maison Émile
     </Text>
   );
@@ -38,18 +38,18 @@ export default function AppTabs() {
       <Tabs
         screenOptions={{
           headerShown: true,
-          headerStyle: { backgroundColor: colors.background },
+          headerStyle: { backgroundColor: theme.background },
           headerShadowVisible: false,
           headerTitle: headerTitle,
           headerRight: headerRight,
           headerLeft: () => <View style={styles.headerLeftSpacer} />,
-          tabBarActiveTintColor: colors.tint,
-          tabBarInactiveTintColor: colors.textSecondary,
+          tabBarActiveTintColor: theme.accent,
+          tabBarInactiveTintColor: theme.textSecondary,
           tabBarStyle: [
             styles.tabBar,
             Platform.select({
               ios: { position: "absolute" },
-              default: { backgroundColor: colors.background },
+              default: { backgroundColor: theme.background },
             }),
           ],
           tabBarLabelStyle: styles.tabBarLabel,

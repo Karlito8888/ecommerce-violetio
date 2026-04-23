@@ -19,7 +19,10 @@ export const Route = createFileRoute("/api/collections/$collectionId/")({
 
         if (!collection) {
           return Response.json(
-            { data: null, error: { code: "NOT_FOUND", message: `Collection ${params.collectionId} not found` } },
+            {
+              data: null,
+              error: { code: "NOT_FOUND", message: `Collection ${params.collectionId} not found` },
+            },
             { status: 404 },
           );
         }

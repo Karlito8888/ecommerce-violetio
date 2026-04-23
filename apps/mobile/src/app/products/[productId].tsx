@@ -195,7 +195,7 @@ export default function ProductDetailScreen() {
       <>
         <Stack.Screen options={{ title: "Loading…" }} />
         <ThemedView style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.tint} />
+          <ActivityIndicator size="large" color={theme.accent} />
         </ThemedView>
       </>
     );

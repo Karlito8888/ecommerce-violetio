@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, Alert, useColorScheme } from "react-native";
+import { StyleSheet, View, Pressable, Alert } from "react-native";
 
 import { BiometricType } from "@ecommerce/shared";
-import { Colors, Spacing } from "@/constants/theme";
+import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/context/AuthContext";
 import { getBiometricLabel } from "@/utils/biometricLabel";
 import { ThemedText } from "./themed-text";
@@ -22,8 +23,7 @@ export function BiometricPrompt({ onFallbackToPassword }: BiometricPromptProps) 
   const { biometricStatus, attemptBiometricLogin } = useAuth();
   const [attemptsRemaining, setAttemptsRemaining] = useState(3);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : scheme];
+  const theme = useTheme();
 
   const label = getBiometricLabel(biometricStatus?.supportedTypes ?? []);
   const icon = getBiometricIcon(biometricStatus?.supportedTypes ?? []);
@@ -65,13 +65,13 @@ export function BiometricPrompt({ onFallbackToPassword }: BiometricPromptProps) 
       <Pressable
         style={({ pressed }) => [
           styles.button,
-          { backgroundColor: colors.tint },
+          { backgroundColor: theme.accent },
           pressed && styles.buttonPressed,
         ]}
         onPress={handleBiometricLogin}
         disabled={isAuthenticating}
       >
-        <ThemedText style={[styles.buttonText, { color: colors.buttonText }]}>
+        <ThemedText style={[styles.buttonText, { color: theme.textInverse }]}>
           {isAuthenticating ? "Authenticating..." : `Use ${label}`}
         </ThemedText>
       </Pressable>

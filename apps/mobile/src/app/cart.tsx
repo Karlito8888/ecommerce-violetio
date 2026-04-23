@@ -275,7 +275,7 @@ export default function CartScreen() {
   );
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView ambient style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedText type="subtitle" style={styles.title}>
           Your Bag{totalItems > 0 ? ` (${totalItems})` : ""}

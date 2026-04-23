@@ -57,7 +57,7 @@ export default function CollectionDetailScreen() {
     return (
       <ThemedView style={styles.centered}>
         <Stack.Screen options={{ title: "" }} />
-        <ActivityIndicator size="large" color={theme.tint} />
+        <ActivityIndicator size="large" color={theme.accent} />
       </ThemedView>
     );
   }
@@ -71,9 +71,9 @@ export default function CollectionDetailScreen() {
         </ThemedText>
         <Pressable
           onPress={() => router.back()}
-          style={[styles.backBtn, { borderColor: theme.tint }]}
+          style={[styles.backBtn, { borderColor: theme.accent }]}
         >
-          <ThemedText style={[styles.backBtnText, { color: theme.tint }]}>← Go back</ThemedText>
+          <ThemedText style={[styles.backBtnText, { color: theme.accent }]}>← Go back</ThemedText>
         </Pressable>
       </ThemedView>
     );
@@ -113,7 +113,7 @@ export default function CollectionDetailScreen() {
 
             {/* Meta */}
             <View style={styles.header}>
-              <ThemedText style={[styles.typeBadge, { color: theme.tint }]}>
+              <ThemedText style={[styles.typeBadge, { color: theme.accent }]}>
                 {collection.type === "AUTOMATED" ? "Automated" : "Curated"} Collection
               </ThemedText>
               {collection.description ? (
@@ -138,7 +138,7 @@ export default function CollectionDetailScreen() {
           isFetchingNextPage ? (
             <ActivityIndicator
               size="small"
-              color={theme.tint}
+              color={theme.accent}
               style={{ marginVertical: Spacing.four }}
             />
           ) : null
@@ -197,7 +197,7 @@ function ProductCard({ product, onPress, theme }: ProductCardProps) {
         <ThemedText themeColor="textSecondary" style={styles.merchant} numberOfLines={1}>
           {product.seller}
         </ThemedText>
-        <ThemedText style={[styles.price, { color: theme.tint }]}>{price}</ThemedText>
+        <ThemedText style={[styles.price, { color: theme.accent }]}>{price}</ThemedText>
       </View>
     </Pressable>
   );

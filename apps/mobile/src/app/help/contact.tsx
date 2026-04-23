@@ -320,19 +320,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.backgroundElement,
   },
   subjectOptionActive: {
-    borderColor: Colors.light.tint,
-    backgroundColor: Colors.light.tint + "15",
+    borderColor: Colors.light.accent,
+    backgroundColor: Colors.light.accent + "15",
   },
   subjectText: {
     fontSize: 14,
     color: Colors.light.textSecondary,
   },
   subjectTextActive: {
-    color: Colors.light.tint,
+    color: Colors.light.accent,
     fontWeight: "500",
   },
   submitButton: {
-    backgroundColor: Colors.light.tint,
+    backgroundColor: Colors.light.accent,
     paddingVertical: Spacing.three,
     borderRadius: 8,
     alignItems: "center",

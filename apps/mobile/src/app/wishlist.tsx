@@ -112,13 +112,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   cta: {
-    backgroundColor: Colors.light.tint,
+    backgroundColor: Colors.light.accent,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.four,
     borderRadius: 8,
   },
   ctaText: {
-    color: Colors.light.buttonText,
+    color: Colors.light.textInverse,
     fontWeight: "600",
     fontSize: 15,
   },

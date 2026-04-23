@@ -118,7 +118,7 @@ export default function SearchScreen() {
   );
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView ambient style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <TextInput
           style={styles.searchInput}
@@ -134,7 +134,7 @@ export default function SearchScreen() {
 
         {isLoading && query.length >= 2 && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.light.tint} />
+            <ActivityIndicator size="large" color={Colors.light.accent} />
           </View>
         )}
 

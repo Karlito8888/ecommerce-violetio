@@ -39,7 +39,7 @@
 }
 
 .related-content__item:hover {
-  box-shadow: 0 8px 24px rgba(26, 26, 26, 0.1);
+  box-shadow: var(--shadow-lg);
   transform: translateY(-2px);
 }
 
@@ -65,21 +65,21 @@
 }
 
 .related-content__image--guide {
-  background: linear-gradient(135deg, #f5e6d3, #e8d5b7);
+  background: var(--gradient-guide);
 }
 
 .related-content__image--comparison {
-  background: linear-gradient(135deg, #d3e5f5, #b7cde8);
+  background: var(--gradient-comparison);
 }
 
 .related-content__image--review {
-  background: linear-gradient(135deg, #e5d3f5, #d1b7e8);
+  background: var(--gradient-review);
 }
 
 .related-content__placeholder-label {
   font-family: var(--font-heading);
   font-size: 1rem;
-  color: rgba(0, 0, 0, 0.3);
+  color: var(--color-placeholder);
   font-weight: 500;
 }
 

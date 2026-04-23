@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
   },
   contactCtaButton: {
-    backgroundColor: Colors.light.tint,
+    backgroundColor: Colors.light.accent,
     paddingHorizontal: Spacing.five,
     paddingVertical: Spacing.two,
     borderRadius: 8,

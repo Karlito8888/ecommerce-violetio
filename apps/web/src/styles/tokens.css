@@ -139,6 +139,23 @@
   --glint-inset: rgba(255, 255, 255, 0.82);
   --kicker-color: rgba(139, 115, 85, 0.9);
   --selection-bg: rgba(201, 169, 110, 0.24);
+
+  /* ── Overlay Surfaces ── */
+  /* For floating elements over images (wishlist, share buttons) */
+  --surface-overlay: rgba(250, 250, 248, 0.85);
+  /* Input / card inner backgrounds */
+  --surface-input: #fff;
+  /* Text on dark/accent-colored buttons */
+  --color-btn-text: #fff;
+  /* Placeholder icon tint for image placeholders */
+  --color-placeholder: rgba(26, 26, 26, 0.3);
+  /* Overlay backdrop */
+  --surface-backdrop: rgba(0, 0, 0, 0.5);
+
+  /* ── Placeholder Gradients (content cards without images) ── */
+  --gradient-guide: linear-gradient(135deg, #f5e6d3, #e8d5b7);
+  --gradient-comparison: linear-gradient(135deg, #d3e5f5, #b7cde8);
+  --gradient-review: linear-gradient(135deg, #e5d3f5, #d1b7e8);
 }
 
 /* ── Dark Theme ──
@@ -189,4 +206,16 @@
   --glint-inset: rgba(255, 255, 255, 0.06);
   --kicker-color: rgba(201, 169, 110, 0.9);
   --selection-bg: rgba(201, 169, 110, 0.32);
+
+  /* ── Overlay Surfaces (dark) ── */
+  --surface-overlay: rgba(44, 44, 44, 0.85);
+  --surface-input: #333333;
+  --color-btn-text: #1a1a1a;
+  --color-placeholder: rgba(250, 250, 248, 0.3);
+  --surface-backdrop: rgba(0, 0, 0, 0.6);
+
+  /* ── Placeholder Gradients (dark) ── */
+  --gradient-guide: linear-gradient(135deg, #3d3528, #332d22);
+  --gradient-comparison: linear-gradient(135deg, #283540, #223040);
+  --gradient-review: linear-gradient(135deg, #352840, #302240);
 }

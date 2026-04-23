@@ -1,8 +1,9 @@
 import { Stack, Link } from "expo-router";
-import { View, FlatList, Pressable, ActivityIndicator, useColorScheme } from "react-native";
+import { View, FlatList, Pressable, ActivityIndicator } from "react-native";
 import { ThemedText } from "../../components/themed-text";
 import { useState, useEffect } from "react";
-import { Colors, Spacing } from "@/constants/theme";
+import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { apiGet } from "@/server/apiClient";
 
 interface MerchantItem {
@@ -16,8 +17,7 @@ export default function MerchantsScreen() {
   const [merchants, setMerchants] = useState<MerchantItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : (scheme ?? "light")];
+  const theme = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -47,7 +47,7 @@ export default function MerchantsScreen() {
       <View style={{ flex: 1, paddingHorizontal: Spacing.four, paddingTop: Spacing.three }}>
         <View style={{ marginBottom: Spacing.four }}>
           <ThemedText type="title">Our Merchants</ThemedText>
-          <ThemedText type="small" style={{ color: colors.textSecondary, marginTop: 4 }}>
+          <ThemedText type="small" style={{ color: theme.textSecondary, marginTop: 4 }}>
             Curated sellers from the world's best e-commerce platforms.
           </ThemedText>
         </View>
@@ -55,11 +55,11 @@ export default function MerchantsScreen() {
         {loading ? (
           <ActivityIndicator size="large" style={{ marginTop: 40 }} />
         ) : error ? (
-          <ThemedText style={{ textAlign: "center", marginTop: 40, color: colors.textSecondary }}>
+          <ThemedText style={{ textAlign: "center", marginTop: 40, color: theme.textSecondary }}>
             {error}
           </ThemedText>
         ) : merchants.length === 0 ? (
-          <ThemedText style={{ textAlign: "center", marginTop: 40, color: colors.textSecondary }}>
+          <ThemedText style={{ textAlign: "center", marginTop: 40, color: theme.textSecondary }}>
             No merchants connected yet. Check back soon!
           </ThemedText>
         ) : (
@@ -75,7 +75,7 @@ export default function MerchantsScreen() {
                     alignItems: "center",
                     padding: Spacing.three,
                     borderWidth: 1,
-                    borderColor: colors.textSecondary + "30",
+                    borderColor: theme.textSecondary + "30",
                     borderRadius: 10,
                     gap: Spacing.three,
                   }}
@@ -85,25 +85,25 @@ export default function MerchantsScreen() {
                       width: 44,
                       height: 44,
                       borderRadius: 12,
-                      backgroundColor: colors.backgroundElement,
+                      backgroundColor: theme.backgroundElement,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    <ThemedText style={{ fontSize: 18, color: colors.tint }}>◉</ThemedText>
+                    <ThemedText style={{ fontSize: 18, color: theme.accent }}>◉</ThemedText>
                   </View>
                   <View style={{ flex: 1 }}>
                     <ThemedText style={{ fontWeight: "600", fontSize: 15 }}>{item.name}</ThemedText>
                     {item.platform && (
                       <ThemedText
                         type="small"
-                        style={{ color: colors.textSecondary, textTransform: "capitalize" }}
+                        style={{ color: theme.textSecondary, textTransform: "capitalize" }}
                       >
                         {item.platform.charAt(0) + item.platform.slice(1).toLowerCase()}
                       </ThemedText>
                     )}
                   </View>
-                  <ThemedText style={{ color: colors.textSecondary, fontSize: 20 }}>›</ThemedText>
+                  <ThemedText style={{ color: theme.textSecondary, fontSize: 20 }}>›</ThemedText>
                 </Pressable>
               </Link>
             )}

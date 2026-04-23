@@ -197,13 +197,13 @@
 }
 
 .auth-form__social-btn--google {
-  background: var(--color-white, #fff);
+  background: var(--color-ivory);
   color: var(--color-ink);
 }
 
 .auth-form__social-btn--apple {
   background: var(--color-ink);
-  color: var(--color-white, #fff);
+  color: var(--color-ivory);
   border-color: var(--color-ink);
 }
 

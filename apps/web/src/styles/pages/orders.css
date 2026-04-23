@@ -55,7 +55,7 @@
 
 .orders__card:hover {
   border-color: var(--color-charcoal);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px var(--shadow-sm);
 }
 
 .orders__card-header {
@@ -181,7 +181,7 @@
   display: inline-block;
   padding: 0.75rem 2.5rem;
   background: var(--color-midnight);
-  color: #fff;
+  color: var(--color-btn-text);
   border-radius: var(--radius-md);
   text-decoration: none;
   font-size: 0.9375rem;

@@ -81,7 +81,7 @@
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-stone);
   border-radius: var(--radius-md);
-  background: #fff;
+  background: var(--surface-input);
   font-family: var(--font-body);
   font-size: 0.9375rem;
   color: var(--color-ink);
@@ -266,7 +266,7 @@
   width: 100%;
   padding: var(--space-4) var(--space-6);
   background: var(--color-midnight);
-  color: #fff;
+  color: var(--color-btn-text);
   font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 600;
@@ -440,7 +440,7 @@
   margin-top: var(--space-5);
   padding: var(--space-3) var(--space-6);
   background: var(--color-sienna);
-  color: #fff;
+  color: var(--color-btn-text);
   font-family: var(--font-body);
   font-size: 0.875rem;
   font-weight: 600;
@@ -578,7 +578,7 @@
 
 .checkout__promo-btn:hover:not(:disabled) {
   background: var(--color-sienna);
-  color: #fff;
+  color: var(--color-btn-text);
   border-color: var(--color-sienna);
 }
 

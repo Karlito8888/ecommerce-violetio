@@ -26,7 +26,10 @@ function collectionQueryOptions(collectionId: string) {
       const collection = (result.data ?? []).find((c) => c.id === collectionId);
       return collection
         ? { data: collection, error: null }
-        : { data: null, error: { code: "NOT_FOUND", message: `Collection ${collectionId} not found` } };
+        : {
+            data: null,
+            error: { code: "NOT_FOUND", message: `Collection ${collectionId} not found` },
+          };
     },
     staleTime: 5 * 60 * 1000,
   });

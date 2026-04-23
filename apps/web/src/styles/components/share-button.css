@@ -14,7 +14,7 @@
 
 .share-button {
   border: none;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface-overlay);
   backdrop-filter: blur(4px);
   cursor: pointer;
   transition:

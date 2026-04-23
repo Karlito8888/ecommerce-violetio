@@ -4,19 +4,12 @@
  * Designed to match the Maison Émile warm neutral + gold aesthetic.
  */
 import { useCallback, useEffect, useRef } from "react";
-import {
-  Animated,
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useColorScheme,
-} from "react-native";
+import { Animated, Dimensions, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { Fonts, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import ThemeToggle from "@/components/ThemeToggle";
 import { useUser } from "@ecommerce/shared";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -61,8 +54,7 @@ export interface HamburgerMenuProps {
 }
 
 export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
-  const scheme = useColorScheme();
-  const theme = Colors[scheme === "unspecified" ? "light" : (scheme ?? "light")];
+  const theme = useTheme();
   const router = useRouter();
   const { data: user } = useUser();
   const isAuthenticated = !!user && !user.is_anonymous;
@@ -150,7 +142,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
         ]}
       >
         {/* Brand header */}
-        <View style={[styles.drawerHeader, { borderBottomColor: theme.tint }]}>
+        <View style={[styles.drawerHeader, { borderBottomColor: theme.accent }]}>
           <Text style={[styles.brandName, { color: theme.text, fontFamily: Fonts?.serif }]}>
             Maison{"\n"}Émile
           </Text>
@@ -181,7 +173,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
               <View
                 style={[styles.menuIconContainer, { backgroundColor: theme.backgroundElement }]}
               >
-                <Text style={[styles.menuIconText, { color: theme.tint }]}>{item.icon}</Text>
+                <Text style={[styles.menuIconText, { color: theme.accent }]}>{item.icon}</Text>
               </View>
               <View style={styles.menuItemContent}>
                 <Text style={[styles.menuLabel, { color: theme.text }]}>{item.label}</Text>
@@ -198,6 +190,12 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
 
         {/* Divider */}
         <View style={[styles.divider, { backgroundColor: theme.backgroundElement }]} />
+
+        {/* Theme Toggle */}
+        <View style={styles.themeRow}>
+          <Text style={[styles.themeLabel, { color: theme.textSecondary }]}>Appearance</Text>
+          <ThemeToggle />
+        </View>
 
         {/* Sign Out / Sign In */}
         <View style={styles.footer}>
@@ -221,7 +219,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
               ]}
               onPress={() => navigate("/auth/login")}
             >
-              <Text style={[styles.footerButtonText, { color: theme.tint }]}>Sign In</Text>
+              <Text style={[styles.footerButtonText, { color: theme.accent }]}>Sign In</Text>
             </Pressable>
           )}
         </View>
@@ -325,5 +323,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     letterSpacing: 0.2,
+  },
+  themeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  themeLabel: {
+    fontSize: 14,
+    fontWeight: "500",
   },
 });

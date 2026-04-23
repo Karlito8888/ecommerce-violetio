@@ -1,12 +1,13 @@
 import { Image } from "expo-image";
 import { PixelRatio, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useCallback } from "react";
+import type { GestureResponderEvent } from "react-native";
 import type { Product } from "@ecommerce/shared";
 import { formatPrice, optimizeImageUrl } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
-import { Colors, Fonts, Spacing } from "@/constants/theme";
-import { Link } from "expo-router";
+import { Fonts, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 /**
  * Product card image dimensions adjusted for device pixel ratio.
@@ -20,69 +21,125 @@ const CARD_IMG_HEIGHT_PX = Math.round(CARD_IMG_WIDTH_PX * (4 / 3));
 /**
  * Native product card for the mobile catalog grid.
  *
- * Matches the web ProductCard anatomy:
+ * Matches the web BaseProductCard anatomy exactly:
  * - Product image (3:4 ratio) with placeholder for missing images
+ * - Sold-out badge overlay
  * - Product name in serif font
- * - Merchant name in secondary text
- * - Price via formatPrice() (cents → localized currency string)
+ * - Merchant name (tappable link to merchant page)
+ * - Price via formatPrice()
+ * - Delivery estimate when available
  *
- * Uses React Native StyleSheet with design tokens from theme constants.
+ * Theme-aware: uses useTheme() for all colors — responds to dark/light.
  */
 function ProductCard({ product }: { product: Product }) {
+  const theme = useTheme();
   const router = useRouter();
   const priceDisplay = formatPrice(product.minPrice, product.currency);
+  const isOutOfStock = !product.available;
+
+  const handleMerchantPress = useCallback(
+    (e: GestureResponderEvent) => {
+      e.stopPropagation();
+      router.push(`/merchants/${product.merchantId}` as never);
+    },
+    [router, product.merchantId],
+  );
+
+  // Delivery info — mirrors web BaseProductCard logic
+  const shipping = product.shippingInfo;
+  let deliveryLabel: string | null = null;
+  let deliveryIsAvailable = false;
+
+  if (shipping?.deliveryEstimate) {
+    deliveryLabel = shipping.deliveryEstimate.label;
+    deliveryIsAvailable = true;
+  } else if (shipping?.source === "OTHER") {
+    deliveryLabel = "Shipping TBD";
+    deliveryIsAvailable = false;
+  }
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.card,
+        {
+          backgroundColor: theme.backgroundElement,
+          shadowColor: theme.shadowColor,
+        },
+        pressed && styles.cardPressed,
+      ]}
       onPress={() => router.push(`/products/${product.id}` as never)}
       accessibilityRole="button"
       accessibilityLabel={`${product.name}, ${priceDisplay}`}
     >
-      {product.thumbnailUrl ? (
-        <Image
-          source={{
-            uri:
-              optimizeImageUrl(product.thumbnailUrl, {
-                width: CARD_IMG_WIDTH_PX,
-                height: CARD_IMG_HEIGHT_PX,
-              }) ?? undefined,
-          }}
-          contentFit="cover"
-          transition={200}
-          style={[styles.image, !product.available && styles.imageOutOfStock]}
-          accessibilityLabel={`${product.name} by ${product.seller}`}
-        />
-      ) : (
-        <View style={[styles.image, styles.placeholder]}>
-          <ThemedText type="small">No image</ThemedText>
-        </View>
-      )}
+      {/* Image area */}
+      <View style={styles.imageWrap}>
+        {product.thumbnailUrl ? (
+          <Image
+            source={{
+              uri:
+                optimizeImageUrl(product.thumbnailUrl, {
+                  width: CARD_IMG_WIDTH_PX,
+                  height: CARD_IMG_HEIGHT_PX,
+                }) ?? undefined,
+            }}
+            contentFit="cover"
+            transition={200}
+            style={[styles.image, isOutOfStock && styles.imageOutOfStock]}
+            accessibilityLabel={`${product.name} by ${product.seller}`}
+          />
+        ) : (
+          <View
+            style={[
+              styles.image,
+              styles.placeholder,
+              { backgroundColor: theme.backgroundSelected },
+            ]}
+          >
+            <ThemedText type="small" style={{ color: theme.textSecondary }}>
+              No image
+            </ThemedText>
+          </View>
+        )}
 
-      {!product.available && (
-        <View style={styles.badge}>
-          <ThemedText type="small" style={styles.badgeText}>
-            Sold Out
-          </ThemedText>
-        </View>
-      )}
+        {/* Sold Out badge */}
+        {isOutOfStock && (
+          <View style={[styles.badge, { backgroundColor: theme.text }]}>
+            <ThemedText type="small" style={[styles.badgeText, { color: theme.background }]}>
+              Sold Out
+            </ThemedText>
+          </View>
+        )}
+      </View>
 
+      {/* Info section — mirrors web .product-card__info */}
       <View style={styles.info}>
         <ThemedText style={styles.name} numberOfLines={2}>
           {product.name}
         </ThemedText>
-        <Link
-          href={`/merchants/${product.merchantId}`}
-          asChild
-          onPress={(e) => e.stopPropagation()}
-        >
-          <Pressable hitSlop={8} style={styles.merchantLink}>
-            <ThemedText type="small" style={styles.merchant}>
-              {product.seller}
-            </ThemedText>
-          </Pressable>
-        </Link>
-        <ThemedText style={styles.price}>{priceDisplay}</ThemedText>
+
+        {/* Merchant link */}
+        <Pressable hitSlop={8} style={styles.merchantLink} onPress={handleMerchantPress}>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            {product.seller}
+          </ThemedText>
+        </Pressable>
+
+        <ThemedText style={[styles.price, { color: theme.text }]}>{priceDisplay}</ThemedText>
+
+        {/* Delivery estimate */}
+        {deliveryLabel && (
+          <ThemedText
+            type="small"
+            style={[
+              styles.delivery,
+              { color: deliveryIsAvailable ? theme.success : theme.textSecondary },
+              !deliveryIsAvailable && styles.deliveryTbd,
+            ]}
+          >
+            {deliveryLabel}
+          </ThemedText>
+        )}
       </View>
     </Pressable>
   );
@@ -96,17 +153,29 @@ const styles = StyleSheet.create({
     margin: Spacing.one,
     borderRadius: Spacing.two,
     overflow: "hidden",
-    backgroundColor: Colors.light.backgroundElement,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.98 }],
+  },
+  imageWrap: {
+    position: "relative",
+    width: "100%",
+    aspectRatio: 3 / 4,
+    overflow: "hidden",
   },
   image: {
     width: "100%",
-    aspectRatio: 3 / 4,
+    height: "100%",
   },
   imageOutOfStock: {
     opacity: 0.5,
   },
   placeholder: {
-    backgroundColor: Colors.light.backgroundSelected,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -114,16 +183,15 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: Spacing.two,
     left: Spacing.two,
-    backgroundColor: Colors.light.text,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Spacing.one,
   },
   badgeText: {
-    color: Colors.light.background,
     fontSize: 10,
     fontWeight: "600",
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   info: {
     padding: Spacing.two,
@@ -135,18 +203,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: Spacing.half,
   },
-  merchant: {
-    color: Colors.light.textSecondary,
-    marginBottom: Spacing.one,
-  },
   merchantLink: {
     alignSelf: "flex-start",
+    marginBottom: Spacing.one,
   },
   price: {
     fontSize: 14,
     fontWeight: "600",
   },
-  cardPressed: {
-    opacity: 0.75,
+  delivery: {
+    marginTop: Spacing.half,
+    fontSize: 12,
+  },
+  deliveryTbd: {
+    fontStyle: "italic",
   },
 });
