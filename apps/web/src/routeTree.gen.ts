@@ -39,6 +39,7 @@ import { Route as AccountWishlistRouteImport } from './routes/account/wishlist'
 import { Route as AccountProfileRouteImport } from './routes/account/profile'
 import { Route as ApiProductsIndexRouteImport } from './routes/api/products/index'
 import { Route as ApiMerchantsIndexRouteImport } from './routes/api/merchants/index'
+import { Route as ApiCollectionsIndexRouteImport } from './routes/api/collections/index'
 import { Route as ApiCartIndexRouteImport } from './routes/api/cart/index'
 import { Route as AdminSupportIndexRouteImport } from './routes/admin/support/index'
 import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
@@ -51,6 +52,7 @@ import { Route as ApiCartMergeRouteImport } from './routes/api/cart/merge'
 import { Route as ApiCartClaimRouteImport } from './routes/api/cart/claim'
 import { Route as AdminSupportInquiryIdRouteImport } from './routes/admin/support/$inquiryId'
 import { Route as AccountOrdersOrderIdRouteImport } from './routes/account/orders/$orderId'
+import { Route as ApiCollectionsCollectionIdIndexRouteImport } from './routes/api/collections/$collectionId/index'
 import { Route as ApiCartCartIdIndexRouteImport } from './routes/api/cart/$cartId/index'
 import { Route as ApiMerchantsMerchantIdProductsRouteImport } from './routes/api/merchants/$merchantId/products'
 import { Route as ApiCollectionsCollectionIdProductsRouteImport } from './routes/api/collections/$collectionId/products'
@@ -217,6 +219,11 @@ const ApiMerchantsIndexRoute = ApiMerchantsIndexRouteImport.update({
   path: '/api/merchants/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCollectionsIndexRoute = ApiCollectionsIndexRouteImport.update({
+  id: '/api/collections/',
+  path: '/api/collections/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCartIndexRoute = ApiCartIndexRouteImport.update({
   id: '/api/cart/',
   path: '/api/cart/',
@@ -278,6 +285,12 @@ const AccountOrdersOrderIdRoute = AccountOrdersOrderIdRouteImport.update({
   path: '/orders/$orderId',
   getParentRoute: () => AccountRouteRoute,
 } as any)
+const ApiCollectionsCollectionIdIndexRoute =
+  ApiCollectionsCollectionIdIndexRouteImport.update({
+    id: '/api/collections/$collectionId/',
+    path: '/api/collections/$collectionId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCartCartIdIndexRoute = ApiCartCartIdIndexRouteImport.update({
   id: '/api/cart/$cartId/',
   path: '/api/cart/$cartId/',
@@ -402,6 +415,7 @@ export interface FileRoutesByFullPath {
   '/account/orders/': typeof AccountOrdersIndexRoute
   '/admin/support/': typeof AdminSupportIndexRoute
   '/api/cart/': typeof ApiCartIndexRoute
+  '/api/collections/': typeof ApiCollectionsIndexRoute
   '/api/merchants/': typeof ApiMerchantsIndexRoute
   '/api/products/': typeof ApiProductsIndexRoute
   '/api/cart/$cartId/billing_address': typeof ApiCartCartIdBilling_addressRoute
@@ -415,6 +429,7 @@ export interface FileRoutesByFullPath {
   '/api/collections/$collectionId/products': typeof ApiCollectionsCollectionIdProductsRoute
   '/api/merchants/$merchantId/products': typeof ApiMerchantsMerchantIdProductsRoute
   '/api/cart/$cartId/': typeof ApiCartCartIdIndexRoute
+  '/api/collections/$collectionId/': typeof ApiCollectionsCollectionIdIndexRoute
   '/api/cart/$cartId/orders/$orderId': typeof ApiCartCartIdOrdersOrderIdRoute
   '/api/cart/$cartId/shipping/available': typeof ApiCartCartIdShippingAvailableRoute
   '/api/cart/$cartId/skus/$skuId': typeof ApiCartCartIdSkusSkuIdRoute
@@ -461,6 +476,7 @@ export interface FileRoutesByTo {
   '/account/orders': typeof AccountOrdersIndexRoute
   '/admin/support': typeof AdminSupportIndexRoute
   '/api/cart': typeof ApiCartIndexRoute
+  '/api/collections': typeof ApiCollectionsIndexRoute
   '/api/merchants': typeof ApiMerchantsIndexRoute
   '/api/products': typeof ApiProductsIndexRoute
   '/api/cart/$cartId/billing_address': typeof ApiCartCartIdBilling_addressRoute
@@ -474,6 +490,7 @@ export interface FileRoutesByTo {
   '/api/collections/$collectionId/products': typeof ApiCollectionsCollectionIdProductsRoute
   '/api/merchants/$merchantId/products': typeof ApiMerchantsMerchantIdProductsRoute
   '/api/cart/$cartId': typeof ApiCartCartIdIndexRoute
+  '/api/collections/$collectionId': typeof ApiCollectionsCollectionIdIndexRoute
   '/api/cart/$cartId/orders/$orderId': typeof ApiCartCartIdOrdersOrderIdRoute
   '/api/cart/$cartId/shipping/available': typeof ApiCartCartIdShippingAvailableRoute
   '/api/cart/$cartId/skus/$skuId': typeof ApiCartCartIdSkusSkuIdRoute
@@ -521,6 +538,7 @@ export interface FileRoutesById {
   '/account/orders/': typeof AccountOrdersIndexRoute
   '/admin/support/': typeof AdminSupportIndexRoute
   '/api/cart/': typeof ApiCartIndexRoute
+  '/api/collections/': typeof ApiCollectionsIndexRoute
   '/api/merchants/': typeof ApiMerchantsIndexRoute
   '/api/products/': typeof ApiProductsIndexRoute
   '/api/cart/$cartId/billing_address': typeof ApiCartCartIdBilling_addressRoute
@@ -534,6 +552,7 @@ export interface FileRoutesById {
   '/api/collections/$collectionId/products': typeof ApiCollectionsCollectionIdProductsRoute
   '/api/merchants/$merchantId/products': typeof ApiMerchantsMerchantIdProductsRoute
   '/api/cart/$cartId/': typeof ApiCartCartIdIndexRoute
+  '/api/collections/$collectionId/': typeof ApiCollectionsCollectionIdIndexRoute
   '/api/cart/$cartId/orders/$orderId': typeof ApiCartCartIdOrdersOrderIdRoute
   '/api/cart/$cartId/shipping/available': typeof ApiCartCartIdShippingAvailableRoute
   '/api/cart/$cartId/skus/$skuId': typeof ApiCartCartIdSkusSkuIdRoute
@@ -582,6 +601,7 @@ export interface FileRouteTypes {
     | '/account/orders/'
     | '/admin/support/'
     | '/api/cart/'
+    | '/api/collections/'
     | '/api/merchants/'
     | '/api/products/'
     | '/api/cart/$cartId/billing_address'
@@ -595,6 +615,7 @@ export interface FileRouteTypes {
     | '/api/collections/$collectionId/products'
     | '/api/merchants/$merchantId/products'
     | '/api/cart/$cartId/'
+    | '/api/collections/$collectionId/'
     | '/api/cart/$cartId/orders/$orderId'
     | '/api/cart/$cartId/shipping/available'
     | '/api/cart/$cartId/skus/$skuId'
@@ -641,6 +662,7 @@ export interface FileRouteTypes {
     | '/account/orders'
     | '/admin/support'
     | '/api/cart'
+    | '/api/collections'
     | '/api/merchants'
     | '/api/products'
     | '/api/cart/$cartId/billing_address'
@@ -654,6 +676,7 @@ export interface FileRouteTypes {
     | '/api/collections/$collectionId/products'
     | '/api/merchants/$merchantId/products'
     | '/api/cart/$cartId'
+    | '/api/collections/$collectionId'
     | '/api/cart/$cartId/orders/$orderId'
     | '/api/cart/$cartId/shipping/available'
     | '/api/cart/$cartId/skus/$skuId'
@@ -700,6 +723,7 @@ export interface FileRouteTypes {
     | '/account/orders/'
     | '/admin/support/'
     | '/api/cart/'
+    | '/api/collections/'
     | '/api/merchants/'
     | '/api/products/'
     | '/api/cart/$cartId/billing_address'
@@ -713,6 +737,7 @@ export interface FileRouteTypes {
     | '/api/collections/$collectionId/products'
     | '/api/merchants/$merchantId/products'
     | '/api/cart/$cartId/'
+    | '/api/collections/$collectionId/'
     | '/api/cart/$cartId/orders/$orderId'
     | '/api/cart/$cartId/shipping/available'
     | '/api/cart/$cartId/skus/$skuId'
@@ -756,6 +781,7 @@ export interface RootRouteChildren {
   OrderOrderIdConfirmationRoute: typeof OrderOrderIdConfirmationRoute
   AdminSupportIndexRoute: typeof AdminSupportIndexRoute
   ApiCartIndexRoute: typeof ApiCartIndexRoute
+  ApiCollectionsIndexRoute: typeof ApiCollectionsIndexRoute
   ApiMerchantsIndexRoute: typeof ApiMerchantsIndexRoute
   ApiProductsIndexRoute: typeof ApiProductsIndexRoute
   ApiCartCartIdBilling_addressRoute: typeof ApiCartCartIdBilling_addressRoute
@@ -768,6 +794,7 @@ export interface RootRouteChildren {
   ApiCartOffersOfferIdRoute: typeof ApiCartOffersOfferIdRoute
   ApiCollectionsCollectionIdProductsRoute: typeof ApiCollectionsCollectionIdProductsRoute
   ApiCartCartIdIndexRoute: typeof ApiCartCartIdIndexRoute
+  ApiCollectionsCollectionIdIndexRoute: typeof ApiCollectionsCollectionIdIndexRoute
   ApiCartCartIdOrdersOrderIdRoute: typeof ApiCartCartIdOrdersOrderIdRoute
   ApiCartCartIdSkusSkuIdRoute: typeof ApiCartCartIdSkusSkuIdRoute
   ApiCartCartIdSkusIndexRoute: typeof ApiCartCartIdSkusIndexRoute
@@ -985,6 +1012,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMerchantsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/collections/': {
+      id: '/api/collections/'
+      path: '/api/collections'
+      fullPath: '/api/collections/'
+      preLoaderRoute: typeof ApiCollectionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cart/': {
       id: '/api/cart/'
       path: '/api/cart'
@@ -1068,6 +1102,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/account/orders/$orderId'
       preLoaderRoute: typeof AccountOrdersOrderIdRouteImport
       parentRoute: typeof AccountRouteRoute
+    }
+    '/api/collections/$collectionId/': {
+      id: '/api/collections/$collectionId/'
+      path: '/api/collections/$collectionId'
+      fullPath: '/api/collections/$collectionId/'
+      preLoaderRoute: typeof ApiCollectionsCollectionIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/cart/$cartId/': {
       id: '/api/cart/$cartId/'
@@ -1259,6 +1300,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrderOrderIdConfirmationRoute: OrderOrderIdConfirmationRoute,
   AdminSupportIndexRoute: AdminSupportIndexRoute,
   ApiCartIndexRoute: ApiCartIndexRoute,
+  ApiCollectionsIndexRoute: ApiCollectionsIndexRoute,
   ApiMerchantsIndexRoute: ApiMerchantsIndexRoute,
   ApiProductsIndexRoute: ApiProductsIndexRoute,
   ApiCartCartIdBilling_addressRoute: ApiCartCartIdBilling_addressRoute,
@@ -1272,6 +1314,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCollectionsCollectionIdProductsRoute:
     ApiCollectionsCollectionIdProductsRoute,
   ApiCartCartIdIndexRoute: ApiCartCartIdIndexRoute,
+  ApiCollectionsCollectionIdIndexRoute: ApiCollectionsCollectionIdIndexRoute,
   ApiCartCartIdOrdersOrderIdRoute: ApiCartCartIdOrdersOrderIdRoute,
   ApiCartCartIdSkusSkuIdRoute: ApiCartCartIdSkusSkuIdRoute,
   ApiCartCartIdSkusIndexRoute: ApiCartCartIdSkusIndexRoute,
