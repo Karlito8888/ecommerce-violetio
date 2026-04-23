@@ -1,4 +1,5 @@
-import { Image, PixelRatio, Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
+import { PixelRatio, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import React from "react";
 import type { Product } from "@ecommerce/shared";
@@ -47,9 +48,10 @@ function ProductCard({ product }: { product: Product }) {
                 height: CARD_IMG_HEIGHT_PX,
               }) ?? undefined,
           }}
+          contentFit="cover"
+          transition={200}
           style={[styles.image, !product.available && styles.imageOutOfStock]}
           accessibilityLabel={`${product.name} by ${product.seller}`}
-          resizeMode="cover"
         />
       ) : (
         <View style={[styles.image, styles.placeholder]}>
