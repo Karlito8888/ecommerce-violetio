@@ -1,11 +1,20 @@
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, PixelRatio, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import React from "react";
 import type { Product } from "@ecommerce/shared";
-import { formatPrice, optimizeWithPreset } from "@ecommerce/shared";
+import { formatPrice, optimizeImageUrl } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { Colors, Fonts, Spacing } from "@/constants/theme";
 import { Link } from "expo-router";
+
+/**
+ * Product card image dimensions adjusted for device pixel ratio.
+ *
+ * On a 3x device, a card ~180pt wide needs ~540 physical pixels
+ * for crisp rendering. The Shopify CDN will resize server-side.
+ */
+const CARD_IMG_WIDTH_PX = Math.min(Math.round(200 * PixelRatio.get()), 800);
+const CARD_IMG_HEIGHT_PX = Math.round(CARD_IMG_WIDTH_PX * (4 / 3));
 
 /**
  * Native product card for the mobile catalog grid.
@@ -31,7 +40,13 @@ function ProductCard({ product }: { product: Product }) {
     >
       {product.thumbnailUrl ? (
         <Image
-          source={{ uri: optimizeWithPreset(product.thumbnailUrl, "productCard") ?? undefined }}
+          source={{
+            uri:
+              optimizeImageUrl(product.thumbnailUrl, {
+                width: CARD_IMG_WIDTH_PX,
+                height: CARD_IMG_HEIGHT_PX,
+              }) ?? undefined,
+          }}
           style={[styles.image, !product.available && styles.imageOutOfStock]}
           accessibilityLabel={`${product.name} by ${product.seller}`}
           resizeMode="cover"

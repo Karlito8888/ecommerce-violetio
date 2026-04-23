@@ -4,6 +4,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  PixelRatio,
   Pressable,
   ScrollView,
   Share,
@@ -16,7 +17,6 @@ import type { Product, RecommendationItem } from "@ecommerce/shared";
 import {
   createSupabaseClient,
   formatPrice,
-  optimizeWithPreset,
   optimizeImageUrl,
   stripHtml,
   useRecommendations,
@@ -38,6 +38,20 @@ import { Spacing } from "@/constants/theme";
  * so the snap-to-page behavior works correctly.
  */
 const SCREEN_WIDTH = Dimensions.get("window").width;
+
+/** Device pixel ratio — used to request higher-resolution images from CDN. */
+const PIXEL_RATIO = PixelRatio.get();
+
+/**
+ * PDP hero image physical dimensions.
+ *
+ * Mobile screens have high pixel densities (2x–3x). Requesting an image
+ * at logical-pixel size results in blurry upscaling. We multiply by
+ * `PixelRatio` to request a crisp image from the Shopify CDN.
+ *
+ * Capped at 2400px to avoid excessive bandwidth on tablets.
+ */
+const HERO_IMAGE_PX = Math.min(Math.round(SCREEN_WIDTH * PIXEL_RATIO), 2400);
 
 /**
  * Mobile product detail layout (React Native).
@@ -80,7 +94,11 @@ export default function MobileProductDetail({ product }: { product: Product }) {
           {images.map((img, i) => (
             <Image
               key={img.id}
-              source={{ uri: optimizeImageUrl(img.url, { width: 800, height: 800 }) ?? img.url }}
+              source={{
+                uri:
+                  optimizeImageUrl(img.url, { width: HERO_IMAGE_PX, height: HERO_IMAGE_PX }) ??
+                  img.url,
+              }}
               style={styles.heroImage}
               accessibilityLabel={`${product.name} - Image ${i + 1} of ${images.length}`}
             />
@@ -195,7 +213,11 @@ function RecommendationsSection({ productId }: { productId: string }) {
       {item.thumbnailUrl ? (
         <Image
           source={{
-            uri: optimizeWithPreset(item.thumbnailUrl, "recommendation") ?? item.thumbnailUrl,
+            uri:
+              optimizeImageUrl(item.thumbnailUrl, {
+                width: Math.min(Math.round(180 * PIXEL_RATIO), 600),
+                height: Math.min(Math.round(240 * PIXEL_RATIO), 800),
+              }) ?? item.thumbnailUrl,
           }}
           style={styles.recImage}
         />
