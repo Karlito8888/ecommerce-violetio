@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  PixelRatio,
   Pressable,
   ScrollView,
   Share,
@@ -37,6 +38,16 @@ import { Spacing } from "@/constants/theme";
  * so the snap-to-page behavior works correctly.
  */
 const SCREEN_WIDTH = Dimensions.get("window").width;
+
+/**
+ * Physical pixel width for the hero image.
+ *
+ * Mobile screens have high pixel densities (2x-3.5x). To avoid blurry
+ * upscaling, we request an image at the *physical* pixel width from the
+ * Shopify CDN (which accepts ?width=&height= params). Capped at 2160px
+ * for bandwidth.
+ */
+const HERO_WIDTH_PX = Math.min(Math.round(Dimensions.get("window").width * PixelRatio.get()), 2160);
 
 /**
  * Mobile product detail layout (React Native).
@@ -80,7 +91,11 @@ export default function MobileProductDetail({ product }: { product: Product }) {
             <Image
               key={img.id}
               source={{
-                uri: optimizeImageUrl(img.url, { width: 800, height: 800 }) ?? img.url,
+                uri:
+                  optimizeImageUrl(img.url, {
+                    width: HERO_WIDTH_PX,
+                    height: HERO_WIDTH_PX,
+                  }) ?? img.url,
               }}
               style={styles.heroImage}
               contentFit="cover"
