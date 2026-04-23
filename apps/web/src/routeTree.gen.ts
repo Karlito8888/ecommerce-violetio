@@ -31,14 +31,27 @@ import { Route as CollectionsCollectionIdRouteImport } from './routes/collection
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as ApiTrackEventRouteImport } from './routes/api/track-event'
+import { Route as ApiGuestOrderLookupRouteImport } from './routes/api/guest-order-lookup'
+import { Route as ApiExchangeRatesRouteImport } from './routes/api/exchange-rates'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AccountWishlistRouteImport } from './routes/account/wishlist'
 import { Route as AccountProfileRouteImport } from './routes/account/profile'
+import { Route as ApiProductsIndexRouteImport } from './routes/api/products/index'
+import { Route as ApiMerchantsIndexRouteImport } from './routes/api/merchants/index'
+import { Route as ApiCartIndexRouteImport } from './routes/api/cart/index'
 import { Route as AdminSupportIndexRouteImport } from './routes/admin/support/index'
 import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
 import { Route as OrderOrderIdConfirmationRouteImport } from './routes/order/$orderId/confirmation'
+import { Route as ApiProductsProductIdRouteImport } from './routes/api/products/$productId'
+import { Route as ApiMerchantsMerchantIdRouteImport } from './routes/api/merchants/$merchantId'
 import { Route as AdminSupportInquiryIdRouteImport } from './routes/admin/support/$inquiryId'
 import { Route as AccountOrdersOrderIdRouteImport } from './routes/account/orders/$orderId'
+import { Route as ApiCartCartIdIndexRouteImport } from './routes/api/cart/$cartId/index'
+import { Route as ApiMerchantsMerchantIdProductsRouteImport } from './routes/api/merchants/$merchantId/products'
+import { Route as ApiCollectionsCollectionIdProductsRouteImport } from './routes/api/collections/$collectionId/products'
+import { Route as ApiCartCartIdSkusIndexRouteImport } from './routes/api/cart/$cartId/skus/index'
+import { Route as ApiCartCartIdSkusSkuIdRouteImport } from './routes/api/cart/$cartId/skus/$skuId'
 
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
@@ -150,6 +163,21 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTrackEventRoute = ApiTrackEventRouteImport.update({
+  id: '/api/track-event',
+  path: '/api/track-event',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGuestOrderLookupRoute = ApiGuestOrderLookupRouteImport.update({
+  id: '/api/guest-order-lookup',
+  path: '/api/guest-order-lookup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiExchangeRatesRoute = ApiExchangeRatesRouteImport.update({
+  id: '/api/exchange-rates',
+  path: '/api/exchange-rates',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminHealthRoute = AdminHealthRouteImport.update({
   id: '/admin/health',
   path: '/admin/health',
@@ -164,6 +192,21 @@ const AccountProfileRoute = AccountProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
   getParentRoute: () => AccountRouteRoute,
+} as any)
+const ApiProductsIndexRoute = ApiProductsIndexRouteImport.update({
+  id: '/api/products/',
+  path: '/api/products/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMerchantsIndexRoute = ApiMerchantsIndexRouteImport.update({
+  id: '/api/merchants/',
+  path: '/api/merchants/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCartIndexRoute = ApiCartIndexRouteImport.update({
+  id: '/api/cart/',
+  path: '/api/cart/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSupportIndexRoute = AdminSupportIndexRouteImport.update({
   id: '/admin/support/',
@@ -181,6 +224,16 @@ const OrderOrderIdConfirmationRoute =
     path: '/order/$orderId/confirmation',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiProductsProductIdRoute = ApiProductsProductIdRouteImport.update({
+  id: '/api/products/$productId',
+  path: '/api/products/$productId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMerchantsMerchantIdRoute = ApiMerchantsMerchantIdRouteImport.update({
+  id: '/api/merchants/$merchantId',
+  path: '/api/merchants/$merchantId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminSupportInquiryIdRoute = AdminSupportInquiryIdRouteImport.update({
   id: '/admin/support/$inquiryId',
   path: '/admin/support/$inquiryId',
@@ -191,6 +244,33 @@ const AccountOrdersOrderIdRoute = AccountOrdersOrderIdRouteImport.update({
   path: '/orders/$orderId',
   getParentRoute: () => AccountRouteRoute,
 } as any)
+const ApiCartCartIdIndexRoute = ApiCartCartIdIndexRouteImport.update({
+  id: '/api/cart/$cartId/',
+  path: '/api/cart/$cartId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMerchantsMerchantIdProductsRoute =
+  ApiMerchantsMerchantIdProductsRouteImport.update({
+    id: '/products',
+    path: '/products',
+    getParentRoute: () => ApiMerchantsMerchantIdRoute,
+  } as any)
+const ApiCollectionsCollectionIdProductsRoute =
+  ApiCollectionsCollectionIdProductsRouteImport.update({
+    id: '/api/collections/$collectionId/products',
+    path: '/api/collections/$collectionId/products',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCartCartIdSkusIndexRoute = ApiCartCartIdSkusIndexRouteImport.update({
+  id: '/api/cart/$cartId/skus/',
+  path: '/api/cart/$cartId/skus/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCartCartIdSkusSkuIdRoute = ApiCartCartIdSkusSkuIdRouteImport.update({
+  id: '/api/cart/$cartId/skus/$skuId',
+  path: '/api/cart/$cartId/skus/$skuId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -199,6 +279,9 @@ export interface FileRoutesByFullPath {
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
   '/admin/health': typeof AdminHealthRoute
+  '/api/exchange-rates': typeof ApiExchangeRatesRoute
+  '/api/guest-order-lookup': typeof ApiGuestOrderLookupRoute
+  '/api/track-event': typeof ApiTrackEventRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -220,9 +303,19 @@ export interface FileRoutesByFullPath {
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
+  '/api/merchants/$merchantId': typeof ApiMerchantsMerchantIdRouteWithChildren
+  '/api/products/$productId': typeof ApiProductsProductIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
   '/account/orders/': typeof AccountOrdersIndexRoute
   '/admin/support/': typeof AdminSupportIndexRoute
+  '/api/cart/': typeof ApiCartIndexRoute
+  '/api/merchants/': typeof ApiMerchantsIndexRoute
+  '/api/products/': typeof ApiProductsIndexRoute
+  '/api/collections/$collectionId/products': typeof ApiCollectionsCollectionIdProductsRoute
+  '/api/merchants/$merchantId/products': typeof ApiMerchantsMerchantIdProductsRoute
+  '/api/cart/$cartId/': typeof ApiCartCartIdIndexRoute
+  '/api/cart/$cartId/skus/$skuId': typeof ApiCartCartIdSkusSkuIdRoute
+  '/api/cart/$cartId/skus/': typeof ApiCartCartIdSkusIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -231,6 +324,9 @@ export interface FileRoutesByTo {
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
   '/admin/health': typeof AdminHealthRoute
+  '/api/exchange-rates': typeof ApiExchangeRatesRoute
+  '/api/guest-order-lookup': typeof ApiGuestOrderLookupRoute
+  '/api/track-event': typeof ApiTrackEventRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -252,9 +348,19 @@ export interface FileRoutesByTo {
   '/search': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
+  '/api/merchants/$merchantId': typeof ApiMerchantsMerchantIdRouteWithChildren
+  '/api/products/$productId': typeof ApiProductsProductIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
   '/account/orders': typeof AccountOrdersIndexRoute
   '/admin/support': typeof AdminSupportIndexRoute
+  '/api/cart': typeof ApiCartIndexRoute
+  '/api/merchants': typeof ApiMerchantsIndexRoute
+  '/api/products': typeof ApiProductsIndexRoute
+  '/api/collections/$collectionId/products': typeof ApiCollectionsCollectionIdProductsRoute
+  '/api/merchants/$merchantId/products': typeof ApiMerchantsMerchantIdProductsRoute
+  '/api/cart/$cartId': typeof ApiCartCartIdIndexRoute
+  '/api/cart/$cartId/skus/$skuId': typeof ApiCartCartIdSkusSkuIdRoute
+  '/api/cart/$cartId/skus': typeof ApiCartCartIdSkusIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -264,6 +370,9 @@ export interface FileRoutesById {
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
   '/admin/health': typeof AdminHealthRoute
+  '/api/exchange-rates': typeof ApiExchangeRatesRoute
+  '/api/guest-order-lookup': typeof ApiGuestOrderLookupRoute
+  '/api/track-event': typeof ApiTrackEventRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -285,9 +394,19 @@ export interface FileRoutesById {
   '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
+  '/api/merchants/$merchantId': typeof ApiMerchantsMerchantIdRouteWithChildren
+  '/api/products/$productId': typeof ApiProductsProductIdRoute
   '/order/$orderId/confirmation': typeof OrderOrderIdConfirmationRoute
   '/account/orders/': typeof AccountOrdersIndexRoute
   '/admin/support/': typeof AdminSupportIndexRoute
+  '/api/cart/': typeof ApiCartIndexRoute
+  '/api/merchants/': typeof ApiMerchantsIndexRoute
+  '/api/products/': typeof ApiProductsIndexRoute
+  '/api/collections/$collectionId/products': typeof ApiCollectionsCollectionIdProductsRoute
+  '/api/merchants/$merchantId/products': typeof ApiMerchantsMerchantIdProductsRoute
+  '/api/cart/$cartId/': typeof ApiCartCartIdIndexRoute
+  '/api/cart/$cartId/skus/$skuId': typeof ApiCartCartIdSkusSkuIdRoute
+  '/api/cart/$cartId/skus/': typeof ApiCartCartIdSkusIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -298,6 +417,9 @@ export interface FileRouteTypes {
     | '/account/profile'
     | '/account/wishlist'
     | '/admin/health'
+    | '/api/exchange-rates'
+    | '/api/guest-order-lookup'
+    | '/api/track-event'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -319,9 +441,19 @@ export interface FileRouteTypes {
     | '/search/'
     | '/account/orders/$orderId'
     | '/admin/support/$inquiryId'
+    | '/api/merchants/$merchantId'
+    | '/api/products/$productId'
     | '/order/$orderId/confirmation'
     | '/account/orders/'
     | '/admin/support/'
+    | '/api/cart/'
+    | '/api/merchants/'
+    | '/api/products/'
+    | '/api/collections/$collectionId/products'
+    | '/api/merchants/$merchantId/products'
+    | '/api/cart/$cartId/'
+    | '/api/cart/$cartId/skus/$skuId'
+    | '/api/cart/$cartId/skus/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -330,6 +462,9 @@ export interface FileRouteTypes {
     | '/account/profile'
     | '/account/wishlist'
     | '/admin/health'
+    | '/api/exchange-rates'
+    | '/api/guest-order-lookup'
+    | '/api/track-event'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -351,9 +486,19 @@ export interface FileRouteTypes {
     | '/search'
     | '/account/orders/$orderId'
     | '/admin/support/$inquiryId'
+    | '/api/merchants/$merchantId'
+    | '/api/products/$productId'
     | '/order/$orderId/confirmation'
     | '/account/orders'
     | '/admin/support'
+    | '/api/cart'
+    | '/api/merchants'
+    | '/api/products'
+    | '/api/collections/$collectionId/products'
+    | '/api/merchants/$merchantId/products'
+    | '/api/cart/$cartId'
+    | '/api/cart/$cartId/skus/$skuId'
+    | '/api/cart/$cartId/skus'
   id:
     | '__root__'
     | '/'
@@ -362,6 +507,9 @@ export interface FileRouteTypes {
     | '/account/profile'
     | '/account/wishlist'
     | '/admin/health'
+    | '/api/exchange-rates'
+    | '/api/guest-order-lookup'
+    | '/api/track-event'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -383,9 +531,19 @@ export interface FileRouteTypes {
     | '/search/'
     | '/account/orders/$orderId'
     | '/admin/support/$inquiryId'
+    | '/api/merchants/$merchantId'
+    | '/api/products/$productId'
     | '/order/$orderId/confirmation'
     | '/account/orders/'
     | '/admin/support/'
+    | '/api/cart/'
+    | '/api/merchants/'
+    | '/api/products/'
+    | '/api/collections/$collectionId/products'
+    | '/api/merchants/$merchantId/products'
+    | '/api/cart/$cartId/'
+    | '/api/cart/$cartId/skus/$skuId'
+    | '/api/cart/$cartId/skus/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -393,6 +551,9 @@ export interface RootRouteChildren {
   AccountRouteRoute: typeof AccountRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
   AdminHealthRoute: typeof AdminHealthRoute
+  ApiExchangeRatesRoute: typeof ApiExchangeRatesRoute
+  ApiGuestOrderLookupRoute: typeof ApiGuestOrderLookupRoute
+  ApiTrackEventRoute: typeof ApiTrackEventRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
@@ -413,8 +574,17 @@ export interface RootRouteChildren {
   ProductsIndexRoute: typeof ProductsIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
   AdminSupportInquiryIdRoute: typeof AdminSupportInquiryIdRoute
+  ApiMerchantsMerchantIdRoute: typeof ApiMerchantsMerchantIdRouteWithChildren
+  ApiProductsProductIdRoute: typeof ApiProductsProductIdRoute
   OrderOrderIdConfirmationRoute: typeof OrderOrderIdConfirmationRoute
   AdminSupportIndexRoute: typeof AdminSupportIndexRoute
+  ApiCartIndexRoute: typeof ApiCartIndexRoute
+  ApiMerchantsIndexRoute: typeof ApiMerchantsIndexRoute
+  ApiProductsIndexRoute: typeof ApiProductsIndexRoute
+  ApiCollectionsCollectionIdProductsRoute: typeof ApiCollectionsCollectionIdProductsRoute
+  ApiCartCartIdIndexRoute: typeof ApiCartCartIdIndexRoute
+  ApiCartCartIdSkusSkuIdRoute: typeof ApiCartCartIdSkusSkuIdRoute
+  ApiCartCartIdSkusIndexRoute: typeof ApiCartCartIdSkusIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -573,6 +743,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/track-event': {
+      id: '/api/track-event'
+      path: '/api/track-event'
+      fullPath: '/api/track-event'
+      preLoaderRoute: typeof ApiTrackEventRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/guest-order-lookup': {
+      id: '/api/guest-order-lookup'
+      path: '/api/guest-order-lookup'
+      fullPath: '/api/guest-order-lookup'
+      preLoaderRoute: typeof ApiGuestOrderLookupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/exchange-rates': {
+      id: '/api/exchange-rates'
+      path: '/api/exchange-rates'
+      fullPath: '/api/exchange-rates'
+      preLoaderRoute: typeof ApiExchangeRatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/health': {
       id: '/admin/health'
       path: '/admin/health'
@@ -593,6 +784,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/account/profile'
       preLoaderRoute: typeof AccountProfileRouteImport
       parentRoute: typeof AccountRouteRoute
+    }
+    '/api/products/': {
+      id: '/api/products/'
+      path: '/api/products'
+      fullPath: '/api/products/'
+      preLoaderRoute: typeof ApiProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/merchants/': {
+      id: '/api/merchants/'
+      path: '/api/merchants'
+      fullPath: '/api/merchants/'
+      preLoaderRoute: typeof ApiMerchantsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cart/': {
+      id: '/api/cart/'
+      path: '/api/cart'
+      fullPath: '/api/cart/'
+      preLoaderRoute: typeof ApiCartIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/support/': {
       id: '/admin/support/'
@@ -615,6 +827,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderOrderIdConfirmationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/products/$productId': {
+      id: '/api/products/$productId'
+      path: '/api/products/$productId'
+      fullPath: '/api/products/$productId'
+      preLoaderRoute: typeof ApiProductsProductIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/merchants/$merchantId': {
+      id: '/api/merchants/$merchantId'
+      path: '/api/merchants/$merchantId'
+      fullPath: '/api/merchants/$merchantId'
+      preLoaderRoute: typeof ApiMerchantsMerchantIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/support/$inquiryId': {
       id: '/admin/support/$inquiryId'
       path: '/admin/support/$inquiryId'
@@ -628,6 +854,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/account/orders/$orderId'
       preLoaderRoute: typeof AccountOrdersOrderIdRouteImport
       parentRoute: typeof AccountRouteRoute
+    }
+    '/api/cart/$cartId/': {
+      id: '/api/cart/$cartId/'
+      path: '/api/cart/$cartId'
+      fullPath: '/api/cart/$cartId/'
+      preLoaderRoute: typeof ApiCartCartIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/merchants/$merchantId/products': {
+      id: '/api/merchants/$merchantId/products'
+      path: '/products'
+      fullPath: '/api/merchants/$merchantId/products'
+      preLoaderRoute: typeof ApiMerchantsMerchantIdProductsRouteImport
+      parentRoute: typeof ApiMerchantsMerchantIdRoute
+    }
+    '/api/collections/$collectionId/products': {
+      id: '/api/collections/$collectionId/products'
+      path: '/api/collections/$collectionId/products'
+      fullPath: '/api/collections/$collectionId/products'
+      preLoaderRoute: typeof ApiCollectionsCollectionIdProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cart/$cartId/skus/': {
+      id: '/api/cart/$cartId/skus/'
+      path: '/api/cart/$cartId/skus'
+      fullPath: '/api/cart/$cartId/skus/'
+      preLoaderRoute: typeof ApiCartCartIdSkusIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cart/$cartId/skus/$skuId': {
+      id: '/api/cart/$cartId/skus/$skuId'
+      path: '/api/cart/$cartId/skus/$skuId'
+      fullPath: '/api/cart/$cartId/skus/$skuId'
+      preLoaderRoute: typeof ApiCartCartIdSkusSkuIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -650,11 +911,28 @@ const AccountRouteRouteWithChildren = AccountRouteRoute._addFileChildren(
   AccountRouteRouteChildren,
 )
 
+interface ApiMerchantsMerchantIdRouteChildren {
+  ApiMerchantsMerchantIdProductsRoute: typeof ApiMerchantsMerchantIdProductsRoute
+}
+
+const ApiMerchantsMerchantIdRouteChildren: ApiMerchantsMerchantIdRouteChildren =
+  {
+    ApiMerchantsMerchantIdProductsRoute: ApiMerchantsMerchantIdProductsRoute,
+  }
+
+const ApiMerchantsMerchantIdRouteWithChildren =
+  ApiMerchantsMerchantIdRoute._addFileChildren(
+    ApiMerchantsMerchantIdRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRouteRoute: AccountRouteRouteWithChildren,
   AboutRoute: AboutRoute,
   AdminHealthRoute: AdminHealthRoute,
+  ApiExchangeRatesRoute: ApiExchangeRatesRoute,
+  ApiGuestOrderLookupRoute: ApiGuestOrderLookupRoute,
+  ApiTrackEventRoute: ApiTrackEventRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,
   AuthVerifyRoute: AuthVerifyRoute,
@@ -675,8 +953,18 @@ const rootRouteChildren: RootRouteChildren = {
   ProductsIndexRoute: ProductsIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
   AdminSupportInquiryIdRoute: AdminSupportInquiryIdRoute,
+  ApiMerchantsMerchantIdRoute: ApiMerchantsMerchantIdRouteWithChildren,
+  ApiProductsProductIdRoute: ApiProductsProductIdRoute,
   OrderOrderIdConfirmationRoute: OrderOrderIdConfirmationRoute,
   AdminSupportIndexRoute: AdminSupportIndexRoute,
+  ApiCartIndexRoute: ApiCartIndexRoute,
+  ApiMerchantsIndexRoute: ApiMerchantsIndexRoute,
+  ApiProductsIndexRoute: ApiProductsIndexRoute,
+  ApiCollectionsCollectionIdProductsRoute:
+    ApiCollectionsCollectionIdProductsRoute,
+  ApiCartCartIdIndexRoute: ApiCartCartIdIndexRoute,
+  ApiCartCartIdSkusSkuIdRoute: ApiCartCartIdSkusSkuIdRoute,
+  ApiCartCartIdSkusIndexRoute: ApiCartCartIdSkusIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

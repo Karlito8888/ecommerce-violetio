@@ -48,6 +48,7 @@ import {
 import type { CatalogContext } from "./violetCatalog.js";
 import {
   getMerchantById as getMerchantByIdFn,
+  listMerchants as listMerchantsFn,
   setCommissionRate as setCommissionRateFn,
 } from "./violetMerchants.js";
 import { getCategories as getCategoriesFn } from "./violetCategories.js";
@@ -162,6 +163,12 @@ export class VioletAdapter implements SupplierAdapter {
   }
 
   // ─── Merchant ────────────────────────────────────────────────────
+
+  async listMerchants(): Promise<
+    ApiResponse<import("../types/orderPersistence.types.js").MerchantRow[]>
+  > {
+    return listMerchantsFn(this.getCtx());
+  }
 
   async getMerchant(merchantId: string): Promise<ApiResponse<MerchantDetail>> {
     return getMerchantByIdFn(this.getCtx(), merchantId);

@@ -1,19 +1,57 @@
 /**
- * Violet Merchant API client — merchant details and commission rate management.
+ * Violet Merchant API client — merchant listing, details, and commission rate management.
  *
  * Provides functions to:
+ * - List all connected merchants (GET /merchants)
  * - Fetch individual merchant details (GET /merchants/{id})
  * - Set a merchant's commission rate for the channel
  *
+ * @see https://docs.violet.io/api-reference/merchants/get-merchants
  * @see https://docs.violet.io/api-reference/merchants/get-merchant-by-id
  * @see https://docs.violet.io/api-reference/apps/commission-rates
  */
 
 import type { ApiResponse } from "../types/index.js";
-import type { MerchantDetail } from "../types/orderPersistence.types.js";
+import type { MerchantDetail, MerchantRow } from "../types/orderPersistence.types.js";
 import type { AppInstall, SetCommissionRateInput } from "../types/admin.types.js";
 import { fetchWithRetry } from "./violetFetch.js";
 import type { CatalogContext } from "./violetCatalog.js";
+
+/**
+ * List all connected merchants from Violet API.
+ *
+ * GET /v1/merchants?page=1&size=50
+ *
+ * Returns a list of merchants compatible with MerchantRow format,
+ * used by the merchants listing page (web + mobile).
+ *
+ * @see https://docs.violet.io/api-reference/merchants/get-merchants
+ */
+export async function listMerchants(ctx: CatalogContext): Promise<ApiResponse<MerchantRow[]>> {
+  const result = await fetchWithRetry(
+    `${ctx.apiBase}/merchants?page=1&size=50`,
+    { method: "GET" },
+    ctx.tokenManager,
+  );
+
+  if (result.error) return { data: null, error: result.error };
+
+  const data = result.data as {
+    content: Array<Record<string, unknown>>;
+  };
+
+  const merchants: MerchantRow[] = (data.content ?? []).map((raw) => ({
+    merchant_id: String(raw.id ?? ""),
+    name: String(raw.name ?? "Unknown"),
+    platform: (raw.source as string) ?? null,
+    status: (raw.connection_status as string) ?? "UNKNOWN",
+    commission_rate: raw.commission_rate != null ? Number(raw.commission_rate) : null,
+    connected_at: (raw.date_created as string) ?? new Date().toISOString(),
+    updated_at: (raw.date_last_modified as string) ?? new Date().toISOString(),
+  }));
+
+  return { data: merchants, error: null };
+}
 
 /**
  * Fetch details for a single merchant by ID.

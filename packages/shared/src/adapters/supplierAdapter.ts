@@ -49,6 +49,16 @@ export interface SupplierAdapter {
   getAvailableCountries(): Promise<ApiResponse<CountryOption[]>>;
 
   /**
+   * Lists all connected merchants from the supplier.
+   *
+   * Returns merchants for the public-facing merchants listing page.
+   * Calls GET /merchants under the hood.
+   *
+   * @see https://docs.violet.io/api-reference/merchants/get-merchants
+   */
+  listMerchants(): Promise<ApiResponse<import("../types/orderPersistence.types.js").MerchantRow[]>>;
+
+  /**
    * Fetches details for a single merchant by ID.
    *
    * Returns enriched merchant data (name, platform, store URL, currency, etc.)

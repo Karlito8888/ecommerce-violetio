@@ -1,26 +1,26 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { MerchantRow } from "@ecommerce/shared";
-import { getSupabaseServer } from "./supabaseServer";
+import { getAdapter } from "./violetAdapter";
 
 /**
- * Server Function — fetch all connected merchants from Supabase.
+ * Server Function — fetch all connected merchants from Violet API.
  *
- * Reads from the `merchants` table (populated by MERCHANT_CONNECTED webhook).
- * This is the local source of truth — no Violet API call needed.
+ * Calls GET /v1/merchants directly — the canonical source of truth.
+ * The Supabase `merchants` table is only populated by webhooks
+ * (MERCHANT_CONNECTED) and may be empty in dev/test environments.
  *
- * Returns only CONNECTED merchants, sorted alphabetically.
+ * Returns all connected merchants, sorted by name.
+ *
+ * @see https://docs.violet.io/api-reference/merchants/get-merchants
  */
 export const getMerchantsFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<MerchantRow[]> => {
-    const supabase = getSupabaseServer();
+    const adapter = getAdapter();
+    const result = await adapter.listMerchants();
 
-    const { data, error } = await supabase
-      .from("merchants")
-      .select("merchant_id, name, platform, status, commission_rate, connected_at, updated_at")
-      .in("status", ["CONNECTED", "ENABLED"])
-      .order("name", { ascending: true });
+    if (result.error || !result.data) return [];
 
-    if (error) return [];
-    return (data ?? []) as MerchantRow[];
+    // Sort alphabetically by name (Violet may not guarantee order)
+    return result.data.sort((a, b) => a.name.localeCompare(b.name));
   },
 );

@@ -16,21 +16,26 @@ interface MerchantItem {
 export default function MerchantsScreen() {
   const [merchants, setMerchants] = useState<MerchantItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const scheme = useColorScheme();
   const colors = Colors[scheme === "unspecified" ? "light" : (scheme ?? "light")];
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/merchants?select=merchant_id,name,platform,status&status=in.(CONNECTED,ENABLED)&order=name.asc`,
-          {
-            headers: { apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "" },
-          },
-        );
-        const data = await res.json();
-        setMerchants(Array.isArray(data) ? data : []);
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/get-merchants`, {
+          headers: { apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "" },
+        });
+        const json = await res.json();
+
+        if (json.error) {
+          setError(json.error.message ?? "Failed to fetch merchants");
+          setMerchants([]);
+        } else {
+          setMerchants(Array.isArray(json.data) ? json.data : []);
+        }
       } catch {
+        setError("Network error — please try again");
         setMerchants([]);
       } finally {
         setLoading(false);
@@ -51,6 +56,10 @@ export default function MerchantsScreen() {
 
         {loading ? (
           <ActivityIndicator size="large" style={{ marginTop: 40 }} />
+        ) : error ? (
+          <ThemedText style={{ textAlign: "center", marginTop: 40, color: colors.textSecondary }}>
+            {error}
+          </ThemedText>
         ) : merchants.length === 0 ? (
           <ThemedText style={{ textAlign: "center", marginTop: 40, color: colors.textSecondary }}>
             No merchants connected yet. Check back soon!
