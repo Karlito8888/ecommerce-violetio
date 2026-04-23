@@ -153,12 +153,6 @@
   color: var(--color-success, #059669);
 }
 
-.merchant-page__store-url {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-top: 0.5rem;
-}
-
 /* ── Products section ──────────────────────────────────────── */
 .merchant-page__section-title {
   font-size: var(--font-size-lg);

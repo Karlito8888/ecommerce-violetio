@@ -99,7 +99,6 @@ function MerchantPage() {
           {platformLabel && <span className="merchant-page__badge">{platformLabel} merchant</span>}
           <span className="merchant-page__badge merchant-page__badge--verified">✓ Verified</span>
         </div>
-        {merchant.storeUrl && <p className="merchant-page__store-url">{merchant.storeUrl}</p>}
       </header>
 
       {/* ── Products grid ──────────────────────────────────────────── */}
