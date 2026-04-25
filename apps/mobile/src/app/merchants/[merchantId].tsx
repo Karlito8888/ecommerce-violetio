@@ -1,143 +1,146 @@
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, Stack, Link } from "expo-router";
 import { View, FlatList, ActivityIndicator, Pressable } from "react-native";
+import type { MerchantDetail, Product } from "@ecommerce/shared";
 import { ThemedText } from "../../components/themed-text";
 import ProductCard from "../../components/product/ProductCard";
-import type { Product } from "@ecommerce/shared";
-import { useState, useEffect, useCallback } from "react";
-import { apiGet } from "@/server/apiClient";
+import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { fetchMerchantByIdMobile, fetchMerchantProductsMobile } from "@/server/getMerchants";
 
-interface MerchantDetail {
-  id: string;
-  name: string;
-  platform: string | null;
-  status: string;
-  currency: string | null;
-  storeUrl: string | null;
-  connectedAt: string | null;
-}
+const PAGE_SIZE = 12;
+
+// ─── Screen ───────────────────────────────────────────────────────────
 
 export default function MerchantScreen() {
   const { merchantId } = useLocalSearchParams<{ merchantId: string }>();
-  const [merchant, setMerchant] = useState<MerchantDetail | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasNext, setHasNext] = useState(true);
+  const theme = useTheme();
 
-  // Fetch merchant details
-  useEffect(() => {
-    if (!merchantId) return;
+  // Fetch merchant metadata
+  const { data: merchantResult, isLoading: isLoadingMeta } = useQuery({
+    queryKey: ["merchant", merchantId],
+    queryFn: () => fetchMerchantByIdMobile(merchantId),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!merchantId,
+  });
 
-    (async () => {
-      try {
-        const json = await apiGet<{ data?: MerchantDetail }>(`/api/merchants/${merchantId}`);
-        if (json.data) setMerchant(json.data);
-      } catch {
-        // Merchant details are non-blocking
-      }
-    })();
-  }, [merchantId]);
-
-  // Fetch products
-  const fetchProducts = useCallback(
-    async (pageNum: number) => {
-      try {
-        const json = await apiGet<{
-          data?: { data?: Product[]; hasNext?: boolean };
-        }>(`/api/merchants/${merchantId}/products?page=${pageNum}&pageSize=12`);
-        const newProducts = (json.data?.data ?? []) as Product[];
-        setHasNext(json.data?.hasNext ?? false);
-        return newProducts;
-      } catch {
-        return [];
-      }
+  // Fetch products (infinite scroll)
+  const {
+    data: productsData,
+    isLoading: isLoadingProducts,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["merchant-products", merchantId],
+    queryFn: ({ pageParam = 1 }) =>
+      fetchMerchantProductsMobile(merchantId, pageParam as number, PAGE_SIZE),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.data?.hasNext) return undefined;
+      return (lastPage.data.page ?? 1) + 1;
     },
-    [merchantId],
-  );
+    enabled: !!merchantId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  // Initial load
-  useEffect(() => {
-    if (!merchantId) return;
-    setLoading(true);
-    fetchProducts(1).then((data) => {
-      setProducts(data);
-      setLoading(false);
-    });
-  }, [merchantId, fetchProducts]);
+  const merchant: MerchantDetail | null = merchantResult?.data ?? null;
+  const allProducts: Product[] = productsData?.pages.flatMap((p) => p.data?.data ?? []) ?? [];
+  const total = productsData?.pages[0]?.data?.total ?? 0;
+  const isLoading = isLoadingMeta || isLoadingProducts;
 
-  // Load more
-  const handleLoadMore = async () => {
-    if (loadingMore || !hasNext) return;
-    setLoadingMore(true);
-    const nextPage = page + 1;
-    const newProducts = await fetchProducts(nextPage);
-    setProducts((prev) => [...prev, ...newProducts]);
-    setPage(nextPage);
-    setLoadingMore(false);
-  };
+  if (isLoading) {
+    return (
+      <>
+        <Stack.Screen options={{ title: "Merchant", headerBackTitle: "Back" }} />
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color={theme.accent} />
+        </View>
+      </>
+    );
+  }
+
+  if (!merchant) {
+    return (
+      <>
+        <Stack.Screen options={{ title: "Merchant", headerBackTitle: "Back" }} />
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.four }}
+        >
+          <ThemedText style={{ textAlign: "center", color: theme.textSecondary }}>
+            Merchant not found.
+          </ThemedText>
+          <Pressable onPress={() => {}} style={{ marginTop: Spacing.three }}>
+            <Link href="/" asChild>
+              <Pressable>
+                <ThemedText style={{ color: theme.accent }}>← Back to home</ThemedText>
+              </Pressable>
+            </Link>
+          </Pressable>
+        </View>
+      </>
+    );
+  }
+
+  const platformLabel = merchant.platform
+    ? merchant.platform.charAt(0) + merchant.platform.slice(1).toLowerCase()
+    : null;
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: merchant?.name ?? "Merchant",
+          title: merchant.name,
           headerBackTitle: "Back",
         }}
       />
       <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
         {/* Merchant header */}
-        {merchant && (
-          <View
-            style={{
-              marginBottom: 16,
-              paddingBottom: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: "#e5e7eb",
-            }}
-          >
-            <ThemedText type="title">{merchant.name}</ThemedText>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-              {merchant.platform && (
-                <View
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    backgroundColor: "#f3f4f6",
-                  }}
-                >
-                  <ThemedText type="small">
-                    {merchant.platform.charAt(0) + merchant.platform.slice(1).toLowerCase()}
-                  </ThemedText>
-                </View>
-              )}
+        <View
+          style={{
+            marginBottom: 16,
+            paddingBottom: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: "#e5e7eb",
+          }}
+        >
+          <ThemedText type="title">{merchant.name}</ThemedText>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            {platformLabel && (
               <View
                 style={{
                   paddingHorizontal: 10,
                   paddingVertical: 4,
                   borderRadius: 999,
-                  backgroundColor: "#ecfdf5",
+                  backgroundColor: "#f3f4f6",
                 }}
               >
-                <ThemedText type="small" style={{ color: "#059669" }}>
-                  ✓ Verified
-                </ThemedText>
+                <ThemedText type="small">{platformLabel} merchant</ThemedText>
               </View>
+            )}
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                backgroundColor: "#ecfdf5",
+              }}
+            >
+              <ThemedText type="small" style={{ color: "#059669" }}>
+                ✓ Verified
+              </ThemedText>
             </View>
           </View>
-        )}
+        </View>
 
         {/* Products */}
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 40 }} size="large" />
-        ) : products.length === 0 ? (
+        {allProducts.length === 0 ? (
           <ThemedText style={{ textAlign: "center", marginTop: 40, color: "#9ca3af" }}>
             No products available from this merchant yet.
           </ThemedText>
         ) : (
           <FlatList
-            data={products}
+            data={allProducts}
             keyExtractor={(item) => item.id}
             numColumns={2}
             columnWrapperStyle={{ gap: 12 }}
@@ -149,10 +152,22 @@ export default function MerchantScreen() {
                 </Pressable>
               </Link>
             )}
-            onEndReached={handleLoadMore}
+            onEndReached={() => {
+              if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+            }}
             onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              <View
+                style={{ marginBottom: 12, flexDirection: "row", alignItems: "baseline", gap: 8 }}
+              >
+                <ThemedText style={{ fontSize: 16, fontWeight: "600" }}>Products</ThemedText>
+                <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                  {total} item{total !== 1 ? "s" : ""}
+                </ThemedText>
+              </View>
+            }
             ListFooterComponent={
-              loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} /> : null
+              isFetchingNextPage ? <ActivityIndicator style={{ marginVertical: 16 }} /> : null
             }
           />
         )}

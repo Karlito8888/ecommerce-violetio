@@ -4,20 +4,20 @@
  * Returns a single product's details from Violet API.
  * Public endpoint — no authentication required.
  *
+ * Delegates to the shared getProductFn server function to ensure consistent
+ * contextual pricing.
+ *
  * @see audit-dual-backend.md — Phase 2 migration endpoint
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { getAdapter } from "#/server/violetAdapter";
-import { getCountryCookieFn } from "#/server/geoip";
+import { getProductFn } from "#/server/getProduct";
 
 export const Route = createFileRoute("/api/products/$productId")({
   server: {
     handlers: {
       GET: async ({ params }) => {
-        const { countryCode } = await getCountryCookieFn();
-        const adapter = getAdapter();
-        const result = await adapter.getProduct(params.productId, countryCode ?? undefined);
-        return Response.json({ data: result.data, error: result.error });
+        const result = await getProductFn({ data: params.productId });
+        return Response.json(result);
       },
     },
   },

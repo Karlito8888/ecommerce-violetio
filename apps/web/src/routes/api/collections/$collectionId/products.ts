@@ -6,11 +6,13 @@
  *
  * Query params: page (default 1), pageSize (default 12)
  *
+ * Delegates to the shared getCollectionProductsFn server function to ensure
+ * contextual pricing is applied consistently.
+ *
  * @see audit-dual-backend.md — Phase 2 migration endpoint
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { getAdapter } from "#/server/violetAdapter";
-import { getCountryCookieFn } from "#/server/geoip";
+import { getCollectionProductsFn } from "#/server/getCollections";
 
 export const Route = createFileRoute("/api/collections/$collectionId/products")({
   server: {
@@ -20,17 +22,10 @@ export const Route = createFileRoute("/api/collections/$collectionId/products")(
         const page = Number(url.searchParams.get("page") ?? 1);
         const pageSize = Number(url.searchParams.get("pageSize") ?? 12);
 
-        const { countryCode } = await getCountryCookieFn();
-        const adapter = getAdapter();
-
-        const result = await adapter.getCollectionOffers(
-          params.collectionId,
-          page,
-          pageSize,
-          countryCode ?? undefined,
-        );
-
-        return Response.json({ data: result.data, error: result.error });
+        const result = await getCollectionProductsFn({
+          data: { collectionId: params.collectionId, page, pageSize },
+        });
+        return Response.json(result);
       },
     },
   },

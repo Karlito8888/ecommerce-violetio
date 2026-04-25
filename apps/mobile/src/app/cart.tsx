@@ -1,20 +1,15 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import type { Cart, Bag, CartItem } from "@ecommerce/shared";
-import { apiGet, apiPut, apiDelete } from "@/server/apiClient";
-
-/** Structured result type for API calls. */
-interface ApiResult<T> {
-  data: T | null;
-  error: string | null;
-}
+import type { Bag, CartItem } from "@ecommerce/shared";
+import { fetchCartMobile, updateCartItemMobile, removeCartItemMobile } from "@/server/getCart";
 
 /** Key for persisting the Violet cart ID in SecureStore. */
 const CART_KEY = "violet_cart_id";
@@ -22,53 +17,6 @@ const CART_KEY = "violet_cart_id";
 /** Formats integer cents to a dollar string. */
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
-}
-
-/**
- * Fetches the current cart from the web backend API.
- */
-async function fetchCartFromApi(violetCartId: string): Promise<ApiResult<Cart>> {
-  try {
-    const json = await apiGet<{ data?: Cart; error?: { message?: string } }>(
-      `/api/cart/${violetCartId}`,
-    );
-    return { data: json.data ?? null, error: json.error?.message ?? null };
-  } catch {
-    return { data: null, error: "Network error. Check your connection." };
-  }
-}
-
-/**
- * Updates a cart item quantity via the web backend API.
- */
-async function updateItemApi(
-  violetCartId: string,
-  skuId: string,
-  quantity: number,
-): Promise<ApiResult<Cart>> {
-  try {
-    const json = await apiPut<{ data?: Cart; error?: { message?: string } }>(
-      `/api/cart/${violetCartId}/skus/${skuId}`,
-      { quantity },
-    );
-    return { data: json.data ?? null, error: json.error?.message ?? null };
-  } catch {
-    return { data: null, error: "Network error. Check your connection." };
-  }
-}
-
-/**
- * Removes a cart item via the web backend API.
- */
-async function removeItemApi(violetCartId: string, skuId: string): Promise<ApiResult<Cart>> {
-  try {
-    const json = await apiDelete<{ data?: Cart; error?: { message?: string } }>(
-      `/api/cart/${violetCartId}/skus/${skuId}`,
-    );
-    return { data: json.data ?? null, error: json.error?.message ?? null };
-  } catch {
-    return { data: null, error: "Network error. Check your connection." };
-  }
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -185,94 +133,79 @@ function BagSection({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function CartScreen() {
-  const [cart, setCart] = useState<Cart | null>(null);
   const [violetCartId, setVioletCartId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(true);
+  const queryClient = useQueryClient();
 
-  /**
-   * Ref to track in-flight mutations without causing re-renders.
-   * Using a ref instead of `isUpdating` state in dependency arrays prevents
-   * unnecessary recreation of callbacks on every update cycle.
-   */
-  const isUpdatingRef = useRef(false);
+  // Load saved cart ID on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedId = await SecureStore.getItemAsync(CART_KEY);
+        if (savedId) setVioletCartId(savedId);
+      } finally {
+        setInitializing(false);
+      }
+    })();
+  }, []);
+
+  // ─── Query: fetch cart ──────────────────────────────────────────
+
+  const {
+    data: cart,
+    error: queryError,
+    isLoading: isQueryLoading,
+  } = useQuery({
+    queryKey: ["cart", violetCartId],
+    queryFn: async () => {
+      if (!violetCartId) return null;
+      const result = await fetchCartMobile(violetCartId);
+      if (result.error) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: !!violetCartId,
+    staleTime: 0, // Cart data should always be fresh
+  });
+
+  // ─── Mutations: update & remove ─────────────────────────────────
+
+  const invalidateCart = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["cart", violetCartId] });
+  }, [queryClient, violetCartId]);
+
+  const updateMutation = useMutation({
+    mutationFn: ({ skuId, quantity }: { skuId: string; quantity: number }) =>
+      violetCartId
+        ? updateCartItemMobile(violetCartId, skuId, quantity)
+        : Promise.reject("No cart"),
+    onSuccess: invalidateCart,
+    onError: (err) => Alert.alert("Error", err.message),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (skuId: string) =>
+      violetCartId ? removeCartItemMobile(violetCartId, skuId) : Promise.reject("No cart"),
+    onSuccess: invalidateCart,
+    onError: (err) => Alert.alert("Error", err.message),
+  });
+
+  const isUpdating = updateMutation.isPending || removeMutation.isPending;
+
+  const handleUpdateQty = useCallback(
+    (skuId: string, quantity: number) => updateMutation.mutate({ skuId, quantity }),
+    [updateMutation],
+  );
+
+  const handleRemove = useCallback(
+    (skuId: string) => removeMutation.mutate(skuId),
+    [removeMutation],
+  );
 
   const totalItems =
     cart?.bags.reduce((sum, bag) => sum + bag.items.reduce((s, i) => s + i.quantity, 0), 0) ?? 0;
 
-  // Load saved cart ID and fetch cart on mount
-  useEffect(() => {
-    async function init() {
-      try {
-        const savedId = await SecureStore.getItemAsync(CART_KEY);
-        if (savedId) {
-          setVioletCartId(savedId);
-          const result = await fetchCartFromApi(savedId);
-          if (result.error) {
-            setError(result.error);
-          } else {
-            setCart(result.data);
-          }
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    init();
-  }, []);
-
-  /**
-   * Updates item quantity in the cart via the web backend API.
-   * Uses isUpdatingRef to guard against concurrent mutations without
-   * adding isUpdating to the dependency array (which would cause re-renders).
-   */
-  const handleUpdateQty = useCallback(
-    async (skuId: string, quantity: number) => {
-      if (!violetCartId || isUpdatingRef.current) return;
-      isUpdatingRef.current = true;
-      setIsUpdating(true);
-      setError(null);
-      try {
-        const result = await updateItemApi(violetCartId, skuId, quantity);
-        if (result.error) {
-          Alert.alert("Error", result.error);
-        } else if (result.data) {
-          setCart(result.data);
-        }
-      } finally {
-        isUpdatingRef.current = false;
-        setIsUpdating(false);
-      }
-    },
-    [violetCartId],
-  );
-
-  /**
-   * Removes an item from the cart via the web backend API.
-   * Uses isUpdatingRef to guard against concurrent mutations without
-   * adding isUpdating to the dependency array (which would cause re-renders).
-   */
-  const handleRemove = useCallback(
-    async (skuId: string) => {
-      if (!violetCartId || isUpdatingRef.current) return;
-      isUpdatingRef.current = true;
-      setIsUpdating(true);
-      setError(null);
-      try {
-        const result = await removeItemApi(violetCartId, skuId);
-        if (result.error) {
-          Alert.alert("Error", result.error);
-        } else if (result.data) {
-          setCart(result.data);
-        }
-      } finally {
-        isUpdatingRef.current = false;
-        setIsUpdating(false);
-      }
-    },
-    [violetCartId],
-  );
+  const isLoading = initializing || isQueryLoading;
+  const error = queryError?.message ?? null;
 
   return (
     <ThemedView ambient style={styles.container}>
@@ -314,10 +247,6 @@ export default function CartScreen() {
               <ThemedText style={styles.totalValue}>{formatCents(cart.total)}</ThemedText>
             </View>
 
-            {/**
-             * Navigates to the checkout screen. Button is disabled during cart
-             * update operations to prevent navigation with stale state.
-             */}
             <TouchableOpacity
               style={[styles.checkoutBtn, isUpdating && styles.checkoutBtnDisabled]}
               disabled={isUpdating}

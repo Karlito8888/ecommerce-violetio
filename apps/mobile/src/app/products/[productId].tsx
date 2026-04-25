@@ -1,5 +1,6 @@
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from "expo-router";
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
@@ -51,15 +52,6 @@ async function getSessionToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-async function fetchProduct(offerId: string): Promise<Product | null> {
-  try {
-    const json = await apiGet<{ data?: Product }>(`/api/products/${offerId}`);
-    return json.data ?? null;
-  } catch {
-    return null;
-  }
-}
-
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 type AddState = "idle" | "loading" | "added" | "error";
@@ -68,9 +60,6 @@ export default function ProductDetailScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
   const theme = useTheme();
 
-  const [product, setProduct] = useState<Product | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [addState, setAddState] = useState<AddState>("idle");
   const [selectedValues, setSelectedValues] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
@@ -83,27 +72,32 @@ export default function ProductDetailScreen() {
     }, [trackProductView]),
   );
 
-  // Fetch product on mount
-  useEffect(() => {
-    if (!productId) return;
-    let cancelled = false;
-    (async () => {
-      const data = await fetchProduct(productId);
-      if (!cancelled) {
-        setProduct(data);
-        setLoadError(data === null);
-        setIsLoading(false);
-        // Pre-select first available variant options once product loads
-        if (data && !initialized) {
-          setSelectedValues(getDefaultSelectedValues(data));
-          setInitialized(true);
-        }
+  // Fetch product via TanStack Query
+  const {
+    data: product,
+    isLoading,
+    isError: loadError,
+  } = useQuery({
+    queryKey: ["product", productId],
+    queryFn: async () => {
+      try {
+        const json = await apiGet<{ data?: Product }>(`/api/products/${productId}`);
+        return json.data ?? null;
+      } catch {
+        return null;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [productId]);
+    },
+    enabled: !!productId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Pre-select first available variant options once product loads
+  useMemo(() => {
+    if (product && !initialized) {
+      setSelectedValues(getDefaultSelectedValues(product));
+      setInitialized(true);
+    }
+  }, [product, initialized]);
 
   // ─── Shared variant logic (DRY — from @ecommerce/shared) ───────────
   const variants = useProductVariants(product ?? emptyProduct, selectedValues);
