@@ -27,6 +27,8 @@ vi.mock("@tanstack/react-router", () => ({
         : to;
     return React.createElement("a", { href, ...rest }, children as React.ReactNode);
   },
+  /** Mock useNavigate — BaseProductCard uses it for merchant name click navigation. */
+  useNavigate: () => vi.fn(),
 }));
 
 function createMockProductMatch(overrides: Partial<ProductMatch> = {}): ProductMatch {

@@ -1,9 +1,10 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import Constants from "expo-constants";
-import React, { createContext, useCallback, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Colors } from "@/constants/theme";
 
 import { ThemePreferenceProvider, useThemePreference } from "@/hooks/use-theme-preference";
 import { ColorSchemeContext } from "@/hooks/use-color-scheme-context";
@@ -197,11 +198,30 @@ function LayoutInner() {
   const { resolvedScheme } = useThemePreference();
   const stripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
+  // Extend React Navigation themes with our design tokens.
+  // This sets the background, card, text, border, and primary colors for ALL screens
+  // (Tabs + nested Stacks) — no need to set backgroundColor per-screen or per-layout.
+  const navigationTheme = useMemo(() => {
+    const tokens = resolvedScheme === "dark" ? Colors.dark : Colors.light;
+    const base = resolvedScheme === "dark" ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        background: tokens.background,
+        card: tokens.background,
+        text: tokens.text,
+        border: tokens.borderSubtle,
+        primary: tokens.accent,
+      },
+    };
+  }, [resolvedScheme]);
+
   return (
     <AuthProvider>
       <DynamicStripeProvider fallbackKey={stripeKey}>
         <ColorSchemeContext.Provider value={resolvedScheme}>
-          <ThemeProvider value={resolvedScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <ThemeProvider value={navigationTheme}>
             <AppContent />
           </ThemeProvider>
         </ColorSchemeContext.Provider>

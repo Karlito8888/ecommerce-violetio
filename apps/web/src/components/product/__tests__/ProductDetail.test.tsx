@@ -186,7 +186,7 @@ describe("ProductDetail", () => {
     expect(variantSelector).toBeNull();
   });
 
-  it("disables 'Add to Bag' on multi-variant products until all variants selected", () => {
+  it("pre-selects first variant option and enables 'Add to Bag'", () => {
     const product = createMockProduct({
       variants: [{ name: "Size", values: ["S", "M"] }],
       skus: [
@@ -206,10 +206,10 @@ describe("ProductDetail", () => {
     });
     const container = renderToContainer(<ProductDetail product={product} />);
 
-    // Before selecting any variant, button should be disabled
+    // First variant option is pre-selected, button should be enabled
     const button = container.querySelector(".product-detail__cta") as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.textContent).toBe("Notify When Available");
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toBe("Add to Bag");
   });
 
   it("renders price from single SKU using formatPrice", () => {

@@ -25,6 +25,8 @@ import React from "react";
  * so it doesn't appear as a tab. Users navigate here via deep links or by
  * pressing a product card in the catalog.
  *
+ * Background color is inherited from the root ThemeProvider — no per-layout setup needed.
+ *
  * @see https://docs.expo.dev/router/layouts/stack/
  */
 export default function ProductsLayout() {

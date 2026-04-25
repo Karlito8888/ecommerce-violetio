@@ -65,3 +65,5 @@ export { contentDetailQueryOptions, contentListQueryOptions } from "./useContent
 export type { ContentDetailFetchFn, ContentListFetchFn } from "./useContent.js";
 export { useShare } from "./useShare.js";
 export type { ShareData, ShareResult } from "./useShare.js";
+export { useProductVariants, getDefaultSelectedValues } from "./useProductVariants.js";
+export type { ProductVariantsResult } from "./useProductVariants.js";

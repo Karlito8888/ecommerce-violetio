@@ -29,17 +29,21 @@ const lightTheme = {
   text: colors.charcoal, // --color-text → --color-charcoal: #3D3D3D
   textSecondary: colors.steel, // --color-text-secondary → --color-steel: #5A5A5A
   textMuted: colors.silver, // --color-text-muted → --color-silver: #999999
-  textInverse: colors.ivory, // Text on dark/accent backgrounds
+  textInverse: colors.ink, // --color-ink: #1A1A1A (black in light → white in dark)
 
   // Accent & interactive
   accent: colors.gold, // --color-accent → --color-gold: #C9A96E
   accentDark: colors.amber, // --color-gold-dark → --color-amber: #A68B4B
   accentHover: colors.sienna, // Link hover: --color-sienna: #8B7355
-  btnText: "#FFFFFF", // --color-btn-text (on colored buttons)
+  btnText: colors.midnight, // --color-midnight: #2C2C2C (dark text on gold CTA)
 
   // Borders
   borderSubtle: "rgba(213, 206, 198, 0.5)", // --border-subtle
+  borderStone: colors.stone, // --color-stone: #D5CEC6 (variant option border)
   borderAccent: "rgba(201, 169, 110, 0.18)", // --border-accent
+
+  // Selections
+  selectionBg: "rgba(201, 169, 110, 0.24)", // --selection-bg
 
   // Semantic
   success: colors.success, // #5A7A4A
@@ -69,17 +73,21 @@ const darkTheme = {
   text: darkColors.charcoal, // #E8E4DF
   textSecondary: darkColors.steel, // #D5CEC6
   textMuted: darkColors.silver, // #B8A28F
-  textInverse: darkColors.midnight, // #FAFAF8 — midnight flips in dark
+  textInverse: darkColors.ink, // --color-ink: #FAFAF8 (white in dark)
 
   // Accent & interactive (gold/amber preserved — AAA on dark bg)
   accent: darkColors.gold, // #C9A96E — same
   accentDark: darkColors.amber, // #A68B4B — same
   accentHover: darkColors.sienna, // #B8A28F
-  btnText: "#1A1A1A", // --color-btn-text (dark): ink on gold buttons
+  btnText: darkColors.midnight, // --color-midnight: #FAFAF8 (white text on gold CTA)
 
   // Borders
   borderSubtle: "rgba(74, 74, 74, 0.5)", // --border-subtle (dark)
+  borderStone: darkColors.stone, // --color-stone: #4A4A4A (dark)
   borderAccent: "rgba(201, 169, 110, 0.28)", // --border-accent (dark)
+
+  // Selections
+  selectionBg: "rgba(201, 169, 110, 0.32)", // --selection-bg (dark)
 
   // Semantic
   success: darkColors.success, // #7AAD5A

@@ -1,6 +1,12 @@
-import { useState, useMemo, useCallback } from "react";
-import type { Product, SKU } from "@ecommerce/shared";
-import { stripHtml, useAddToCart, formatPrice } from "@ecommerce/shared";
+import { useState, useCallback } from "react";
+import type { Product } from "@ecommerce/shared";
+import {
+  stripHtml,
+  useAddToCart,
+  formatPrice,
+  useProductVariants,
+  getDefaultSelectedValues,
+} from "@ecommerce/shared";
 import type { AddToCartFn } from "@ecommerce/shared";
 import ImageGallery from "./ImageGallery";
 import VariantSelector from "./VariantSelector";
@@ -67,61 +73,17 @@ import "./ProductDetail.css";
 const addToCartAdapter: AddToCartFn = (input) => addToCartFn({ data: input });
 
 export default function ProductDetail({ product }: { product: Product }) {
-  const [selectedValues, setSelectedValues] = useState<Record<string, string>>({});
+  const [selectedValues, setSelectedValues] = useState<Record<string, string>>(() =>
+    getDefaultSelectedValues(product),
+  );
   const [addButtonState, setAddButtonState] = useState<"idle" | "loading" | "added">("idle");
 
   const { violetCartId, setCart, openDrawer } = useCartContext();
 
-  /**
-   * Find the SKU matching ALL currently selected variant values.
-   *
-   * Returns `null` if not all variants are selected yet or no SKU matches.
-   * Uses strict matching: every selected value must appear in the SKU's
-   * `variantValues` array for it to be considered a match.
-   */
-  const selectedSku: SKU | null = useMemo(() => {
-    // Single SKU: auto-select regardless of variant definitions.
-    // Violet demo merchants often define variant dimensions (e.g., "color", "size")
-    // at the offer level but only have 1 SKU — no user choice needed.
-    if (product.skus.length === 1) {
-      return product.skus[0];
-    }
-    if (product.skus.length === 0) return null;
-    const entries = Object.entries(selectedValues);
-    if (entries.length < product.variants.length) return null;
-    return (
-      product.skus.find((sku) =>
-        entries.every(([vName, vValue]) =>
-          sku.variantValues.some(
-            (sv) => sv.variant.toLowerCase() === vName.toLowerCase() && sv.value === vValue,
-          ),
-        ),
-      ) ?? null
-    );
-  }, [selectedValues, product.skus, product.variants.length]);
-
-  const showVariants = product.variants.length > 0 && product.skus.length > 1;
-
-  /**
-   * Determine if the "Add to Bag" CTA should be enabled.
-   *
-   * ## Logic (Violet.io best practice)
-   *
-   * - **Multi-variant products**: button is disabled until ALL variants are selected
-   *   and the matched SKU is in stock (`inStock && qtyAvailable > 0`).
-   *   Rationale: you can't add to cart without a specific SKU — Violet's Cart API
-   *   requires a `sku_id`, not just an `offer_id`.
-   *
-   * - **Single/no-variant products**: falls back to `product.available` since the
-   *   SKU is auto-selected (line above) and availability is offer-level.
-   *
-   * @see Story 4.1 for cart integration where this matters
-   */
-  const isAvailable = showVariants
-    ? selectedSku !== null && selectedSku.inStock && selectedSku.qtyAvailable > 0
-    : selectedSku
-      ? selectedSku.inStock && selectedSku.qtyAvailable > 0
-      : product.available;
+  const { showVariants, selectedSku, isAvailable, galleryImages } = useProductVariants(
+    product,
+    selectedValues,
+  );
 
   const handleVariantSelect = (variantName: string, value: string) => {
     setSelectedValues((prev) => ({ ...prev, [variantName]: value }));
@@ -213,7 +175,7 @@ export default function ProductDetail({ product }: { product: Product }) {
   return (
     <div className="product-detail">
       <div className="product-detail__gallery">
-        <ImageGallery images={product.images} productName={product.name} />
+        <ImageGallery images={galleryImages} productName={product.name} />
       </div>
 
       <div className="product-detail__info">
