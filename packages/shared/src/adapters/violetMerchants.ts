@@ -25,9 +25,17 @@ import type { CatalogContext } from "./violetCatalog.js";
  * Returns a list of merchants compatible with MerchantRow format,
  * used by the merchants listing page (web + mobile).
  *
+ * When `withOfferCounts` is true, fetches the published offer count
+ * for each merchant via GET /catalog/offers/merchants/{id}/count.
+ * Counts are fetched in parallel (fire-and-forget on error → null).
+ *
  * @see https://docs.violet.io/api-reference/merchants/get-merchants
+ * @see https://docs.violet.io/api-reference/catalog/offers/count-merchant-offers
  */
-export async function listMerchants(ctx: CatalogContext): Promise<ApiResponse<MerchantRow[]>> {
+export async function listMerchants(
+  ctx: CatalogContext,
+  withOfferCounts = false,
+): Promise<ApiResponse<MerchantRow[]>> {
   const result = await fetchWithRetry(
     `${ctx.apiBase}/merchants?page=1&size=50`,
     { method: "GET" },
@@ -48,9 +56,51 @@ export async function listMerchants(ctx: CatalogContext): Promise<ApiResponse<Me
     commission_rate: raw.commission_rate != null ? Number(raw.commission_rate) : null,
     connected_at: (raw.date_created as string) ?? new Date().toISOString(),
     updated_at: (raw.date_last_modified as string) ?? new Date().toISOString(),
+    offer_count: null,
   }));
 
+  // Enrich with offer counts if requested
+  if (withOfferCounts && merchants.length > 0) {
+    const countPromises = merchants.map(async (m, i) => {
+      try {
+        const count = await getMerchantOfferCount(ctx, m.merchant_id);
+        merchants[i] = { ...m, offer_count: count };
+      } catch {
+        // Fire-and-forget — count stays null
+      }
+    });
+    await Promise.all(countPromises);
+  }
+
   return { data: merchants, error: null };
+}
+
+/**
+ * Get the number of published offers for a specific merchant.
+ *
+ * GET /catalog/offers/merchants/{merchant_id}/count
+ *
+ * Returns the count as a number, or null on error.
+ *
+ * @see https://docs.violet.io/api-reference/catalog/offers/count-merchant-offers
+ */
+export async function getMerchantOfferCount(
+  ctx: CatalogContext,
+  merchantId: string,
+): Promise<number | null> {
+  const result = await fetchWithRetry(
+    `${ctx.apiBase}/catalog/offers/merchants/${merchantId}/count`,
+    { method: "GET" },
+    ctx.tokenManager,
+  );
+
+  if (result.error || result.data == null) return null;
+
+  // Violet may return a plain number or { count: N }
+  if (typeof result.data === "number") return result.data;
+  const obj = result.data as Record<string, unknown>;
+  if (typeof obj.count === "number") return obj.count;
+  return null;
 }
 
 /**

@@ -56,10 +56,6 @@
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
 }
 
-.merchants-page__card-icon {
-  flex-shrink: 0;
-}
-
 .merchants-page__card-info {
   flex: 1;
   min-width: 0;
@@ -71,11 +67,29 @@
   margin: 0 0 0.25rem;
 }
 
+.merchants-page__card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .merchants-page__card-platform {
   display: inline-block;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   text-transform: capitalize;
+}
+
+.merchants-page__card-count {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.merchants-page__card-count::before {
+  content: "·";
+  margin-right: 0.5rem;
 }
 
 .merchants-page__card-arrow {

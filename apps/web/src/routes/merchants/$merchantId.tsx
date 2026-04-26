@@ -63,6 +63,7 @@ function MerchantPage() {
 
   const merchant = merchantQuery.data?.data;
   const allProducts = productsQuery.data?.pages.flatMap((p) => p.data?.data ?? []) ?? [];
+  const total = productsQuery.data?.pages[0]?.data?.total ?? null;
 
   if (!merchant) {
     return (
@@ -106,7 +107,8 @@ function MerchantPage() {
         <h2 className="merchant-page__section-title">
           Products
           <span className="merchant-page__count">
-            {productsQuery.data?.pages[0]?.data?.total ?? allProducts.length} items
+            Showing {allProducts.length}
+            {total != null ? ` of ${total}` : ""} products
           </span>
         </h2>
 

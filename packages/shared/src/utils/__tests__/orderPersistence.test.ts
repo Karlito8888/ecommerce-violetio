@@ -10,11 +10,7 @@ function createMockSupabase() {
 
   const mockSingle = vi.fn();
   const mockSelect = vi.fn(() => ({ single: mockSingle }));
-  const mockInsert = vi.fn(() => ({
-    select: mockSelect,
-    // For order_items (no select chain)
-    then: undefined,
-  }));
+  const mockInsert = vi.fn((_data: unknown) => undefined);
 
   const fromFn = vi.fn((table: string) => {
     const result = insertResults[table];
@@ -54,13 +50,16 @@ const baseInput: PersistOrderInput = {
   bags: [
     {
       violetBagId: "bag-1",
+      merchantId: "m-1",
       merchantName: "Test Store",
       status: "COMPLETED",
       financialStatus: "PAID",
+      fulfillmentStatus: "PROCESSING",
       subtotal: 5000,
       shippingTotal: 500,
       taxTotal: 450,
       total: 5950,
+      commissionRate: 10,
       shippingMethod: "Standard",
       carrier: "USPS",
       items: [

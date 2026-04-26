@@ -33,7 +33,7 @@ vi.mock("../supabaseServer", () => ({
 // ─── Mock hashOrderLookupToken ────────────────────────────────────────────────
 
 vi.mock("@ecommerce/shared/server/utils", () => ({
-  hashOrderLookupToken: vi.fn((token: string) => `hashed_${token}`),
+  hashOrderLookupToken: vi.fn((token: string) => Promise.resolve(`hashed_${token}`)),
 }));
 
 // ─── Import handlers after mocks ──────────────────────────────────────────────

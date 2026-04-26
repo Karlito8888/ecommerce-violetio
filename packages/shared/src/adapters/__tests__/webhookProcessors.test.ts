@@ -42,20 +42,16 @@
  * @see supabase/functions/_shared/webhookAuth.ts — HMAC validation (Deno-only)
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, type Mock } from "vitest";
 
 // ─── Mock SupabaseClient ──────────────────────────────────────────────
 
-interface MockFunctionsInvoke {
-  invoke: ReturnType<typeof vi.fn>;
-}
-
 interface MockQueryBuilder {
-  update: ReturnType<typeof vi.fn>;
-  insert: ReturnType<typeof vi.fn>;
-  eq: ReturnType<typeof vi.fn>;
-  from: ReturnType<typeof vi.fn>;
-  functions: MockFunctionsInvoke;
+  update: Mock;
+  insert: Mock;
+  eq: Mock;
+  from: Mock;
+  functions: { invoke: Mock };
 }
 
 function createMockSupabase(): MockQueryBuilder {
@@ -94,7 +90,7 @@ async function processOfferAdded(
   },
 ): Promise<void> {
   try {
-    const { error } = await supabase.functions.invoke("generate-embeddings", {
+    const invokeResult = (await supabase.functions.invoke("generate-embeddings", {
       body: {
         productId: String(payload.id),
         productName: payload.name,
@@ -103,14 +99,14 @@ async function processOfferAdded(
         tags: payload.tags ?? [],
         category: payload.tags?.[0] ?? "",
       },
-    });
+    })) as { data: Record<string, unknown>; error: { message: string } | null };
 
-    if (error) {
+    if (invokeResult.error) {
       await supabase
         .from("webhook_events")
         .update({
           status: "failed",
-          error_message: error.message,
+          error_message: invokeResult.error.message,
           processed_at: expect.any(String),
         })
         .eq("event_id", eventId);

@@ -321,13 +321,20 @@ export async function getProductsByMerchant(
   const rawPage = parsed.data;
   const products = rawPage.content.map((offer) => transformOffer(offer, countryCode));
 
+  // Violet's GET /catalog/offers/merchants/{id} always returns total_elements=0
+  // and total_pages=0 (documented limitation). We cannot rely on rawPage.last
+  // since the docs don't confirm its reliability when total_elements=0.
+  // Instead, detect the last page by checking if content is smaller than requested size.
+  // @see https://docs.violet.io/api-reference/catalog/offers/get-all-merchant-offers
+  const hasNext = rawPage.content.length >= size;
+
   return {
     data: {
       data: products,
-      total: rawPage.total_elements,
+      total: rawPage.total_elements || null,
       page,
       pageSize: size,
-      hasNext: !rawPage.last,
+      hasNext,
     },
     error: null,
   };

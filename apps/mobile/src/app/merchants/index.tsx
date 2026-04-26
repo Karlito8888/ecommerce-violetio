@@ -10,8 +10,8 @@ import { fetchMerchantsMobile } from "@/server/getMerchants";
 // ─── Query ────────────────────────────────────────────────────────────
 
 const merchantsQuery = {
-  queryKey: ["merchants"],
-  queryFn: fetchMerchantsMobile,
+  queryKey: ["merchants-with-counts"],
+  queryFn: () => fetchMerchantsMobile(true),
   staleTime: 5 * 60 * 1000,
 };
 
@@ -97,28 +97,23 @@ function MerchantCard({ merchant, theme }: MerchantCardProps) {
           gap: Spacing.three,
         }}
       >
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            backgroundColor: theme.backgroundElement,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <ThemedText style={{ fontSize: 18, color: theme.accent }}>◉</ThemedText>
-        </View>
         <View style={{ flex: 1 }}>
           <ThemedText style={{ fontWeight: "600", fontSize: 15 }}>{merchant.name}</ThemedText>
-          {merchant.platform && (
-            <ThemedText
-              type="small"
-              style={{ color: theme.textSecondary, textTransform: "capitalize" }}
-            >
-              {merchant.platform.charAt(0) + merchant.platform.slice(1).toLowerCase()}
-            </ThemedText>
-          )}
+          <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginTop: 2 }}>
+            {merchant.platform && (
+              <ThemedText
+                type="small"
+                style={{ color: theme.textSecondary, textTransform: "capitalize" }}
+              >
+                {merchant.platform.charAt(0) + merchant.platform.slice(1).toLowerCase()}
+              </ThemedText>
+            )}
+            {merchant.offer_count !== null && (
+              <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                · {merchant.offer_count} product{merchant.offer_count !== 1 ? "s" : ""}
+              </ThemedText>
+            )}
+          </View>
         </View>
         <ThemedText style={{ color: theme.textSecondary, fontSize: 20 }}>›</ThemedText>
       </Pressable>

@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
-import { getMerchantsFn } from "../../server/getMerchants";
+import { getMerchantsWithCountsFn } from "../../server/getMerchants";
 
 // ─── Query options ────────────────────────────────────────────────────
 
 function merchantsQueryOptions() {
   return queryOptions({
-    queryKey: ["merchants"],
-    queryFn: () => getMerchantsFn(),
+    queryKey: ["merchants-with-counts"],
+    queryFn: () => getMerchantsWithCountsFn(),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -49,29 +49,20 @@ function MerchantsPage() {
               params={{ merchantId: merchant.merchant_id }}
               className="merchants-page__card"
             >
-              <div className="merchants-page__card-icon">
-                <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" width="40" height="40">
-                  <rect width="48" height="48" rx="12" fill="var(--color-sand)" />
-                  <path d="M16 20h16v2H16zM16 26h12v2H16z" fill="var(--color-stone)" />
-                  <rect
-                    x="14"
-                    y="14"
-                    width="20"
-                    height="20"
-                    rx="3"
-                    stroke="var(--color-stone)"
-                    strokeWidth="2"
-                    fill="none"
-                  />
-                </svg>
-              </div>
               <div className="merchants-page__card-info">
                 <h2 className="merchants-page__card-name">{merchant.name}</h2>
-                {merchant.platform && (
-                  <span className="merchants-page__card-platform">
-                    {merchant.platform.charAt(0) + merchant.platform.slice(1).toLowerCase()}
-                  </span>
-                )}
+                <div className="merchants-page__card-meta">
+                  {merchant.platform && (
+                    <span className="merchants-page__card-platform">
+                      {merchant.platform.charAt(0) + merchant.platform.slice(1).toLowerCase()}
+                    </span>
+                  )}
+                  {merchant.offer_count !== null && (
+                    <span className="merchants-page__card-count">
+                      {merchant.offer_count} product{merchant.offer_count !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
               </div>
               <span className="merchants-page__card-arrow" aria-hidden="true">
                 →

@@ -23,20 +23,20 @@ describe("generateOrderLookupToken", () => {
 });
 
 describe("hashOrderLookupToken", () => {
-  it("returns a 64-character hex string (SHA-256)", () => {
-    const hash = hashOrderLookupToken("test-token");
+  it("returns a 64-character hex string (SHA-256)", async () => {
+    const hash = await hashOrderLookupToken("test-token");
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("produces consistent hashes for the same input", () => {
-    const hash1 = hashOrderLookupToken("same-token");
-    const hash2 = hashOrderLookupToken("same-token");
+  it("produces consistent hashes for the same input", async () => {
+    const hash1 = await hashOrderLookupToken("same-token");
+    const hash2 = await hashOrderLookupToken("same-token");
     expect(hash1).toBe(hash2);
   });
 
-  it("produces different hashes for different inputs", () => {
-    const hash1 = hashOrderLookupToken("token-a");
-    const hash2 = hashOrderLookupToken("token-b");
+  it("produces different hashes for different inputs", async () => {
+    const hash1 = await hashOrderLookupToken("token-a");
+    const hash2 = await hashOrderLookupToken("token-b");
     expect(hash1).not.toBe(hash2);
   });
 });

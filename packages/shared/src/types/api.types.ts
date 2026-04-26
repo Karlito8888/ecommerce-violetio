@@ -14,7 +14,9 @@ export interface ApiError {
 /** Generic paginated result wrapper used by catalog and other list endpoints. */
 export interface PaginatedResult<T> {
   data: T[];
-  total: number;
+  /** Total count of items across all pages. Null when the API doesn't provide it
+   *  (e.g., GET /catalog/offers/merchants/{id} always returns 0). */
+  total: number | null;
   page: number;
   pageSize: number;
   hasNext: boolean;

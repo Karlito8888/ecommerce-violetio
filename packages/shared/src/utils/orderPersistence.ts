@@ -40,7 +40,7 @@ export async function persistOrder(
   let orderLookupTokenHash: string | null = null;
   if (!input.userId) {
     orderLookupToken = generateOrderLookupToken();
-    orderLookupTokenHash = hashOrderLookupToken(orderLookupToken);
+    orderLookupTokenHash = await hashOrderLookupToken(orderLookupToken);
   }
 
   const { data: orderRow, error: orderError } = await supabase

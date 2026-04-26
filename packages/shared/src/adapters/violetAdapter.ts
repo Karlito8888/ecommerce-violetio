@@ -164,10 +164,10 @@ export class VioletAdapter implements SupplierAdapter {
 
   // ─── Merchant ────────────────────────────────────────────────────
 
-  async listMerchants(): Promise<
-    ApiResponse<import("../types/orderPersistence.types.js").MerchantRow[]>
-  > {
-    return listMerchantsFn(this.getCtx());
+  async listMerchants(
+    withOfferCounts = false,
+  ): Promise<ApiResponse<import("../types/orderPersistence.types.js").MerchantRow[]>> {
+    return listMerchantsFn(this.getCtx(), withOfferCounts);
   }
 
   async getMerchant(merchantId: string): Promise<ApiResponse<MerchantDetail>> {

@@ -44,6 +44,8 @@ function createMockFetchFn() {
       albums: [],
       images: [],
       thumbnailUrl: null,
+      shippingInfo: null,
+      collectionIds: [],
     },
     error: null,
   });

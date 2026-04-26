@@ -48,6 +48,8 @@ export interface MerchantRow {
   connected_at: string;
   /** ISO 8601 timestamp of last status update */
   updated_at: string;
+  /** Number of published offers for this merchant. Null if not fetched or on error. */
+  offer_count: number | null;
 }
 
 /**

@@ -147,14 +147,14 @@ describe("VioletAdapter — discount methods", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    process.env.VIOLET_APP_ID = "12345";
+    vi.stubEnv("VIOLET_APP_ID", "12345");
     adapter = new VioletAdapter(createMockTokenManager(), "https://test-api.violet.io/v1");
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    delete process.env.VIOLET_APP_ID;
+    vi.unstubAllEnvs();
   });
 
   // ── addDiscount ──────────────────────────────────────────────────
@@ -626,7 +626,7 @@ describe("parseAndTransformCart — discount handling", () => {
 
 describe("violetDiscountSchema — validation", () => {
   // Import the schema directly for isolated testing
-  let violetDiscountSchema: import("zod").ZodTypeAny;
+  let violetDiscountSchema: import("zod/v4").ZodTypeAny;
 
   beforeEach(async () => {
     const mod = await import("../../schemas/cart.schema.js");
@@ -648,11 +648,12 @@ describe("violetDiscountSchema — validation", () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.id).toBe(5001);
-      expect(result.data.status).toBe("APPLIED");
-      expect(result.data.code).toBe("20POFF");
-      expect(result.data.value_type).toBe("PERCENTAGE");
-      expect(result.data.amount_total).toBe(1000);
+      const data = result.data as Record<string, unknown>;
+      expect(data.id).toBe(5001);
+      expect(data.status).toBe("APPLIED");
+      expect(data.code).toBe("20POFF");
+      expect(data.value_type).toBe("PERCENTAGE");
+      expect(data.amount_total).toBe(1000);
     }
   });
 
@@ -665,10 +666,11 @@ describe("violetDiscountSchema — validation", () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.status).toBe("PENDING"); // default
-      expect(result.data.type).toBe("CODE"); // default
-      expect(result.data.value_type).toBeUndefined();
-      expect(result.data.amount_total).toBeUndefined();
+      const data = result.data as Record<string, unknown>;
+      expect(data.status).toBe("PENDING"); // default
+      expect(data.type).toBe("CODE"); // default
+      expect(data.value_type).toBeUndefined();
+      expect(data.amount_total).toBeUndefined();
     }
   });
 

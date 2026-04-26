@@ -56,7 +56,9 @@ export interface SupplierAdapter {
    *
    * @see https://docs.violet.io/api-reference/merchants/get-merchants
    */
-  listMerchants(): Promise<ApiResponse<import("../types/orderPersistence.types.js").MerchantRow[]>>;
+  listMerchants(
+    withOfferCounts?: boolean,
+  ): Promise<ApiResponse<import("../types/orderPersistence.types.js").MerchantRow[]>>;
 
   /**
    * Fetches details for a single merchant by ID.

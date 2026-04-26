@@ -46,7 +46,7 @@ export default function MerchantScreen() {
 
   const merchant: MerchantDetail | null = merchantResult?.data ?? null;
   const allProducts: Product[] = productsData?.pages.flatMap((p) => p.data?.data ?? []) ?? [];
-  const total = productsData?.pages[0]?.data?.total ?? 0;
+  const total = productsData?.pages[0]?.data?.total ?? null;
   const isLoading = isLoadingMeta || isLoadingProducts;
 
   if (isLoading) {
@@ -162,7 +162,8 @@ export default function MerchantScreen() {
               >
                 <ThemedText style={{ fontSize: 16, fontWeight: "600" }}>Products</ThemedText>
                 <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                  {total} item{total !== 1 ? "s" : ""}
+                  Showing {allProducts.length}
+                  {total != null ? ` of ${total}` : ""} products
                 </ThemedText>
               </View>
             }

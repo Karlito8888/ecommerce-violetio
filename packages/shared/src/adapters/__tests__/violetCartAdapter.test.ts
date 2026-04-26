@@ -49,7 +49,7 @@ describe("VioletAdapter — cart methods", () => {
 
   beforeEach(() => {
     // Set VIOLET_APP_ID for getAppId()
-    process.env.VIOLET_APP_ID = "12345";
+    vi.stubEnv("VIOLET_APP_ID", "12345");
 
     adapter = new VioletAdapter(createMockTokenManager(), "https://test-api.violet.io/v1");
     fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -57,7 +57,7 @@ describe("VioletAdapter — cart methods", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    delete process.env.VIOLET_APP_ID;
+    vi.unstubAllEnvs();
   });
 
   // ── createCart ────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ describe("VioletAdapter — cart methods", () => {
     });
 
     it("returns error when VIOLET_APP_ID is missing", async () => {
-      delete process.env.VIOLET_APP_ID;
+      vi.stubEnv("VIOLET_APP_ID", "");
 
       const result = await adapter.createCart({ userId: null, sessionId: "session-1" });
 

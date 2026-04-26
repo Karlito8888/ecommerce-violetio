@@ -22,10 +22,16 @@ import { apiGet } from "./apiClient";
  * Fetch all connected merchants via web backend.
  *
  * Returns merchants sorted alphabetically (sorting done server-side).
+ *
+ * When `withCounts` is true, each merchant includes `offer_count`
+ * (number of published products) fetched from the Violet count API.
  */
-export async function fetchMerchantsMobile(): Promise<ApiResponse<MerchantRow[]>> {
+export async function fetchMerchantsMobile(
+  withCounts = false,
+): Promise<ApiResponse<MerchantRow[]>> {
   try {
-    return await apiGet<ApiResponse<MerchantRow[]>>("/api/merchants");
+    const qs = withCounts ? "?with_counts=true" : "";
+    return await apiGet<ApiResponse<MerchantRow[]>>(`/api/merchants${qs}`);
   } catch (err) {
     return {
       data: null,

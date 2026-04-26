@@ -233,9 +233,7 @@ describe("VioletAdapter", () => {
       const offer = createMockOffer({
         skus: [
           createMockSku({
-            variant_values: [
-              { name: "Size", value: "Large" } as VioletSkuResponse["variant_values"][0],
-            ],
+            variant_values: [{ name: "Size", value: "Large" }],
           }),
         ],
       });

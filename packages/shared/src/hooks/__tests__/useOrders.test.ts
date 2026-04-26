@@ -207,7 +207,9 @@ describe("createOrdersRealtimeChannel", () => {
     );
 
     // The returned channel is the mock (subscribe returns `this`)
-    (channel as unknown as typeof mockChannel).unsubscribe();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ch = channel as any;
+    ch.unsubscribe();
     expect(mockChannel.unsubscribe).toHaveBeenCalledOnce();
   });
 });

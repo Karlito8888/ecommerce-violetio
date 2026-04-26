@@ -68,7 +68,7 @@ import { getSupabaseServer, getSupabaseSessionClient } from "./supabaseServer";
 export async function lookupOrderByTokenHandler(
   token: string,
 ): Promise<OrderWithBagsAndItems | null> {
-  const tokenHash = hashOrderLookupToken(token);
+  const tokenHash = await hashOrderLookupToken(token);
   const supabase = getSupabaseServer(); // service role — bypasses RLS (no anon policy)
 
   const { data, error } = await supabase

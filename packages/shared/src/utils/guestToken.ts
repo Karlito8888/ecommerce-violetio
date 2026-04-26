@@ -25,18 +25,24 @@
  * @module guestToken
  * @see {@link persistOrder} — the consumer of these utilities
  */
-import { randomBytes, createHash } from "node:crypto";
-
 /**
  * Generates a cryptographically random order lookup token for guest checkouts.
  *
- * Uses `node:crypto.randomBytes(32)` for 256 bits of entropy, encoded as
- * base64url (URL-safe, no padding) for safe display and transmission.
+ * Uses the Web Crypto API (`crypto.getRandomValues`) for 256 bits of entropy,
+ * encoded as base64url (URL-safe, no padding) for safe display and transmission.
+ * Works in Node 18+, browsers, Deno, and edge runtimes — no `node:` import.
  *
  * @returns A 43-character base64url-encoded random token
  */
 export function generateOrderLookupToken(): string {
-  return randomBytes(32).toString("base64url");
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  // Manual base64url encoding to avoid Node-specific Buffer
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /**
@@ -45,9 +51,17 @@ export function generateOrderLookupToken(): string {
  * Only the hash is persisted in `orders.order_lookup_token_hash` — if the
  * database is compromised, the attacker cannot derive the original token.
  *
+ * Uses the Web Crypto API (`crypto.subtle.digest`) — works everywhere.
+ *
  * @param token - The plaintext base64url token from {@link generateOrderLookupToken}
  * @returns SHA-256 hex digest (64 lowercase hex characters)
  */
-export function hashOrderLookupToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+export async function hashOrderLookupToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = new Uint8Array(hashBuffer);
+  return Array.from(hashArray)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }

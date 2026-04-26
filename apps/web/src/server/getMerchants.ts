@@ -24,3 +24,22 @@ export const getMerchantsFn = createServerFn({ method: "GET" }).handler(
     return result.data.sort((a, b) => a.name.localeCompare(b.name));
   },
 );
+
+/**
+ * Server Function — fetch all connected merchants with their published offer counts.
+ *
+ * Enriches each merchant with `offer_count` from
+ * GET /catalog/offers/merchants/{id}/count.
+ *
+ * @see https://docs.violet.io/api-reference/catalog/offers/count-merchant-offers
+ */
+export const getMerchantsWithCountsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<MerchantRow[]> => {
+    const adapter = getAdapter();
+    const result = await adapter.listMerchants(true);
+
+    if (result.error || !result.data) return [];
+
+    return result.data.sort((a, b) => a.name.localeCompare(b.name));
+  },
+);
