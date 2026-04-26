@@ -1,6 +1,6 @@
 # Audit DRY / KISS — Duplications Overkilled Web & Mobile
 
-**Date** : 2026-04-25 (création), 2026-04-25 (Phase 1 complétée)
+**Date** : 2026-04-25 (création), 2026-04-26 (Phase 4 complétée — toutes phases terminées)
 **Scope** : Architecture complète du monorepo e-commerce (web + mobile + shared)
 **Contexte** : Audit déclenché par l'analyse des 3 endpoints Violet.io (Get Merchants, Get Merchant by ID, Get Offers for a Merchant) — anomalies corrigées sur les merchants, puis étendu à l'ensemble du codebase.
 
@@ -22,13 +22,13 @@
 
 L'architecture du monorepo suit un pattern **single-backend** (TanStack Start) partagé entre web (Server Functions) et mobile (API Routes → Server Functions). Ce pattern est **correct dans son principe**. Cependant, l'implémentation présente **4 anomalies systémiques** de duplication qui violent les principes DRY et KISS :
 
-| # | Anomalie | Périmètre | Lignes impactées | Statut |
-|---|---|---|---|---|
-| 1 | API Routes dupliquent les Server Functions | Web backend (9 routes lisibles) | ~300 lignes | ✅ **Phase 1 corrigée** |
-| 1b | API Routes cart gardent leur propre logique | Web backend (14 routes cart) | ~550 lignes | ✅ **Non-duplication** (contrat d'entrée différent) |
-| 2 | Fetching mobile manuel vs TanStack Query | Mobile (2 pages migrées, 2 légitimes) | ~930 lignes | ✅ **Phase 2 corrigée** |
-| 3 | Types dupliqués dans le mobile | Mobile (order/lookup) | ~60 lignes | 🔴 À corriger (Phase 3) |
-| 4 | Checkout mobile monolithique | Mobile (checkout.tsx) | 412 lignes | 🟡 À planifier (Phase 4) |
+| #   | Anomalie                                    | Périmètre                             | Lignes impactées | Statut                                              |
+| --- | ------------------------------------------- | ------------------------------------- | ---------------- | --------------------------------------------------- |
+| 1   | API Routes dupliquent les Server Functions  | Web backend (9 routes lisibles)       | ~300 lignes      | ✅ **Phase 1 corrigée**                             |
+| 1b  | API Routes cart gardent leur propre logique | Web backend (14 routes cart)          | ~550 lignes      | ✅ **Non-duplication** (contrat d'entrée différent) |
+| 2   | Fetching mobile manuel vs TanStack Query    | Mobile (2 pages migrées, 2 légitimes) | ~930 lignes      | ✅ **Phase 2 corrigée**                             |
+| 3   | Types dupliqués dans le mobile              | Mobile (order/lookup)                 | ~60 lignes       | ✅ **Phase 3 corrigée**                             |
+| 4   | Checkout mobile monolithique                | Mobile (checkout.tsx)                 | 700 lignes       | ✅ **Phase 4 corrigée**                              |
 
 **Ce qui est déjà exemplaire** (pas de correction nécessaire) :
 
@@ -58,47 +58,47 @@ Les API Routes réimplémentent : appel `getAdapter()`, parsing des params, mapp
 
 #### Cart/Checkout — 15 routes sur 17
 
-| Fichier API Route | Server Function existante | Duplication |
-|---|---|---|
-| `api/cart/index.ts` | `createCartFn` | `getAdapter().createCart()` |
-| `api/cart/$cartId/index.ts` | `getCartFn` | `getAdapter().getCart()` |
-| `api/cart/$cartId/skus/index.ts` | `addToCartFn` | `getAdapter().addToCart()` |
-| `api/cart/$cartId/skus/$skuId.ts` | `updateCartItemFn` / `removeFromCartFn` | `getAdapter().updateCartItem()` / `removeFromCart` |
-| `api/cart/$cartId/shipping_address.ts` | `setShippingAddressFn` | `getAdapter().setShippingAddress()` |
-| `api/cart/$cartId/shipping/available.ts` | `getAvailableShippingMethodsFn` | `getAdapter().getAvailableShippingMethods()` |
-| `api/cart/$cartId/shipping.ts` | `setShippingMethodsFn` | `getAdapter().setShippingMethods()` |
-| `api/cart/$cartId/customer.ts` | `setCustomerFn` | `getAdapter().setCustomer()` |
-| `api/cart/$cartId/billing_address.ts` | `setBillingAddressFn` | `getAdapter().setBillingAddress()` |
-| `api/cart/$cartId/payment-intent.ts` | `getPaymentIntentFn` | `getAdapter().getPaymentIntent()` |
-| `api/cart/$cartId/submit.ts` | `submitOrderFn` | `getAdapter().submitOrder()` |
-| `api/cart/$cartId/price.ts` | `priceCartFn` | `getAdapter().priceCart()` |
-| `api/cart/$cartId/orders/$orderId.ts` | `getOrderDetailsFn` | `getAdapter().getOrder()` |
-| `api/cart/merge.ts` | `mergeAnonymousCartFn` | logique merge |
-| `api/cart/offers/$offerId.ts` | logique inline | ajout par offer ID |
+| Fichier API Route                        | Server Function existante               | Duplication                                        |
+| ---------------------------------------- | --------------------------------------- | -------------------------------------------------- |
+| `api/cart/index.ts`                      | `createCartFn`                          | `getAdapter().createCart()`                        |
+| `api/cart/$cartId/index.ts`              | `getCartFn`                             | `getAdapter().getCart()`                           |
+| `api/cart/$cartId/skus/index.ts`         | `addToCartFn`                           | `getAdapter().addToCart()`                         |
+| `api/cart/$cartId/skus/$skuId.ts`        | `updateCartItemFn` / `removeFromCartFn` | `getAdapter().updateCartItem()` / `removeFromCart` |
+| `api/cart/$cartId/shipping_address.ts`   | `setShippingAddressFn`                  | `getAdapter().setShippingAddress()`                |
+| `api/cart/$cartId/shipping/available.ts` | `getAvailableShippingMethodsFn`         | `getAdapter().getAvailableShippingMethods()`       |
+| `api/cart/$cartId/shipping.ts`           | `setShippingMethodsFn`                  | `getAdapter().setShippingMethods()`                |
+| `api/cart/$cartId/customer.ts`           | `setCustomerFn`                         | `getAdapter().setCustomer()`                       |
+| `api/cart/$cartId/billing_address.ts`    | `setBillingAddressFn`                   | `getAdapter().setBillingAddress()`                 |
+| `api/cart/$cartId/payment-intent.ts`     | `getPaymentIntentFn`                    | `getAdapter().getPaymentIntent()`                  |
+| `api/cart/$cartId/submit.ts`             | `submitOrderFn`                         | `getAdapter().submitOrder()`                       |
+| `api/cart/$cartId/price.ts`              | `priceCartFn`                           | `getAdapter().priceCart()`                         |
+| `api/cart/$cartId/orders/$orderId.ts`    | `getOrderDetailsFn`                     | `getAdapter().getOrder()`                          |
+| `api/cart/merge.ts`                      | `mergeAnonymousCartFn`                  | logique merge                                      |
+| `api/cart/offers/$offerId.ts`            | logique inline                          | ajout par offer ID                                 |
 
 Exceptions (pas de duplication) : `api/cart/claim.ts` et `api/cart/user.ts` — ces routes délèguent déjà correctement ou ont une logique spécifique non couverte par une server function.
 
 #### Collections — 3 routes
 
-| Fichier API Route | Server Function existante | Bug supplémentaire |
-|---|---|---|
-| `api/collections/index.ts` | `getCollectionsFn` | — |
-| `api/collections/$collectionId/index.ts` | `getCollectionByIdFn` | **Charge TOUTES les collections puis filtre** au lieu d'appeler `getCollectionByIdFn` (requête Supabase ciblée) |
-| `api/collections/$collectionId/products.ts` | `getCollectionProductsFn` | — |
+| Fichier API Route                           | Server Function existante | Bug supplémentaire                                                                                              |
+| ------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `api/collections/index.ts`                  | `getCollectionsFn`        | —                                                                                                               |
+| `api/collections/$collectionId/index.ts`    | `getCollectionByIdFn`     | **Charge TOUTES les collections puis filtre** au lieu d'appeler `getCollectionByIdFn` (requête Supabase ciblée) |
+| `api/collections/$collectionId/products.ts` | `getCollectionProductsFn` | —                                                                                                               |
 
 #### Products — 2 routes
 
-| Fichier API Route | Server Function existante | Bug supplémentaire |
-|---|---|---|
-| `api/products/index.ts` | `getProductsFn` | **Filtrage pays** côté API Route (`p.shippingInfo?.shipsToUserCountry`) absent de la server function → **comportement différent web vs mobile** |
-| `api/products/$productId.ts` | `getProductFn` | — |
+| Fichier API Route            | Server Function existante | Bug supplémentaire                                                                                                                              |
+| ---------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/products/index.ts`      | `getProductsFn`           | **Filtrage pays** côté API Route (`p.shippingInfo?.shipsToUserCountry`) absent de la server function → **comportement différent web vs mobile** |
+| `api/products/$productId.ts` | `getProductFn`            | —                                                                                                                                               |
 
 #### Orders + Exchange-rates — 2 routes
 
-| Fichier API Route | Server Function existante |
-|---|---|
-| `api/orders/$orderId.ts` | `getOrderDetailsFn` |
-| `api/exchange-rates.ts` | `getExchangeRatesFn` (dans `exchangeRates.ts`) |
+| Fichier API Route        | Server Function existante                      |
+| ------------------------ | ---------------------------------------------- |
+| `api/orders/$orderId.ts` | `getOrderDetailsFn`                            |
+| `api/exchange-rates.ts`  | `getExchangeRatesFn` (dans `exchangeRates.ts`) |
 
 ### Bugs identifiés
 
@@ -159,12 +159,12 @@ export const Route = createFileRoute("/api/collections/")({
 
 ### Pages affectées
 
-| Page | Lignes | useState | useEffect | Problème |
-|---|---|---|---|---|
-| `search.tsx` | 293 | 2 | 2 | Pas de cache, re-fetch à chaque mount |
-| `products/[productId].tsx` | 517 | 7 | 2 | State management complexe pour variantes + cart |
-| `cart.tsx` | 412 | 6 | 2 | Pas de stale-while-revalidate sur le panier |
-| `order/lookup.tsx` | 956 | 7 | 2 | Wizard multi-étapes entièrement impératif |
+| Page                       | Lignes | useState | useEffect | Problème                                        |
+| -------------------------- | ------ | -------- | --------- | ----------------------------------------------- |
+| `search.tsx`               | 293    | 2        | 2         | Pas de cache, re-fetch à chaque mount           |
+| `products/[productId].tsx` | 517    | 7        | 2         | State management complexe pour variantes + cart |
+| `cart.tsx`                 | 412    | 6        | 2         | Pas de stale-while-revalidate sur le panier     |
+| `order/lookup.tsx`         | 956    | 7        | 2         | Wizard multi-étapes entièrement impératif       |
 
 ### Pattern correct (déjà en place pour collections)
 
@@ -253,8 +253,8 @@ export interface OrderItemRow {
   sku_id: string;
   name: string;
   quantity: number;
-  price: number;        // integer cents
-  line_price: number;   // integer cents
+  price: number; // integer cents
+  line_price: number; // integer cents
   thumbnail: string | null;
   created_at: string;
 }
@@ -316,19 +316,19 @@ paymentIntent, paymentError, isSubmittingPayment, stripeReady
 
 **9 API Routes corrigées** — chacune délègue désormais à sa server function au lieu de dupliquer `getAdapter()` :
 
-| API Route | Server Function | Fichier modifié |
-|---|---|---|
-| `GET /api/merchants` | `getMerchantsFn` | `routes/api/merchants/index.ts` |
-| `GET /api/merchants/:id` | `getMerchantFn` | `routes/api/merchants/$merchantId.ts` |
-| `GET /api/merchants/:id/products` | `getMerchantProductsFn` | `routes/api/merchants/$merchantId/products.ts` |
-| `GET /api/collections` | `getCollectionsFn` | `routes/api/collections/index.ts` |
-| `GET /api/collections/:id` | `getCollectionByIdFn` | `routes/api/collections/$collectionId/index.ts` |
-| `GET /api/collections/:id/products` | `getCollectionProductsFn` | `routes/api/collections/$collectionId/products.ts` |
-| `GET /api/products` | `getProductsFn` | `routes/api/products/index.ts` |
-| `GET /api/products/:productId` | `getProductFn` | `routes/api/products/$productId.ts` |
-| `GET /api/orders/:orderId` | `getOrderDetailsFn` | `routes/api/orders/$orderId.ts` |
-| `GET /api/cart/:cartId/orders/:orderId` | `getOrderDetailsFn` | `routes/api/cart/$cartId/orders/$orderId.ts` |
-| `GET /api/exchange-rates` | `getExchangeRatesFn` | `routes/api/exchange-rates.ts` |
+| API Route                               | Server Function           | Fichier modifié                                    |
+| --------------------------------------- | ------------------------- | -------------------------------------------------- |
+| `GET /api/merchants`                    | `getMerchantsFn`          | `routes/api/merchants/index.ts`                    |
+| `GET /api/merchants/:id`                | `getMerchantFn`           | `routes/api/merchants/$merchantId.ts`              |
+| `GET /api/merchants/:id/products`       | `getMerchantProductsFn`   | `routes/api/merchants/$merchantId/products.ts`     |
+| `GET /api/collections`                  | `getCollectionsFn`        | `routes/api/collections/index.ts`                  |
+| `GET /api/collections/:id`              | `getCollectionByIdFn`     | `routes/api/collections/$collectionId/index.ts`    |
+| `GET /api/collections/:id/products`     | `getCollectionProductsFn` | `routes/api/collections/$collectionId/products.ts` |
+| `GET /api/products`                     | `getProductsFn`           | `routes/api/products/index.ts`                     |
+| `GET /api/products/:productId`          | `getProductFn`            | `routes/api/products/$productId.ts`                |
+| `GET /api/orders/:orderId`              | `getOrderDetailsFn`       | `routes/api/orders/$orderId.ts`                    |
+| `GET /api/cart/:cartId/orders/:orderId` | `getOrderDetailsFn`       | `routes/api/cart/$cartId/orders/$orderId.ts`       |
+| `GET /api/exchange-rates`               | `getExchangeRatesFn`      | `routes/api/exchange-rates.ts`                     |
 
 **Bugs résolus** :
 
@@ -348,14 +348,14 @@ Les corrections suivantes ont été appliquées avant la Phase 1 pour les 3 endp
 
 ### Fichiers modifiés
 
-| Fichier | Correction |
-|---|---|
-| `apps/web/src/routes/api/merchants/index.ts` | Délègue à `getMerchantsFn()` |
-| `apps/web/src/routes/api/merchants/$merchantId.ts` | Délègue à `getMerchantFn()` |
+| Fichier                                                     | Correction                                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `apps/web/src/routes/api/merchants/index.ts`                | Délègue à `getMerchantsFn()`                                            |
+| `apps/web/src/routes/api/merchants/$merchantId.ts`          | Délègue à `getMerchantFn()`                                             |
 | `apps/web/src/routes/api/merchants/$merchantId/products.ts` | Délègue à `getMerchantProductsFn()` → **bug contextual pricing résolu** |
-| `apps/mobile/src/server/getMerchants.ts` | **Nouveau** — fetch functions typées avec `@ecommerce/shared` |
-| `apps/mobile/src/app/merchants/index.tsx` | Réécrit avec `useQuery` + types importés |
-| `apps/mobile/src/app/merchants/[merchantId].tsx` | Réécrit avec `useQuery` + `useInfiniteQuery` + types importés |
+| `apps/mobile/src/server/getMerchants.ts`                    | **Nouveau** — fetch functions typées avec `@ecommerce/shared`           |
+| `apps/mobile/src/app/merchants/index.tsx`                   | Réécrit avec `useQuery` + types importés                                |
+| `apps/mobile/src/app/merchants/[merchantId].tsx`            | Réécrit avec `useQuery` + `useInfiniteQuery` + types importés           |
 
 ### Avant / Après — Architecture merchants
 
@@ -390,16 +390,17 @@ APRÈS (DRY) :
 **Effort** : Moyen
 **Date** : 2026-04-25
 
-| Domaine | Routes corrigées | Résultat |
-|---|---|---|
-| Merchants | 3 routes | ✅ Délèguent aux server functions |
-| Collections | 3 routes | ✅ Délèguent aux server functions |
-| Products | 2 routes | ✅ Délèguent aux server functions |
-| Orders | 2 routes | ✅ Délèguent aux server functions |
-| Exchange-rates | 1 route | ✅ Délègue à la server function |
-| Cart/Checkout | 14 routes | ✅ Non-duplication légitime (contrat d'entrée différent : URL params vs cookie HTTP) |
+| Domaine        | Routes corrigées | Résultat                                                                             |
+| -------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| Merchants      | 3 routes         | ✅ Délèguent aux server functions                                                    |
+| Collections    | 3 routes         | ✅ Délèguent aux server functions                                                    |
+| Products       | 2 routes         | ✅ Délèguent aux server functions                                                    |
+| Orders         | 2 routes         | ✅ Délèguent aux server functions                                                    |
+| Exchange-rates | 1 route          | ✅ Délègue à la server function                                                      |
+| Cart/Checkout  | 14 routes        | ✅ Non-duplication légitime (contrat d'entrée différent : URL params vs cookie HTTP) |
 
 **Vérifications** :
+
 - ✅ TypeScript : `tsc --noEmit` OK (web + mobile)
 - ✅ ESLint : `eslint apps/ packages/ --max-warnings 0` OK
 - ✅ Tests web : 581 passés
@@ -414,43 +415,91 @@ APRÈS (DRY) :
 
 Sur les 4 pages identifiées, seules **2 nécessitaient réellement** une migration :
 
-| Page | Migration | Raison |
-|---|---|---|
-| `search.tsx` | ❌ Non nécessaire | Utilise DÉJÀ `useSearch()` hook de `@ecommerce/shared` — pas du fetching manuel |
-| `products/[productId].tsx` | ✅ Migré | `useEffect` → `useQuery` pour le fetching produit initial |
-| `cart.tsx` | ✅ Migré | `useState`+`useEffect` → `useQuery` + `useMutation` pour le panier |
-| `order/lookup.tsx` | ❌ Non nécessaire | Documenté comme légitime : données transitoires OTP, shape snake_case différente |
+| Page                       | Migration         | Raison                                                                           |
+| -------------------------- | ----------------- | -------------------------------------------------------------------------------- |
+| `search.tsx`               | ❌ Non nécessaire | Utilise DÉJÀ `useSearch()` hook de `@ecommerce/shared` — pas du fetching manuel  |
+| `products/[productId].tsx` | ✅ Migré          | `useEffect` → `useQuery` pour le fetching produit initial                        |
+| `cart.tsx`                 | ✅ Migré          | `useState`+`useEffect` → `useQuery` + `useMutation` pour le panier               |
+| `order/lookup.tsx`         | ❌ Non nécessaire | Documenté comme légitime : données transitoires OTP, shape snake_case différente |
 
 **Fichiers créés** :
+
 - `apps/mobile/src/server/getCart.ts` — fetch functions typées (`fetchCartMobile`, `updateCartItemMobile`, `removeCartItemMobile`)
 
 **Fichiers modifiés** :
+
 - `apps/mobile/src/app/products/[productId].tsx` — `useEffect` de fetching → `useQuery` (staleTime 5min)
 - `apps/mobile/src/app/cart.tsx` — fetching manuel → `useQuery` + `useMutation` + `invalidateQueries`
 
 **Vérifications** :
+
 - ✅ TypeScript : `tsc --noEmit` OK
 - ✅ ESLint : `--max-warnings 0` OK
 - ✅ Tests web : 581 passés
 - ✅ Tests shared : 437 passés
 
-### Phase 3 — Types mobiles → import shared 🔴 PROCHAINE
+### Phase 3 — Types mobiles → import shared ✅ COMPLÉTÉE
 
 **Priorité** : Moyenne
 **Effort** : Faible
+**Date** : 2026-04-26
 
-- Supprimer `OrderItem`, `OrderBag`, `OrderRefund` de `order/lookup.tsx`
-- Importer depuis `@ecommerce/shared`
-- Créer `GuestOrderResponse` dans shared si nécessaire
+Remplacement des 4 interfaces locales (`OrderItem`, `OrderBag`, `OrderRefund`, `GuestOrder`) par l'import unique de `OrderWithBagsAndItems` depuis `@ecommerce/shared`.
 
-### Phase 4 — Checkout mobile → refactor state 🟡 À PLANIFIER
+Les types locaux étaient des sous-ensembles des types shared :
+- `GuestOrder` → `OrderWithBagsAndItems` (= `OrderRow & { order_bags: OrderBagWithItems[] }`)
+- `OrderBag` → `OrderBagWithItems` (= `OrderBagRow & { order_items: OrderItemRow[], order_refunds: OrderRefundRow[] }`)
+- `OrderItem` → `OrderItemRow` (superset avec `order_bag_id`, `sku_id`, `price`, `created_at`)
+- `OrderRefund` → `OrderRefundRow` (superset avec `order_bag_id`, `violet_refund_id`, `status`, `created_at`)
+
+Seul `OrderWithBagsAndItems` est directement importé — les autres types sont composés à l'intérieur et accessibles via TypeScript.
+
+**Fichiers modifiés** :
+
+| Fichier                                    | Correction                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------ |
+| `apps/mobile/src/app/order/lookup.tsx`     | 4 interfaces supprimées, import `OrderWithBagsAndItems` depuis shared    |
+
+**Changements** :
+- Suppression de ~60 lignes de types dupliqués
+- `GuestOrder` → `OrderWithBagsAndItems` (7 occurrences)
+- `bag.order_refunds &&` → `bag.order_refunds.` (le shared type garantit un tableau non-null)
+- Commentaire JSDoc mis à jour pour refléter l'utilisation des types shared
+
+**Vérifications** :
+
+- ✅ TypeScript : `tsc --noEmit` OK (web + mobile)
+- ✅ ESLint : `--max-warnings 0` OK
+- ✅ Tests web : 581 passés
+- ✅ Tests shared : 437 passés
+
+### Phase 4 — Checkout mobile → refactor state ✅ COMPLÉTÉE
 
 **Priorité** : Basse
 **Effort** : Élevé
+**Date** : 2026-04-26
 
-- State machine pour les étapes
-- Hooks dédiés par étape
-- `useMutation` pour les opérations d'écriture
+Refactor du checkout monolithe (~700 lignes, 21 `useState`) en 5 modules à responsabilité unique.
+
+**Architecture** :
+
+| Module | Lignes | Rôle |
+| ------ | ------ | ---- |
+| `checkout/checkoutReducer.ts` | 348 | State machine typée (`useReducer` + 24 actions) |
+| `checkout/checkoutHooks.ts` | 543 | 5 hooks par étape (validation → API → dispatch) |
+| `checkout/checkoutSteps.tsx` | 749 | 5 composants UI purs (présentation uniquement) |
+| `server/getCheckout.ts` | 181 | 7 fetch functions typées vers API Routes |
+| `checkout/index.ts` | 38 | Barrel export |
+| `app/checkout.tsx` (orchestrateur) | 121 | Binding hooks → composants |
+
+**Résultat** : `checkout.tsx` passé de ~700 lignes → **121 lignes**. 21 `useState` → **1 `useReducer`**.
+
+**Vérifications** :
+
+- ✅ TypeScript : `tsc --noEmit` OK (web + mobile)
+- ✅ ESLint : `--max-warnings 0` OK
+- ✅ Tests web : 581 passés
+- ✅ Tests shared : 437 passés
 
 ---
 
@@ -486,6 +535,7 @@ Sur les 4 pages identifiées, seules **2 nécessitaient réellement** une migrat
 ```
 
 Chaque couche a **une seule responsabilité** :
+
 - **Shared** : types, schemas Zod, adaptateur Violet, hooks
 - **Server Functions** : logique métier (validation, contextual pricing, persistance)
 - **API Routes** : thin proxy HTTP → Server Functions (zéro logique métier)

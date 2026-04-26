@@ -49,9 +49,8 @@
  *    shape (snake_case from Supabase) than the Violet-proxied `OrderDetail` type
  * 3. The OTP auth flow is unique to guest lookup and doesn't fit the query pattern
  *
- * The local `GuestOrder` / `OrderBag` / `OrderItem` types mirror the Supabase table
- * structure (snake_case) rather than the Violet API shape (camelCase). If a shared
- * type is added later, these should be consolidated.
+ * Types (`OrderWithBagsAndItems`, `OrderBagWithItems`, `OrderItemRow`, `OrderRefundRow`)
+ * are imported from `@ecommerce/shared` — see Phase 3 audit (audit-dry-kiss-duplications.md).
  *
  * ## Session cleanup
  * After OTP verification and fetching orders, we immediately sign out
@@ -135,6 +134,7 @@ import {
   formatDate,
   ORDER_STATUS_LABELS,
   BAG_STATUS_LABELS,
+  type OrderWithBagsAndItems,
 } from "@ecommerce/shared";
 import { colors, spacing, typography } from "@ecommerce/ui";
 import { ThemedText } from "@/components/themed-text";
@@ -142,59 +142,14 @@ import { ThemedView } from "@/components/themed-view";
 import { apiPost } from "@/server/apiClient";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-
-/**
- * Line item within an order bag, as returned by the Supabase `guest-order-lookup`
- * web backend API. Uses snake_case to match Supabase table columns directly.
- */
-interface OrderItem {
-  id: string;
-  name: string;
-  quantity: number;
-  line_price: number;
-  thumbnail: string | null;
-}
-
-/** Refund record associated with an order bag. Added in Story 5.5. */
-interface OrderRefund {
-  id: string;
-  amount: number;
-  reason: string | null;
-  currency: string;
-}
-
-/**
- * Merchant bag with nested items and optional refunds. Maps to the `order_bags`
- * Supabase table with joined `order_items` and `order_refunds`.
- */
-interface OrderBag {
-  id: string;
-  merchant_name: string | null;
-  status: string;
-  total: number;
-  tracking_url: string | null;
-  tracking_number: string | null;
-  carrier: string | null;
-  shipping_method: string | null;
-  order_items: OrderItem[];
-  order_refunds?: OrderRefund[];
-}
-
-/**
- * Top-level guest order with nested bags. Returned by the `guest-order-lookup`
- * web backend API for both token-based and email-based lookups.
- */
-interface GuestOrder {
-  id: string;
-  status: string;
-  total: number;
-  subtotal: number;
-  shipping_total: number;
-  tax_total: number;
-  currency: string;
-  created_at: string;
-  order_bags: OrderBag[];
-}
+// Core type imported from @ecommerce/shared — see Phase 3 audit.
+//
+// OrderWithBagsAndItems — full order with nested bags/items (API response shape)
+//   = OrderRow & { order_bags: OrderBagWithItems[] }
+//   where OrderBagWithItems = OrderBagRow & { order_items: OrderItemRow[], order_refunds: OrderRefundRow[] }
+//
+// This single import replaces the 4 former local interfaces (GuestOrder, OrderBag,
+// OrderItem, OrderRefund) which were subsets of the shared Row types.
 
 /**
  * Discriminated union representing the current step in the lookup wizard.
@@ -203,8 +158,8 @@ interface GuestOrder {
 type LookupStep =
   | { step: "email" }
   | { step: "verify"; email: string }
-  | { step: "results"; orders: GuestOrder[] }
-  | { step: "token-result"; order: GuestOrder };
+  | { step: "results"; orders: OrderWithBagsAndItems[] }
+  | { step: "token-result"; order: OrderWithBagsAndItems };
 
 // ─── API client ────────────────────────────────────────────────────────────
 
@@ -212,8 +167,8 @@ type LookupStep =
  * Looks up a single order by its guest tracking token.
  * No authentication required — the token itself is the secret.
  */
-async function lookupByToken(token: string): Promise<GuestOrder | null> {
-  const json = await apiPost<{ data?: GuestOrder }>("/api/guest-order-lookup", {
+async function lookupByToken(token: string): Promise<OrderWithBagsAndItems | null> {
+  const json = await apiPost<{ data?: OrderWithBagsAndItems }>("/api/guest-order-lookup", {
     type: "token",
     token,
   });
@@ -224,7 +179,7 @@ async function lookupByToken(token: string): Promise<GuestOrder | null> {
  * Looks up all orders associated with the authenticated email.
  * Requires a valid Supabase JWT obtained after OTP verification.
  */
-async function lookupByEmail(accessToken: string): Promise<GuestOrder[]> {
+async function lookupByEmail(accessToken: string): Promise<OrderWithBagsAndItems[]> {
   // Direct fetch needed here — we need to pass the OTP session token,
   // not the apiClient's auto-resolved token
   const apiUrl =
@@ -268,7 +223,7 @@ async function lookupByEmail(accessToken: string): Promise<GuestOrder[]> {
  *
  * @param props.order - The guest order data from the web backend API
  */
-function OrderDetailView({ order }: { order: GuestOrder }) {
+function OrderDetailView({ order }: { order: OrderWithBagsAndItems }) {
   return (
     <View style={styles.detailContainer}>
       <View style={styles.detailHeader}>
@@ -312,11 +267,11 @@ function OrderDetailView({ order }: { order: GuestOrder }) {
             </ThemedText>
           )}
 
-          {/* Refund notice — optional chaining because older data from the API
-              may not include order_refunds yet. Per Violet docs, CANCELED bags never
+          {/* Refund notice — Supabase nested select always returns an array
+              (empty when no refunds). Per Violet docs, CANCELED bags never
               have refund data; only REFUNDED/PARTIALLY_REFUNDED bags do.
               @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md */}
-          {bag.order_refunds && bag.order_refunds.length > 0 && (
+          {bag.order_refunds.length > 0 && (
             <ThemedText style={styles.refundNotice}>
               {`Refund of ${formatPrice(
                 bag.order_refunds.reduce((s: number, r: { amount: number }) => s + r.amount, 0),
