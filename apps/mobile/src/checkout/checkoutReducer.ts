@@ -93,6 +93,10 @@ export interface CheckoutState {
   addressError: string | null;
   // Shipping
   shipping: ShippingState;
+  /** True when ALL bags in the cart are digital (no physical items).
+   * When true, the shipping step is skipped entirely — same as web.
+   * @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery */
+  allBagsDigital: boolean;
   // Guest info
   guest: GuestInfoState;
   // Billing
@@ -108,6 +112,7 @@ export type CheckoutAction =
   | { type: "ADDRESS_SUBMIT_SUCCESS" }
   | { type: "ADDRESS_SUBMIT_ERROR"; error: string }
   | { type: "UPDATE_ADDRESS"; address: Partial<AddressFields> }
+  | { type: "DIGITAL_SKIP_SHIPPING" }
   | { type: "SHIPPING_METHODS_FETCH_START" }
   | {
       type: "SHIPPING_METHODS_FETCH_SUCCESS";
@@ -164,6 +169,7 @@ export const initialCheckoutState: CheckoutState = {
     isSubmittingShipping: false,
     shippingError: null,
   },
+  allBagsDigital: false,
   guest: {
     email: "",
     firstName: "",
@@ -205,6 +211,17 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
         step: "methods",
         isAddressSubmitting: false,
         addressError: null,
+      };
+
+    case "DIGITAL_SKIP_SHIPPING":
+      // All bags are digital — skip shipping step, go directly to guest info.
+      // Mirrors web: if (cart?.allBagsDigital) { setStep("guestInfo"); return; }
+      return {
+        ...state,
+        step: "guestInfo",
+        isAddressSubmitting: false,
+        addressError: null,
+        allBagsDigital: true,
       };
 
     case "ADDRESS_SUBMIT_ERROR":

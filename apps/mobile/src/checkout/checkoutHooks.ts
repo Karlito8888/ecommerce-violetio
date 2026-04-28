@@ -27,6 +27,7 @@ import {
   getPaymentIntent,
   submitOrder,
 } from "../server/getCheckout";
+import { fetchCartMobile } from "../server/getCart";
 
 /** SecureStore key for the Violet cart ID. */
 const CART_KEY = "violet_cart_id";
@@ -106,7 +107,20 @@ export function useAddressStep(state: CheckoutState, dispatch: React.Dispatch<Ch
 
       dispatch({ type: "ADDRESS_SUBMIT_SUCCESS" });
 
-      // Immediately fetch shipping methods after address is set
+      // Check if all bags are digital — if so, skip shipping entirely.
+      // Mirrors web: if (cart?.allBagsDigital) { setStep("guestInfo"); return; }
+      // @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
+      try {
+        const cartResult = await fetchCartMobile(cartId);
+        if (cartResult.data?.allBagsDigital) {
+          dispatch({ type: "DIGITAL_SKIP_SHIPPING" });
+          return;
+        }
+      } catch {
+        // If cart fetch fails, proceed with shipping methods — safe fallback
+      }
+
+      // Fetch shipping methods for physical bags
       dispatch({ type: "SHIPPING_METHODS_FETCH_START" });
 
       try {
@@ -165,8 +179,9 @@ export function useShippingStep(state: CheckoutState, dispatch: React.Dispatch<C
   const { shipping } = state;
 
   const allBagsSelected =
-    shipping.availableMethods.length > 0 &&
-    shipping.availableMethods.every((bag) => Boolean(shipping.selectedMethods[bag.bagId]));
+    state.allBagsDigital ||
+    (shipping.availableMethods.length > 0 &&
+      shipping.availableMethods.every((bag) => Boolean(shipping.selectedMethods[bag.bagId])));
 
   const selectMethod = useCallback(
     (bagId: string, methodId: string) => {
@@ -213,6 +228,10 @@ export function useShippingStep(state: CheckoutState, dispatch: React.Dispatch<C
 
   const submit = useCallback(async () => {
     if (!allBagsSelected) return;
+
+    // If all bags are digital, shipping was already skipped via DIGITAL_SKIP_SHIPPING.
+    // This submit should never be called in that case, but guard defensively.
+    if (state.allBagsDigital) return;
 
     const cartId = await resolveCartId();
     if (!cartId) {

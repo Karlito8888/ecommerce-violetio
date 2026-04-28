@@ -225,7 +225,10 @@ export function ShippingStep({
 }) {
   const { shipping, step } = state;
 
-  if (step === "address") return null;
+  // Hide if we haven't reached this step yet, or if all bags are digital.
+  // Per Violet docs: "When all SKUs in a bag are digital, you should skip shipping."
+  // @see https://docs.violet.io/prism/catalog/skus — Digital Product Delivery
+  if (step === "address" || state.allBagsDigital) return null;
 
   return (
     <Section>
