@@ -202,6 +202,12 @@ async function simulateBillingSubmit(opts: {
       paymentIntentClientSecret: clientSecret,
       allowsDelayedPaymentMethods: false,
       returnURL: "mobile://stripe-redirect",
+      // Enable Apple Pay in PaymentSheet on iOS.
+      // @see https://docs.stripe.com/apple-pay?platform=react-native — "Enable Apple Pay"
+      // @see https://docs.stripe.com/payments/mobile/payment-sheet — "Optional: Enable Apple Pay"
+      applePay: {
+        merchantCountryCode: process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY || "US",
+      },
     });
 
     if (initError) {
@@ -326,13 +332,16 @@ describe("useBillingStep — Stripe PaymentSheet init", () => {
       },
     });
 
-    // Core assertion: initPaymentSheet was called with returnURL
+    // Core assertion: initPaymentSheet was called with returnURL and applePay config
     expect(initPaymentSheet).toHaveBeenCalledTimes(1);
     expect(initPaymentSheet).toHaveBeenCalledWith({
       merchantDisplayName: "Maison Émile",
       paymentIntentClientSecret: "pi_test_secret_xxx",
       allowsDelayedPaymentMethods: false,
       returnURL: "mobile://stripe-redirect",
+      applePay: {
+        merchantCountryCode: process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY || "US",
+      },
     });
   });
 
@@ -446,6 +455,40 @@ describe("useBillingStep — Stripe PaymentSheet init", () => {
     expect(setStripePublishableKey).not.toHaveBeenCalled();
     // But initPaymentSheet still proceeds
     expect(initPaymentSheet).toHaveBeenCalled();
+  });
+
+  it("passes applePay config with merchantCountryCode to initPaymentSheet", async () => {
+    // Doc Stripe Payment Sheet: "Optional: Enable Apple Pay — set applePay after
+    // initializing PaymentSheet.Configuration with your Apple merchant ID and
+    // the country code of your business."
+    // @see https://docs.stripe.com/payments/mobile/payment-sheet
+    // @see https://docs.stripe.com/apple-pay?platform=react-native
+    const { dispatch } = createDispatch();
+    const initPaymentSheet = vi.fn().mockResolvedValue({ error: null });
+    const setStripePublishableKey = vi.fn();
+
+    await simulateBillingSubmit({
+      state: makeCheckoutState({ billing: { sameAsShipping: true, address: {} } }),
+      dispatch,
+      initPaymentSheet,
+      setStripePublishableKey,
+      secureStoreCartId: "12345",
+      getPaymentIntentResult: {
+        data: { clientSecret: "pi_secret_apple_pay", stripePublishableKey: "pk_test" },
+        error: null,
+      },
+    });
+
+    expect(initPaymentSheet).toHaveBeenCalledTimes(1);
+    const callArgs = initPaymentSheet.mock.calls[0][0];
+
+    // Verify applePay config is present and has the correct shape
+    expect(callArgs.applePay).toBeDefined();
+    expect(callArgs.applePay).toEqual({
+      merchantCountryCode: process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY || "US",
+    });
+    // merchantCountryCode must be a 2-letter ISO 3166 code
+    expect(callArgs.applePay.merchantCountryCode).toMatch(/^[A-Z]{2}$/);
   });
 
   it("dispatches error when cart ID is missing", async () => {

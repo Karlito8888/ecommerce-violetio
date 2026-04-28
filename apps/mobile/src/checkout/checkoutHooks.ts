@@ -333,6 +333,10 @@ export function useBillingStep(
     paymentIntentClientSecret: string;
     allowsDelayedPaymentMethods: boolean;
     returnURL?: string;
+    /** iOS only. Enable Apple Pay in the Payment Sheet. */
+    applePay?: {
+      merchantCountryCode: string;
+    };
   }) => Promise<{ error?: { message?: string } | null }>,
   setStripePublishableKey: (key: string) => void,
 ) {
@@ -430,6 +434,13 @@ export function useBillingStep(
         // Required for 3DS1/bank redirects to auto-dismiss and return to the app.
         // @see https://docs.stripe.com/payments/accept-a-payment?platform=react-native
         returnURL: "mobile://stripe-redirect",
+        // Enable Apple Pay in PaymentSheet on iOS.
+        // merchantCountryCode = country code of the Stripe platform account (US sandbox / FR prod).
+        // @see https://docs.stripe.com/apple-pay?platform=react-native — "Enable Apple Pay"
+        // @see https://docs.stripe.com/payments/mobile/payment-sheet — "Optional: Enable Apple Pay"
+        applePay: {
+          merchantCountryCode: process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY || "US",
+        },
       });
 
       if (initError) {

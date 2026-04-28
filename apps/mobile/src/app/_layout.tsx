@@ -218,9 +218,20 @@ function DynamicStripeProvider({
   // @see https://docs.stripe.com/payments/accept-a-payment?platform=react-native
   const STRIPE_URL_SCHEME = "mobile";
 
+  // Apple Merchant ID from Apple Developer portal, configured via env var.
+  // Required by StripeProvider to initialize the native Stripe SDK with Apple Pay support.
+  // Also configured in app.config.ts plugin for the iOS entitlements (Info.plist), but
+  // the JS SDK needs it separately for NativeStripeSdk.initialise() on iOS.
+  // @see https://docs.stripe.com/apple-pay?platform=react-native — "Set your Apple Merchant ID in StripeProvider"
+  const APPLE_MERCHANT_ID = process.env.EXPO_PUBLIC_APPLE_MERCHANT_ID ?? "";
+
   return (
     <StripeKeyContext.Provider value={{ setStripePublishableKey: setDynamicKey }}>
-      <StripeProvider publishableKey={dynamicKey} urlScheme={STRIPE_URL_SCHEME}>
+      <StripeProvider
+        publishableKey={dynamicKey}
+        urlScheme={STRIPE_URL_SCHEME}
+        merchantIdentifier={APPLE_MERCHANT_ID}
+      >
         {children as React.ReactElement}
       </StripeProvider>
     </StripeKeyContext.Provider>
