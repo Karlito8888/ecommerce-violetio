@@ -1,8 +1,9 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import Constants from "expo-constants";
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
-import { StripeProvider } from "@stripe/stripe-react-native";
+import { Linking } from "react-native";
+import { StripeProvider, useStripe } from "@stripe/stripe-react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Colors } from "@/constants/theme";
 
@@ -153,6 +154,49 @@ const StripeKeyContext = createContext<{
 export const useSetStripeKey = () => useContext(StripeKeyContext);
 
 /**
+ * Handles deep links from 3D Secure and bank redirect payment methods.
+ *
+ * Stripe requires forwarding redirect URLs back to the SDK so it can
+ * auto-dismiss web views used for authentication (e.g. 3DS1 redirects).
+ * Without this, payment methods that require a redirect (bank debits,
+ * some European 3DS flows) will silently fail.
+ *
+ * Must render inside <StripeProvider> to access `handleURLCallback`.
+ *
+ * @see https://docs.stripe.com/payments/accept-a-payment?platform=react-native
+ */
+function StripeDeepLinkHandler() {
+  const { handleURLCallback } = useStripe();
+
+  const handleDeepLink = useCallback(
+    async (url: string | null) => {
+      if (url) {
+        const stripeHandled = await handleURLCallback(url);
+        if (stripeHandled) {
+          // Stripe handled the URL — 3DS/bank redirect completed
+        }
+        // Non-Stripe URLs are handled by expo-router normally
+      }
+    },
+    [handleURLCallback],
+  );
+
+  useEffect(() => {
+    // Handle app opened from a deep link while cold-starting
+    Linking.getInitialURL().then(handleDeepLink);
+
+    // Handle app opened from a deep link while running
+    const subscription = Linking.addEventListener("url", (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => subscription.remove();
+  }, [handleDeepLink]);
+
+  return null;
+}
+
+/**
  * Wraps `StripeProvider` with a dynamic publishable key.
  *
  * When the checkout screen fetches the cart and finds a `stripePublishableKey`
@@ -169,9 +213,16 @@ function DynamicStripeProvider({
 }) {
   const [dynamicKey, setDynamicKey] = useState(fallbackKey);
 
+  // "mobile" is the URL scheme defined in app.config.ts (scheme: "mobile").
+  // Required by Stripe for 3D Secure redirects and bank redirect payment methods.
+  // @see https://docs.stripe.com/payments/accept-a-payment?platform=react-native
+  const STRIPE_URL_SCHEME = "mobile";
+
   return (
     <StripeKeyContext.Provider value={{ setStripePublishableKey: setDynamicKey }}>
-      <StripeProvider publishableKey={dynamicKey}>{children as React.ReactElement}</StripeProvider>
+      <StripeProvider publishableKey={dynamicKey} urlScheme={STRIPE_URL_SCHEME}>
+        {children as React.ReactElement}
+      </StripeProvider>
     </StripeKeyContext.Provider>
   );
 }
@@ -220,6 +271,7 @@ function LayoutInner() {
   return (
     <AuthProvider>
       <DynamicStripeProvider fallbackKey={stripeKey}>
+        <StripeDeepLinkHandler />
         <ColorSchemeContext.Provider value={resolvedScheme}>
           <ThemeProvider value={navigationTheme}>
             <AppContent />

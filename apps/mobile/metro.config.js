@@ -49,6 +49,20 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       platform,
     );
   }
+  // Bun's metro-runtime package.json exports field maps HMRClient.ts → HMRClient.ts.js
+  // but only HMRClient.js exists, producing 6 Metro WARNs per startup. Redirect to the
+  // compiled JS directly so Metro doesn't hit the invalid export entry.
+  if (moduleName.endsWith("/HMRClient.ts")) {
+    try {
+      return context.resolveRequest(
+        context,
+        moduleName.replace("/HMRClient.ts", "/HMRClient.js"),
+        platform,
+      );
+    } catch {
+      // Fall through to default resolution
+    }
+  }
   if (moduleName.endsWith(".js")) {
     const tsModuleName = moduleName.replace(/\.js$/, ".ts");
     try {

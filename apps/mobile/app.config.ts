@@ -1,6 +1,7 @@
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { resolve, join } from "path";
 import { ExpoConfig, ConfigContext } from "expo/config";
+import { withDangerousMod } from "expo/config-plugins";
 
 /**
  * Load environment variables from the monorepo root .env.local file.
@@ -28,6 +29,41 @@ function loadRootEnv(): void {
 }
 
 loadRootEnv();
+
+/**
+ * Pin Gradle to 8.13 — the version required by AGP 8.12.0 (shipped with RN 0.83.6).
+ *
+ * RN 0.83.6's prebuild template generates Gradle 9.0, which is incompatible
+ * with AGP 8.12.0 (JvmVendorSpec.IBM_SEMERU removed in Gradle 9.0).
+ * Per Android official docs, AGP 8.12 requires Gradle >= 8.13.
+ *
+ * @see https://developer.android.com/build/releases/agp-8-12-0-release-notes
+ * Remove this plugin once Expo/RN ships a Gradle 9.x-compatible AGP.
+ */
+const GRADLE_VERSION = "8.13";
+
+const withPinnedGradle = (config: ExpoConfig) => {
+  return withDangerousMod(config, [
+    "android",
+    async (c) => {
+      const propsPath = join(
+        c.modRequest.platformProjectRoot,
+        "gradle",
+        "wrapper",
+        "gradle-wrapper.properties",
+      );
+      if (existsSync(propsPath)) {
+        let contents = readFileSync(propsPath, "utf-8");
+        contents = contents.replace(
+          /distributionUrl=.*/,
+          `distributionUrl=https\\://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip`,
+        );
+        writeFileSync(propsPath, contents);
+      }
+      return c;
+    },
+  ]);
+};
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -88,6 +124,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: "./assets/images/favicon.png",
   },
   plugins: [
+    withPinnedGradle as unknown as string,
     "expo-router",
     "expo-secure-store",
     "expo-notifications",
@@ -129,6 +166,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supabaseUrl: process.env.SUPABASE_URL ?? "http://localhost:54321",
     // Set via .env.local — empty in dev is OK, required for production
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
+    // Web backend URL consumed by apiClient.ts via Constants.expoConfig.extra.apiUrl.
+    // Falls back to process.env.EXPO_PUBLIC_API_URL then "http://10.0.2.2:3000".
+    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:3000",
     eas: {
       projectId: process.env.EAS_PROJECT_ID ?? "",
     },

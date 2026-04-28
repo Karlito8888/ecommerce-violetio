@@ -34,9 +34,9 @@ Share this file with the Violet team at support@violet.io when booking.
 
 ## Violet Connect Configuration
 
-- [ ] App name configured on channel.violet.io
+- [x] App name configured on channel.violet.io — "Maison Émile"
 - [ ] App logo uploaded
-- [ ] Redirect URL set (post-merchant-onboarding landing page)
+- [x] Redirect URL set (post-merchant-onboarding landing page) — `maisonemile.com/admin/merchants`
 - [ ] At least one real merchant onboarded in Test Mode and verified end-to-end
 - [ ] Commission rates configured per merchant on channel.violet.io
 

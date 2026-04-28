@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { productId, productName, description, vendor, tags, category } = validation.data;
+    const { productId, productName, description, vendor, tags, category, merchantId } = validation.data;
 
     // Concatenate product fields into searchable text
     const textContent = `${productName}. ${description}. Brand: ${vendor}. Category: ${category}. Tags: ${tags.join(", ")}`;
@@ -101,6 +101,7 @@ Deno.serve(async (req: Request) => {
         product_name: productName,
         text_content: textContent,
         embedding: JSON.stringify(embedding),
+        merchant_id: merchantId ?? null,
       },
       { onConflict: "product_id" },
     );

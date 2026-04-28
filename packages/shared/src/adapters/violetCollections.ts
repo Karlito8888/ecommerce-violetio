@@ -9,7 +9,7 @@ import type { VioletPaginatedResponse, VioletOfferResponse } from "../types/inde
 import { transformOffer } from "./violetTransforms.js";
 import { fetchWithRetry } from "./violetFetch.js";
 import type { CatalogContext } from "./violetCatalog.js";
-import { getCurrencyForCountry } from "../utils/currency.js";
+import { currencyParam } from "./violetCatalog.js";
 
 /** TTL for the instance-level collections cache. */
 const COLLECTIONS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -130,8 +130,7 @@ export async function getCollectionOffers(
   pageSize = 24,
   countryCode?: string,
 ): Promise<ApiResponse<PaginatedResult<Product>>> {
-  const baseCurrency = countryCode ? getCurrencyForCountry(countryCode) : undefined;
-  const currencyQs = baseCurrency && baseCurrency !== "USD" ? `&base_currency=${baseCurrency}` : "";
+  const currencyQs = currencyParam(countryCode);
   const url =
     `${ctx.apiBase}/catalog/collections/${collectionId}/offers` +
     `?page=${page}&size=${pageSize}&exclude_hidden=true${currencyQs}`;

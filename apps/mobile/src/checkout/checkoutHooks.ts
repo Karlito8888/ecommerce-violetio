@@ -332,6 +332,7 @@ export function useBillingStep(
     merchantDisplayName: string;
     paymentIntentClientSecret: string;
     allowsDelayedPaymentMethods: boolean;
+    returnURL?: string;
   }) => Promise<{ error?: { message?: string } | null }>,
   setStripePublishableKey: (key: string) => void,
 ) {
@@ -425,6 +426,10 @@ export function useBillingStep(
         merchantDisplayName: "Maison Émile",
         paymentIntentClientSecret: clientSecret,
         allowsDelayedPaymentMethods: false,
+        // "mobile" is the URL scheme from app.config.ts.
+        // Required for 3DS1/bank redirects to auto-dismiss and return to the app.
+        // @see https://docs.stripe.com/payments/accept-a-payment?platform=react-native
+        returnURL: "mobile://stripe-redirect",
       });
 
       if (initError) {

@@ -40,6 +40,7 @@ import { Route as AccountProfileRouteImport } from './routes/account/profile'
 import { Route as ApiProductsIndexRouteImport } from './routes/api/products/index'
 import { Route as ApiMerchantsIndexRouteImport } from './routes/api/merchants/index'
 import { Route as ApiCollectionsIndexRouteImport } from './routes/api/collections/index'
+import { Route as ApiCategoriesIndexRouteImport } from './routes/api/categories/index'
 import { Route as ApiCartIndexRouteImport } from './routes/api/cart/index'
 import { Route as AdminSupportIndexRouteImport } from './routes/admin/support/index'
 import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
@@ -222,6 +223,11 @@ const ApiMerchantsIndexRoute = ApiMerchantsIndexRouteImport.update({
 const ApiCollectionsIndexRoute = ApiCollectionsIndexRouteImport.update({
   id: '/api/collections/',
   path: '/api/collections/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCategoriesIndexRoute = ApiCategoriesIndexRouteImport.update({
+  id: '/api/categories/',
+  path: '/api/categories/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCartIndexRoute = ApiCartIndexRouteImport.update({
@@ -415,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/account/orders/': typeof AccountOrdersIndexRoute
   '/admin/support/': typeof AdminSupportIndexRoute
   '/api/cart/': typeof ApiCartIndexRoute
+  '/api/categories/': typeof ApiCategoriesIndexRoute
   '/api/collections/': typeof ApiCollectionsIndexRoute
   '/api/merchants/': typeof ApiMerchantsIndexRoute
   '/api/products/': typeof ApiProductsIndexRoute
@@ -476,6 +483,7 @@ export interface FileRoutesByTo {
   '/account/orders': typeof AccountOrdersIndexRoute
   '/admin/support': typeof AdminSupportIndexRoute
   '/api/cart': typeof ApiCartIndexRoute
+  '/api/categories': typeof ApiCategoriesIndexRoute
   '/api/collections': typeof ApiCollectionsIndexRoute
   '/api/merchants': typeof ApiMerchantsIndexRoute
   '/api/products': typeof ApiProductsIndexRoute
@@ -538,6 +546,7 @@ export interface FileRoutesById {
   '/account/orders/': typeof AccountOrdersIndexRoute
   '/admin/support/': typeof AdminSupportIndexRoute
   '/api/cart/': typeof ApiCartIndexRoute
+  '/api/categories/': typeof ApiCategoriesIndexRoute
   '/api/collections/': typeof ApiCollectionsIndexRoute
   '/api/merchants/': typeof ApiMerchantsIndexRoute
   '/api/products/': typeof ApiProductsIndexRoute
@@ -601,6 +610,7 @@ export interface FileRouteTypes {
     | '/account/orders/'
     | '/admin/support/'
     | '/api/cart/'
+    | '/api/categories/'
     | '/api/collections/'
     | '/api/merchants/'
     | '/api/products/'
@@ -662,6 +672,7 @@ export interface FileRouteTypes {
     | '/account/orders'
     | '/admin/support'
     | '/api/cart'
+    | '/api/categories'
     | '/api/collections'
     | '/api/merchants'
     | '/api/products'
@@ -723,6 +734,7 @@ export interface FileRouteTypes {
     | '/account/orders/'
     | '/admin/support/'
     | '/api/cart/'
+    | '/api/categories/'
     | '/api/collections/'
     | '/api/merchants/'
     | '/api/products/'
@@ -781,6 +793,7 @@ export interface RootRouteChildren {
   OrderOrderIdConfirmationRoute: typeof OrderOrderIdConfirmationRoute
   AdminSupportIndexRoute: typeof AdminSupportIndexRoute
   ApiCartIndexRoute: typeof ApiCartIndexRoute
+  ApiCategoriesIndexRoute: typeof ApiCategoriesIndexRoute
   ApiCollectionsIndexRoute: typeof ApiCollectionsIndexRoute
   ApiMerchantsIndexRoute: typeof ApiMerchantsIndexRoute
   ApiProductsIndexRoute: typeof ApiProductsIndexRoute
@@ -1017,6 +1030,13 @@ declare module '@tanstack/react-router' {
       path: '/api/collections'
       fullPath: '/api/collections/'
       preLoaderRoute: typeof ApiCollectionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/categories/': {
+      id: '/api/categories/'
+      path: '/api/categories'
+      fullPath: '/api/categories/'
+      preLoaderRoute: typeof ApiCategoriesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cart/': {
@@ -1300,6 +1320,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrderOrderIdConfirmationRoute: OrderOrderIdConfirmationRoute,
   AdminSupportIndexRoute: AdminSupportIndexRoute,
   ApiCartIndexRoute: ApiCartIndexRoute,
+  ApiCategoriesIndexRoute: ApiCategoriesIndexRoute,
   ApiCollectionsIndexRoute: ApiCollectionsIndexRoute,
   ApiMerchantsIndexRoute: ApiMerchantsIndexRoute,
   ApiProductsIndexRoute: ApiProductsIndexRoute,

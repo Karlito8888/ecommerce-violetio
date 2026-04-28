@@ -28,7 +28,7 @@ L'architecture du monorepo suit un pattern **single-backend** (TanStack Start) p
 | 1b  | API Routes cart gardent leur propre logique | Web backend (14 routes cart)          | ~550 lignes      | ✅ **Non-duplication** (contrat d'entrée différent) |
 | 2   | Fetching mobile manuel vs TanStack Query    | Mobile (2 pages migrées, 2 légitimes) | ~930 lignes      | ✅ **Phase 2 corrigée**                             |
 | 3   | Types dupliqués dans le mobile              | Mobile (order/lookup)                 | ~60 lignes       | ✅ **Phase 3 corrigée**                             |
-| 4   | Checkout mobile monolithique                | Mobile (checkout.tsx)                 | 700 lignes       | ✅ **Phase 4 corrigée**                              |
+| 4   | Checkout mobile monolithique                | Mobile (checkout.tsx)                 | 700 lignes       | ✅ **Phase 4 corrigée**                             |
 
 **Ce qui est déjà exemplaire** (pas de correction nécessaire) :
 
@@ -447,6 +447,7 @@ Sur les 4 pages identifiées, seules **2 nécessitaient réellement** une migrat
 Remplacement des 4 interfaces locales (`OrderItem`, `OrderBag`, `OrderRefund`, `GuestOrder`) par l'import unique de `OrderWithBagsAndItems` depuis `@ecommerce/shared`.
 
 Les types locaux étaient des sous-ensembles des types shared :
+
 - `GuestOrder` → `OrderWithBagsAndItems` (= `OrderRow & { order_bags: OrderBagWithItems[] }`)
 - `OrderBag` → `OrderBagWithItems` (= `OrderBagRow & { order_items: OrderItemRow[], order_refunds: OrderRefundRow[] }`)
 - `OrderItem` → `OrderItemRow` (superset avec `order_bag_id`, `sku_id`, `price`, `created_at`)
@@ -456,11 +457,12 @@ Seul `OrderWithBagsAndItems` est directement importé — les autres types sont 
 
 **Fichiers modifiés** :
 
-| Fichier                                    | Correction                                                               |
-| ------------------------------------------ | ------------------------------------------------------------------------ |
-| `apps/mobile/src/app/order/lookup.tsx`     | 4 interfaces supprimées, import `OrderWithBagsAndItems` depuis shared    |
+| Fichier                                | Correction                                                            |
+| -------------------------------------- | --------------------------------------------------------------------- |
+| `apps/mobile/src/app/order/lookup.tsx` | 4 interfaces supprimées, import `OrderWithBagsAndItems` depuis shared |
 
 **Changements** :
+
 - Suppression de ~60 lignes de types dupliqués
 - `GuestOrder` → `OrderWithBagsAndItems` (7 occurrences)
 - `bag.order_refunds &&` → `bag.order_refunds.` (le shared type garantit un tableau non-null)
@@ -483,14 +485,14 @@ Refactor du checkout monolithe (~700 lignes, 21 `useState`) en 5 modules à resp
 
 **Architecture** :
 
-| Module | Lignes | Rôle |
-| ------ | ------ | ---- |
-| `checkout/checkoutReducer.ts` | 348 | State machine typée (`useReducer` + 24 actions) |
-| `checkout/checkoutHooks.ts` | 543 | 5 hooks par étape (validation → API → dispatch) |
-| `checkout/checkoutSteps.tsx` | 749 | 5 composants UI purs (présentation uniquement) |
-| `server/getCheckout.ts` | 181 | 7 fetch functions typées vers API Routes |
-| `checkout/index.ts` | 38 | Barrel export |
-| `app/checkout.tsx` (orchestrateur) | 121 | Binding hooks → composants |
+| Module                             | Lignes | Rôle                                            |
+| ---------------------------------- | ------ | ----------------------------------------------- |
+| `checkout/checkoutReducer.ts`      | 348    | State machine typée (`useReducer` + 24 actions) |
+| `checkout/checkoutHooks.ts`        | 543    | 5 hooks par étape (validation → API → dispatch) |
+| `checkout/checkoutSteps.tsx`       | 749    | 5 composants UI purs (présentation uniquement)  |
+| `server/getCheckout.ts`            | 181    | 7 fetch functions typées vers API Routes        |
+| `checkout/index.ts`                | 38     | Barrel export                                   |
+| `app/checkout.tsx` (orchestrateur) | 121    | Binding hooks → composants                      |
 
 **Résultat** : `checkout.tsx` passé de ~700 lignes → **121 lignes**. 21 `useState` → **1 `useReducer`**.
 

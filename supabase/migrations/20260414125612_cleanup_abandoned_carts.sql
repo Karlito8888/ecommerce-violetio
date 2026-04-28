@@ -112,13 +112,30 @@ $$;
 -- =============================================================================
 -- Runs in the Supabase queue worker (low-traffic window).
 -- Unschedules first to avoid duplicate schedules on re-migration.
-SELECT cron.unschedule('cleanup-abandoned-carts');
+-- Wrapped in DO block to gracefully handle environments where pg_cron
+-- extension exists but the scheduler is not running (local dev).
+DO $_cron_block$
+BEGIN
+  -- Try to unschedule first (ignore if job doesn't exist)
+  BEGIN
+    PERFORM cron.unschedule('cleanup-abandoned-carts');
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
 
-SELECT cron.schedule(
-  'cleanup-abandoned-carts',
-  '0 3 * * *',  -- Every day at 03:00 UTC
-  $$SELECT public.cleanup_abandoned_carts();$$
-);
+  -- Schedule the job (fails gracefully if scheduler unavailable)
+  BEGIN
+    PERFORM cron.schedule(
+      'cleanup-abandoned-carts',
+      '0 3 * * *',  -- Every day at 03:00 UTC
+      $sql$SELECT public.cleanup_abandoned_carts();$sql$
+    );
+    RAISE NOTICE 'Successfully scheduled cleanup-abandoned-carts cron job';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Could not schedule cron job (scheduler unavailable): %', SQLERRM;
+  END;
+END;
+$_cron_block$;
 
 -- =============================================================================
 -- 5. RPC function: mark_cart_completed(violet_cart_id text)

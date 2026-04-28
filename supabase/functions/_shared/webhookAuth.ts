@@ -44,6 +44,9 @@
  * | X-Violet-Bag-Id         | Which bag triggered the event              |
  * | X-Violet-Webhook-Id     | Webhook configuration ID                   |
  * | X-Violet-Entity-Length  | Entity size in bytes                       |
+ * | X-Violet-Reason         | Context for MERCHANT_DISABLED events       |
+ *
+ * @see https://docs.violet.io/prism/merchants/merchant-enable-disable — X-Violet-Reason
  *
  * @module webhookAuth
  * @see https://docs.violet.io/prism/webhooks/handling-webhooks — HMAC validation
@@ -105,10 +108,16 @@ export function extractWebhookHeaders(req: Request): {
   hmac: string;
   eventId: string;
   eventType: string;
+  reason: string | null;
 } {
   return {
     hmac: req.headers.get("x-violet-hmac") ?? "",
     eventId: req.headers.get("x-violet-event-id") ?? "",
     eventType: req.headers.get("x-violet-topic") ?? "",
+    // X-Violet-Reason provides context for MERCHANT_DISABLED events
+    // (e.g. "currency_change", "plan_paused", "app_uninstalled", "scopes_removed").
+    // Null when not provided by Violet.
+    // @see https://docs.violet.io/prism/merchants/merchant-enable-disable
+    reason: req.headers.get("x-violet-reason"),
   };
 }

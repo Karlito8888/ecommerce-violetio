@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * RLS Policy Integration Tests — runs against a live local Supabase instance.
  *

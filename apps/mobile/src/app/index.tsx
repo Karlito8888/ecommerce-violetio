@@ -17,32 +17,31 @@ import ProductList from "@/components/product/ProductList";
 import { Fonts, Spacing, MaxContentWidth } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useRecentlyViewed, productsInfiniteQueryOptions } from "@ecommerce/shared";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { fetchProductsMobile } from "@/server/getProducts";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { fetchProductsMobile, fetchCategoriesMobile } from "@/server/getProducts";
 
-/**
- * Fallback categories matching the web CategoryChips component.
- * Will be replaced by dynamic fetch from Violet API in a future story.
- */
+/** Fallback when dynamic categories fetch fails. */
 const FALLBACK_CATEGORIES = [
   { slug: "all", label: "All", filter: undefined as string | undefined },
-  { slug: "home", label: "Home & Living", filter: "Home" },
-  { slug: "fashion", label: "Fashion", filter: "Clothing" },
-  { slug: "gifts", label: "Gifts", filter: "Gifts" },
-  { slug: "beauty", label: "Beauty", filter: "Beauty" },
-  { slug: "accessories", label: "Accessories", filter: "Accessories" },
 ];
+
+const categoriesQuery = {
+  queryKey: ["categories"],
+  queryFn: fetchCategoriesMobile,
+  staleTime: 5 * 60 * 1000,
+};
 
 export default function HomeScreen() {
   const theme = useTheme();
   const [activeCategory, setActiveCategory] = useState<string | undefined>(undefined);
+  const { data: categories = FALLBACK_CATEGORIES } = useQuery(categoriesQuery);
 
   const { trackEvent } = useMobileTracking();
   const prevCategory = useRef(activeCategory);
   useEffect(() => {
     if (activeCategory && activeCategory !== prevCategory.current) {
       prevCategory.current = activeCategory;
-      const cat = FALLBACK_CATEGORIES.find((c) => c.filter === activeCategory);
+      const cat = categories.find((c) => c.filter === activeCategory);
       trackEvent({
         event_type: "category_view",
         payload: {
@@ -51,7 +50,7 @@ export default function HomeScreen() {
         },
       });
     }
-  }, [activeCategory, trackEvent]);
+  }, [activeCategory, categories, trackEvent]);
 
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery(
     productsInfiniteQueryOptions({ category: activeCategory, pageSize: 12 }, fetchProductsMobile),
@@ -72,7 +71,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.chips}
           style={[styles.chipsRow, { borderBottomColor: theme.backgroundElement }]}
         >
-          {FALLBACK_CATEGORIES.map(({ slug, label, filter }) => {
+          {categories.map(({ slug, label, filter }) => {
             const isActive = activeCategory === filter || (slug === "all" && !activeCategory);
             return (
               <Pressable

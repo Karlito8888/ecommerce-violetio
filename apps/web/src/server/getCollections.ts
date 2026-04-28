@@ -4,6 +4,50 @@ import { getAdapter } from "./violetAdapter";
 import { getSupabaseServer } from "./supabaseServer";
 import { getCountryCookieFn } from "./geoip";
 
+/** Supabase columns to select for collections. Shared by list and detail queries. */
+const COLLECTION_COLUMNS =
+  "id, merchant_id, name, handle, description, type, status, external_id, image_url, image_alt, sort_order, date_created, date_last_modified";
+
+/**
+ * Supabase row shape for the `collections` table.
+ * Avoids `as Record<string, unknown>` casts for columns added by migration (handle, image_alt).
+ */
+interface CollectionRow {
+  id: string;
+  merchant_id: string;
+  name: string;
+  handle: string | null;
+  description: string | null;
+  type: string | null;
+  status: string | null;
+  external_id: string | null;
+  image_url: string | null;
+  image_alt: string | null;
+  sort_order: number | null;
+  date_created: string | null;
+  date_last_modified: string | null;
+}
+
+/** Maps a Supabase collection row to a CollectionItem. */
+function mapCollectionRow(row: CollectionRow, productCount = 0): CollectionItem {
+  return {
+    id: row.id,
+    merchantId: row.merchant_id,
+    name: row.name,
+    handle: row.handle ?? "",
+    description: row.description ?? "",
+    type: (row.type ?? "CUSTOM") as "CUSTOM" | "AUTOMATED",
+    status: (row.status ?? "ACTIVE") as "ACTIVE" | "INACTIVE" | "SYNC_IN_PROGRESS" | "FOR_DELETION",
+    externalId: row.external_id ?? "",
+    imageUrl: row.image_url ?? null,
+    imageAlt: row.image_alt ?? null,
+    sortOrder: row.sort_order ?? 0,
+    productCount,
+    dateCreated: row.date_created ?? new Date().toISOString(),
+    dateLastModified: row.date_last_modified ?? new Date().toISOString(),
+  };
+}
+
 /**
  * Server Function — fetch all active collections from Supabase.
  *
@@ -21,9 +65,7 @@ export const getCollectionsFn = createServerFn({ method: "GET" }).handler(
       const supabase = getSupabaseServer();
       const { data, error } = await supabase
         .from("collections")
-        .select(
-          "id, merchant_id, name, handle, description, type, status, external_id, image_url, image_alt, sort_order, date_created, date_last_modified",
-        )
+        .select(COLLECTION_COLUMNS)
         .eq("status", "ACTIVE")
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
@@ -49,26 +91,9 @@ export const getCollectionsFn = createServerFn({ method: "GET" }).handler(
         }
       }
 
-      const collections: CollectionItem[] = (data ?? []).map((row) => ({
-        id: row.id,
-        merchantId: row.merchant_id,
-        name: row.name,
-        handle: ((row as Record<string, unknown>).handle as string) ?? "",
-        description: row.description ?? "",
-        type: (row.type ?? "CUSTOM") as "CUSTOM" | "AUTOMATED",
-        status: (row.status ?? "ACTIVE") as
-          | "ACTIVE"
-          | "INACTIVE"
-          | "SYNC_IN_PROGRESS"
-          | "FOR_DELETION",
-        externalId: row.external_id ?? "",
-        imageUrl: row.image_url ?? null,
-        imageAlt: ((row as Record<string, unknown>).image_alt as string | null) ?? null,
-        sortOrder: row.sort_order ?? 0,
-        productCount: countsMap.get(row.id) ?? 0,
-        dateCreated: row.date_created ?? new Date().toISOString(),
-        dateLastModified: row.date_last_modified ?? new Date().toISOString(),
-      }));
+      const collections: CollectionItem[] = ((data as CollectionRow[]) ?? []).map((row) =>
+        mapCollectionRow(row, countsMap.get(row.id) ?? 0),
+      );
 
       return { data: collections, error: null };
     } catch (err) {
@@ -93,9 +118,7 @@ export const getCollectionByIdFn = createServerFn({ method: "GET" })
       const supabase = getSupabaseServer();
       const { data, error } = await supabase
         .from("collections")
-        .select(
-          "id, merchant_id, name, handle, description, type, status, external_id, image_url, image_alt, sort_order, date_created, date_last_modified",
-        )
+        .select(COLLECTION_COLUMNS)
         .eq("id", id)
         .eq("status", "ACTIVE")
         .single();
@@ -111,26 +134,7 @@ export const getCollectionByIdFn = createServerFn({ method: "GET" })
       }
 
       return {
-        data: {
-          id: data.id,
-          merchantId: data.merchant_id,
-          name: data.name,
-          handle: ((data as Record<string, unknown>).handle as string) ?? "",
-          description: data.description ?? "",
-          type: (data.type ?? "CUSTOM") as "CUSTOM" | "AUTOMATED",
-          status: (data.status ?? "ACTIVE") as
-            | "ACTIVE"
-            | "INACTIVE"
-            | "SYNC_IN_PROGRESS"
-            | "FOR_DELETION",
-          externalId: data.external_id ?? "",
-          imageUrl: data.image_url ?? null,
-          imageAlt: ((data as Record<string, unknown>).image_alt as string | null) ?? null,
-          sortOrder: data.sort_order ?? 0,
-          productCount: 0,
-          dateCreated: data.date_created ?? new Date().toISOString(),
-          dateLastModified: data.date_last_modified ?? new Date().toISOString(),
-        },
+        data: mapCollectionRow(data as CollectionRow),
         error: null,
       };
     } catch (err) {

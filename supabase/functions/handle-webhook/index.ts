@@ -465,7 +465,13 @@ Deno.serve(async (req: Request) => {
           );
           break;
         }
-        await processMerchantStatusChange(supabase, eventId, eventType, result.data);
+        await processMerchantStatusChange(
+          supabase,
+          eventId,
+          eventType,
+          result.data,
+          rawHeaders.reason,
+        );
         break;
       }
 

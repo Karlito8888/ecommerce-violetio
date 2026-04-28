@@ -138,6 +138,7 @@ export async function processOfferAdded(
         vendor: payload.vendor ?? "",
         tags: payload.tags ?? [],
         category: payload.tags?.[0] ?? "",
+        merchantId: payload.merchant_id != null ? String(payload.merchant_id) : undefined,
       },
     });
 
@@ -383,6 +384,32 @@ export async function processMerchantDisconnected(
     );
   }
 
+  // ─── Soft-delete merchant's product embeddings ────────────────────
+  // Per Violet docs: after disconnection, the app loses all access to the
+  // merchant's catalog. We proactively mark all embeddings as unavailable
+  // so they disappear from search immediately, rather than waiting for
+  // individual OFFER_REMOVED webhooks (which may arrive in bulk later).
+  // Embeddings are preserved for potential reactivation if the merchant
+  // reconnects (same as OFFER_REMOVED soft-delete pattern).
+  // @see https://docs.violet.io/prism/merchants/merchant-app-connections
+  const { error: embeddingsError } = await supabase
+    .from("product_embeddings")
+    .update({ available: false })
+    .eq("merchant_id", merchantId)
+    .eq("available", true);
+
+  if (embeddingsError) {
+    // Non-blocking — OFFER_REMOVED webhooks will also handle this.
+    console.error(
+      `[merchant] Failed to soft-delete embeddings for disconnected merchant ${merchantId}:`,
+      embeddingsError.message,
+    );
+  } else {
+    console.log(
+      `[merchant] Soft-deleted product embeddings for disconnected merchant ${merchantId}`,
+    );
+  }
+
   // Store a log entry for the admin dashboard
   await supabase.from("error_logs").insert({
     source: "webhook",
@@ -409,14 +436,16 @@ export async function processMerchantStatusChange(
   eventId: string,
   eventType: string,
   payload: { id: number; name?: string; status?: string },
+  reason?: string | null,
 ): Promise<void> {
   const merchantId = String(payload.id);
   const merchantName = payload.name ?? "Unknown";
   const status = payload.status ?? "unknown";
 
   const isEnabled = eventType === "MERCHANT_ENABLED";
+  const reasonText = reason ? ` reason="${reason}"` : "";
   console.log(
-    `[merchant] Merchant ${isEnabled ? "enabled" : "disabled"}: id=${merchantId} name="${merchantName}" status=${status}`,
+    `[merchant] Merchant ${isEnabled ? "enabled" : "disabled"}: id=${merchantId} name="${merchantName}" status=${status}${reasonText}`,
   );
 
   // ─── Update merchants table ────────────────────────────────────────
@@ -435,8 +464,8 @@ export async function processMerchantStatusChange(
   await supabase.from("error_logs").insert({
     source: "webhook",
     error_type: eventType,
-    message: `Merchant "${merchantName}" (id=${merchantId}) ${isEnabled ? "enabled" : "disabled"}`,
-    context: { merchant_id: merchantId, merchant_name: merchantName, status },
+    message: `Merchant "${merchantName}" (id=${merchantId}) ${isEnabled ? "enabled" : "disabled"}${reason ? ` — reason: ${reason}` : ""}`,
+    context: { merchant_id: merchantId, merchant_name: merchantName, status, reason: reason ?? undefined },
   });
 
   await updateEventStatus(supabase, eventId, "processed");

@@ -26,6 +26,7 @@ export const generateEmbeddingsRequestSchema = z.object({
   vendor: z.string(),
   tags: z.array(z.string()),
   category: z.string(),
+  merchantId: z.string().optional(),
 });
 
 /**

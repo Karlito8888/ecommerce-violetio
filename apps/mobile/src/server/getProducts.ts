@@ -1,11 +1,14 @@
 /**
- * Mobile fetch function for products via the web backend API.
+ * Mobile fetch functions via the web backend API.
  *
- * Implements the ProductsFetchFn interface from @ecommerce/shared so the shared
- * productsInfiniteQueryOptions hook works on mobile via the web backend
- * (Violet credentials stay server-side, never in the JS bundle).
+ * - fetchProductsMobile: paginated product listings
+ * - fetchCategoriesMobile: dynamically-derived product categories
+ * - fetchMerchantsMobile: merchant listing with optional offer counts
+ *
+ * Violet credentials stay server-side, never in the JS bundle.
  */
-import type { ProductsFetchFn } from "@ecommerce/shared";
+
+import type { CategoryItem, ProductsFetchFn } from "@ecommerce/shared";
 import { apiGet } from "./apiClient";
 
 export const fetchProductsMobile: ProductsFetchFn = async (params) => {
@@ -36,3 +39,22 @@ export const fetchProductsMobile: ProductsFetchFn = async (params) => {
     };
   }
 };
+
+/**
+ * Fetches dynamically-derived categories from the web backend.
+ *
+ * Categories are extracted from `source_category_name` on actual Violet offers,
+ * guaranteeing every category maps to real products (no empty results).
+ * Falls back to a minimal "All" category on error.
+ *
+ * @see packages/shared/src/adapters/violetCategories.ts
+ * @see https://docs.violet.io/prism/catalog/categories
+ */
+export async function fetchCategoriesMobile(): Promise<CategoryItem[]> {
+  try {
+    const result = await apiGet<{ data: CategoryItem[]; error: null | unknown }>("/api/categories");
+    return result.data ?? [{ slug: "all", label: "All", filter: undefined }];
+  } catch {
+    return [{ slug: "all", label: "All", filter: undefined }];
+  }
+}
