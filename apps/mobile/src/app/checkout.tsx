@@ -32,6 +32,7 @@ import { ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useStripe } from "@stripe/stripe-react-native";
+import * as SecureStore from "expo-secure-store";
 
 import { Spacing } from "@/constants/theme";
 import { useSetStripeKey } from "./_layout";
@@ -43,13 +44,16 @@ import {
   useGuestInfoStep,
   useBillingStep,
   usePaymentStep,
+  useDiscountStep,
   AddressStep,
   ShippingStep,
   GuestInfoStep,
   BillingStep,
   PaymentStep,
+  DiscountStep,
   CheckoutHeader,
 } from "@/checkout";
+import { fetchCartMobile } from "@/server/getCart";
 
 export default function CheckoutScreen() {
   const [state, dispatch] = useReducer(checkoutReducer, initialCheckoutState);
@@ -58,6 +62,35 @@ export default function CheckoutScreen() {
 
   /** Stable order ID for idempotency — generated once per checkout session. */
   const appOrderIdRef = useRef(crypto.randomUUID());
+
+  // Fetch cart data for discount display (available after address step)
+  const [cartData, setCartData] = React.useState<{
+    bags: import("@ecommerce/shared").Bag[];
+    discounts: import("@ecommerce/shared").DiscountItem[];
+    discountTotal: number;
+  }>({
+    bags: [],
+    discounts: [],
+    discountTotal: 0,
+  });
+  React.useEffect(() => {
+    async function loadCart() {
+      try {
+        const id = await SecureStore.getItemAsync("violet_cart_id");
+        if (!id) return;
+        const result = await fetchCartMobile(id);
+        if (result.data) {
+          const bags = result.data.bags;
+          const allDiscounts = bags.flatMap((b) => b.discounts ?? []);
+          const totalDiscount = bags.reduce((sum, b) => sum + (b.discountTotal ?? 0), 0);
+          setCartData({ bags, discounts: allDiscounts, discountTotal: totalDiscount });
+        }
+      } catch {
+        // Cart may not exist yet — ignore
+      }
+    }
+    loadCart();
+  }, [state.step, state.discount.isApplying]);
 
   // ── Per-step hooks ──────────────────────────────────────────────────
   const addressStep = useAddressStep(state, dispatch);
@@ -71,6 +104,7 @@ export default function CheckoutScreen() {
     appOrderIdRef.current,
     (orderId: string) => router.push(`/order/${orderId}/confirmation` as never),
   );
+  const discountStep = useDiscountStep(state, dispatch, cartData.bags);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -105,6 +139,17 @@ export default function CheckoutScreen() {
         />
 
         <PaymentStep state={state} onSubmit={paymentStep.submit} />
+
+        <DiscountStep
+          discounts={cartData.discounts}
+          discountTotal={cartData.discountTotal}
+          promoCode={state.discount.promoCode}
+          isApplying={state.discount.isApplying}
+          error={state.discount.error}
+          onUpdatePromoCode={discountStep.updatePromoCode}
+          onApplyPromo={discountStep.applyPromo}
+          onRemoveDiscount={discountStep.removeDiscountCode}
+        />
       </ScrollView>
     </SafeAreaView>
   );

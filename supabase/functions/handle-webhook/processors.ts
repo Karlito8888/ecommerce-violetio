@@ -273,11 +273,10 @@ export async function processSyncEvent(
  * Fired when a merchant completes Violet Connect onboarding.
  * Stores merchant info in the `merchants` table (central source of truth),
  * logs the connection for audit trail, auto-enables feature flags,
- * and persists enabled flags in merchant_feature_flags table.
+ * logs the connection for audit trail, and auto-enables feature flags.
  *
  * ## Idempotency
  * Uses UPSERT (ON CONFLICT merchant_id) so duplicate webhooks are safe.
- * Feature flags and feature_flags table use upsert as well.
  *
  * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
  * @see https://docs.violet.io/prism/violet-connect/guides/detecting-merchants-post-connection
@@ -334,18 +333,6 @@ export async function processMerchantConnected(
   // Failures are logged but non-blocking — the merchant is still connected.
   // @see https://docs.violet.io/api-reference/merchants/configuration/toggle-merchant-configuration-global-feature-flag
   await autoEnableMerchantFlags(merchantId);
-
-  // ─── Persist enabled flags in merchant_feature_flags table ─────
-  // Tracks which flags are active for admin visibility.
-  const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata", "contextual_pricing"];
-  await supabase.from("merchant_feature_flags").upsert(
-    flags.map((flag) => ({
-      merchant_id: merchantId,
-      flag_name: flag,
-      enabled: true,
-    })),
-    { onConflict: "merchant_id,flag_name" },
-  );
 
   await updateEventStatus(supabase, eventId, "processed");
 }
@@ -485,58 +472,14 @@ export async function processMerchantStatusChange(
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  */
 export async function processCollectionCreated(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   eventId: string,
   payload: VioletCollectionPayload,
 ): Promise<void> {
-  try {
-    const collectionId = String(payload.id);
-    const merchantId = String(payload.merchant_id);
-
-    console.log(
-      `[collection] Collection created: id=${collectionId} name="${payload.name ?? "Unknown"}" merchant=${merchantId}`,
-    );
-
-    // Prefer media.source_url (API model) over image_url (flat field, may be absent)
-    const imageUrl = payload.media?.source_url ?? payload.image_url ?? null;
-
-    const { error } = await supabase.from("collections").upsert(
-      {
-        id: collectionId,
-        merchant_id: merchantId,
-        name: payload.name ?? "Untitled Collection",
-        handle: (payload as Record<string, unknown>).handle as string | undefined ?? null,
-        description: payload.description ?? null,
-        type: payload.type ?? "CUSTOM",
-        external_id: payload.external_id ?? null,
-        image_url: imageUrl,
-        image_alt: payload.media?.alt ?? null,
-        sort_order: payload.sort_order ?? 0,
-        status: "ACTIVE",
-        date_last_modified: payload.date_last_modified ?? new Date().toISOString(),
-      },
-      { onConflict: "id" },
-    );
-
-    if (error) {
-      await updateEventStatus(
-        supabase,
-        eventId,
-        "failed",
-        `Failed to upsert collection: ${error.message}`,
-      );
-      return;
-    }
-
-    await updateEventStatus(supabase, eventId, "processed");
-  } catch (err) {
-    await updateEventStatus(
-      supabase,
-      eventId,
-      "failed",
-      err instanceof Error ? err.message : "Unknown error in processCollectionCreated",
-    );
-  }
+  console.log(
+    `[collection] Collection created (no-op): id=${payload.id} name="${payload.name ?? "Unknown"}" — fetched directly from Violet API`,
+  );
+  await updateEventStatus(_supabase, eventId, "processed");
 }
 
 /**
@@ -548,54 +491,14 @@ export async function processCollectionCreated(
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  */
 export async function processCollectionUpdated(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   eventId: string,
   payload: VioletCollectionPayload,
 ): Promise<void> {
-  try {
-    const collectionId = String(payload.id);
-
-    console.log(
-      `[collection] Collection updated: id=${collectionId} name="${payload.name ?? "Unknown"}"`,
-    );
-
-    const update: Record<string, unknown> = {
-      date_last_modified: payload.date_last_modified ?? new Date().toISOString(),
-    };
-    if (payload.name !== undefined) update.name = payload.name;
-    if ((payload as Record<string, unknown>).handle !== undefined) update.handle = (payload as Record<string, unknown>).handle;
-    if (payload.description !== undefined) update.description = payload.description;
-    if (payload.type !== undefined) update.type = payload.type;
-    if (payload.image_url !== undefined) update.image_url = payload.image_url;
-    // Prefer media.source_url (API model) over image_url (flat field)
-    if (payload.media?.source_url !== undefined) update.image_url = payload.media.source_url;
-    if (payload.media?.alt !== undefined) update.image_alt = payload.media.alt;
-    if (payload.sort_order !== undefined) update.sort_order = payload.sort_order;
-
-    const { error } = await supabase
-      .from("collections")
-      .update(update)
-      .eq("id", collectionId);
-
-    if (error) {
-      await updateEventStatus(
-        supabase,
-        eventId,
-        "failed",
-        `Failed to update collection: ${error.message}`,
-      );
-      return;
-    }
-
-    await updateEventStatus(supabase, eventId, "processed");
-  } catch (err) {
-    await updateEventStatus(
-      supabase,
-      eventId,
-      "failed",
-      err instanceof Error ? err.message : "Unknown error in processCollectionUpdated",
-    );
-  }
+  console.log(
+    `[collection] Collection updated (no-op): id=${payload.id} name="${payload.name ?? "Unknown"}" — fetched directly from Violet API`,
+  );
+  await updateEventStatus(_supabase, eventId, "processed");
 }
 
 /**
@@ -610,55 +513,14 @@ export async function processCollectionUpdated(
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  */
 export async function processCollectionRemoved(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   eventId: string,
   payload: VioletCollectionPayload,
 ): Promise<void> {
-  try {
-    const collectionId = String(payload.id);
-
-    console.log(`[collection] Collection removed: id=${collectionId}`);
-
-    // Soft-delete: mark as INACTIVE (matches Violet Collection status enum)
-    // Violet statuses: INACTIVE | ACTIVE | SYNC_IN_PROGRESS | FOR_DELETION
-    const { error: updateError } = await supabase
-      .from("collections")
-      .update({ status: "INACTIVE", date_last_modified: new Date().toISOString() })
-      .eq("id", collectionId);
-
-    if (updateError) {
-      await updateEventStatus(
-        supabase,
-        eventId,
-        "failed",
-        `Failed to mark collection as removed: ${updateError.message}`,
-      );
-      return;
-    }
-
-    // Clear the junction table entries for this collection
-    const { error: junctionError } = await supabase
-      .from("collection_offers")
-      .delete()
-      .eq("collection_id", collectionId);
-
-    if (junctionError) {
-      // Non-fatal: collection is marked as removed, orphaned junction rows are harmless
-      console.error(
-        `[collection] Failed to clear junction for collection ${collectionId}:`,
-        junctionError.message,
-      );
-    }
-
-    await updateEventStatus(supabase, eventId, "processed");
-  } catch (err) {
-    await updateEventStatus(
-      supabase,
-      eventId,
-      "failed",
-      err instanceof Error ? err.message : "Unknown error in processCollectionRemoved",
-    );
-  }
+  console.log(
+    `[collection] Collection removed (no-op): id=${payload.id} — fetched directly from Violet API`,
+  );
+  await updateEventStatus(_supabase, eventId, "processed");
 }
 
 /**
@@ -692,98 +554,14 @@ export async function processCollectionRemoved(
  * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
  */
 export async function processCollectionOffersUpdated(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   eventId: string,
   payload: VioletCollectionPayload,
 ): Promise<void> {
-  try {
-    const collectionId = String(payload.id);
-    const merchantId = String(payload.merchant_id);
-
-    console.log(
-      `[collection] Collection offers updated: id=${collectionId} merchant=${merchantId}`,
-    );
-
-    // ─── Fetch current offer IDs from Violet API (lightweight /ids endpoint) ────
-    const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
-    const offerIds: string[] = [];
-    let page = 1; // Violet pagination is 1-based (default: page=1)
-    let hasMore = true;
-
-    while (hasMore) {
-      // Using /offers/ids instead of /offers — returns only int64 IDs, not full offer objects.
-      // @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers-ids
-      const url =
-        `${apiBase}/catalog/collections/${collectionId}/offers/ids?page=${page}&size=100&exclude_hidden=true`;
-      const res = await violetFetch(url);
-
-      if (!res.ok) {
-        // Non-fatal: if Violet API is temporarily unavailable, acknowledge and skip.
-        // The next COLLECTION_OFFERS_UPDATED webhook will reconcile.
-        console.warn(
-          `[collection] Violet /offers/ids returned ${res.status} for collection ${collectionId}`,
-        );
-        await updateEventStatus(supabase, eventId, "processed"); // acknowledge, don't retry
-        return;
-      }
-
-      const data = (await res.json()) as {
-        content: number[]; // int64[] — just the offer IDs
-        last: boolean;
-      };
-
-      offerIds.push(...(data.content ?? []).map(String));
-      hasMore = !data.last;
-      page++;
-    }
-
-    // ─── Reconcile collection_offers table (delete + insert) ────────────────────
-    // Step 1: Clear existing junction rows for this collection
-    const { error: deleteError } = await supabase
-      .from("collection_offers")
-      .delete()
-      .eq("collection_id", collectionId);
-
-    if (deleteError) {
-      await updateEventStatus(
-        supabase,
-        eventId,
-        "failed",
-        `Failed to clear collection_offers for ${collectionId}: ${deleteError.message}`,
-      );
-      return;
-    }
-
-    // Step 2: Insert fresh offer IDs (if any)
-    if (offerIds.length > 0) {
-      const rows = offerIds.map((offerId) => ({
-        collection_id: collectionId,
-        offer_id: offerId,
-      }));
-      const { error: insertError } = await supabase.from("collection_offers").insert(rows);
-      if (insertError) {
-        await updateEventStatus(
-          supabase,
-          eventId,
-          "failed",
-          `Failed to insert collection_offers for ${collectionId}: ${insertError.message}`,
-        );
-        return;
-      }
-    }
-
-    console.log(
-      `[collection] Reconciled ${offerIds.length} offer IDs for collection ${collectionId}`,
-    );
-    await updateEventStatus(supabase, eventId, "processed");
-  } catch (err) {
-    await updateEventStatus(
-      supabase,
-      eventId,
-      "failed",
-      err instanceof Error ? err.message : "Unknown error in processCollectionOffersUpdated",
-    );
-  }
+  console.log(
+    `[collection] Collection offers updated (no-op): id=${payload.id} merchant=${payload.merchant_id} — fetched directly from Violet API`,
+  );
+  await updateEventStatus(_supabase, eventId, "processed");
 }
 
 // ─── Merchant Feature Flag Auto-Enable ──────────────────────────────────

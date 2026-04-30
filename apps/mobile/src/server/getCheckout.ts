@@ -17,8 +17,8 @@
  * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-stripejs-v3
  * @see audit-dry-kiss-duplications.md — Phase 4 migration
  */
-import type { ShippingMethodsAvailable } from "@ecommerce/shared";
-import { apiGet, apiPost } from "./apiClient";
+import type { Cart, ShippingMethodsAvailable } from "@ecommerce/shared";
+import { apiDelete, apiGet, apiPost } from "./apiClient";
 
 // ─── Response types ─────────────────────────────────────────────────────────
 
@@ -153,6 +153,58 @@ export async function getPaymentIntent(
   cartId: string,
 ): Promise<CheckoutApiResponse<PaymentIntentResponse>> {
   return apiGet<CheckoutApiResponse<PaymentIntentResponse>>(`/api/cart/${cartId}/payment-intent`);
+}
+
+/**
+ * Step 7: Submit the cart to Violet, converting it into an Order.
+ *
+ * Uses `app_order_id` (UUID v4) for idempotency — retries with the same
+ * ID won't create duplicate orders.
+ *
+ * After submission, the cart becomes an Order with states:
+ * - COMPLETED: Success
+ * - REQUIRES_ACTION: 3D Secure challenge needed
+ * - REJECTED: Order rejected
+ * - CANCELED: Order canceled by merchant
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart
+ */
+/**
+ * Apply a discount/promo code to the cart.
+ *
+ * Per Violet docs:
+ * - `code` is the promo code entered by the shopper
+ * - `merchant_id` must match a merchant with SKUs in the cart
+ * - `email` is optional, used for customer-restricted discounts
+ * - Returns the full cart with discounts applied to correct bags
+ * - 6 statuses: PENDING, APPLIED, INVALID, NOT_SUPPORTED, ERROR, EXPIRED
+ * - Non-blocking: invalid discounts are auto-removed at submission
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export async function addDiscount(
+  cartId: string,
+  discount: { code: string; merchant_id: number; email?: string },
+): Promise<CheckoutApiResponse<Cart>> {
+  // Sends Violet-format body {code, merchant_id, email?} directly.
+  // The API Route validates with Zod and converts to DiscountInput internally.
+  // @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+  return apiPost<CheckoutApiResponse<Cart>>(`/api/cart/${cartId}/discounts`, discount);
+}
+
+/**
+ * Remove a discount/promo code from the cart.
+ *
+ * Returns the full cart without the removed discount.
+ *
+ * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+ */
+export async function removeDiscount(
+  cartId: string,
+  discountId: string,
+): Promise<CheckoutApiResponse<Cart>> {
+  return apiDelete<CheckoutApiResponse<Cart>>(`/api/cart/${cartId}/discounts/${discountId}`);
 }
 
 /**

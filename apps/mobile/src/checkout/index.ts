@@ -18,6 +18,7 @@ export {
   type GuestInfoState,
   type BillingState,
   type PaymentState,
+  type DiscountState,
 } from "./checkoutReducer";
 
 export {
@@ -26,6 +27,7 @@ export {
   useGuestInfoStep,
   useBillingStep,
   usePaymentStep,
+  useDiscountStep,
 } from "./checkoutHooks";
 
 export {
@@ -34,5 +36,6 @@ export {
   GuestInfoStep,
   BillingStep,
   PaymentStep,
+  DiscountStep,
   CheckoutHeader,
 } from "./checkoutSteps";

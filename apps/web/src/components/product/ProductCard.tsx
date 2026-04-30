@@ -21,18 +21,6 @@ import "./ProductCard.css";
  * @see SearchProductCard — search result variant using ProductMatch type
  */
 export default function ProductCard({ product }: { product: Product }) {
-  const shipping = product.shippingInfo;
-  let deliveryLabel: string | undefined;
-  let deliveryVariant: "available" | "tbd" | undefined;
-
-  if (shipping?.deliveryEstimate) {
-    deliveryLabel = shipping.deliveryEstimate.label;
-    deliveryVariant = "available";
-  } else if (shipping?.source === "OTHER") {
-    deliveryLabel = "Shipping TBD";
-    deliveryVariant = "tbd";
-  }
-
   return (
     <BaseProductCard
       id={product.id}
@@ -43,8 +31,6 @@ export default function ProductCard({ product }: { product: Product }) {
       available={product.available}
       minPrice={product.minPrice}
       currency={product.currency}
-      deliveryLabel={deliveryLabel}
-      deliveryVariant={deliveryVariant}
     />
   );
 }

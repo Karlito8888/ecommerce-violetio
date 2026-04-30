@@ -268,7 +268,9 @@ export interface DiscountItem {
   type: string;
   /** The promo code entered by the shopper */
   code: string;
-  /** "PERCENTAGE" or "FIXED" — only available after pricing */
+  /** "PERCENTAGE" or "AMOUNT" — only available after pricing
+   * @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
+   */
   valueType?: string;
   /** Discount amount in integer cents — only available after pricing */
   amountTotal?: number;

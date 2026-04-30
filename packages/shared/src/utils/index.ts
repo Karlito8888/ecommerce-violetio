@@ -27,6 +27,13 @@ export type { ImageResizeOptions, ImagePreset } from "./imageOptimize.js";
 export { isValidSlug, CONTENT_TYPE_LABELS, CONTENT_FIELD_GUIDE } from "./contentValidation.js";
 export { stripMarkdownSyntax } from "./stripMarkdown.js";
 export {
+  EEA_COUNTRIES,
+  getSupportedCountries,
+  COUNTRY_LABELS,
+  getDefaultCountry,
+  getCountryPlaceholder,
+} from "./eeaCountries.js";
+export {
   convertPrice,
   formatLocalPrice,
   getDeliveryEstimate,
@@ -39,6 +46,9 @@ export {
   COUNTRY_TO_CURRENCY,
   COUNTRY_NAMES,
 } from "./currency.js";
+export { getDiscountDisplay } from "./discountDisplay.js";
+export type { DiscountDisplay, DiscountVariant } from "./discountDisplay.js";
+
 // guestToken and orderPersistence are server-only (use node:crypto).
 // Import them directly: "@ecommerce/shared/src/utils/guestToken" / "orderPersistence"
 // Do NOT re-export here — it breaks the client bundle.

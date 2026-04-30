@@ -22,9 +22,12 @@ import { router } from "expo-router";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import { formatPrice } from "@ecommerce/shared";
-import type { ShippingMethodsAvailable } from "@ecommerce/shared";
+import { formatPrice, getCountryPlaceholder } from "@ecommerce/shared";
+import type { ShippingMethodsAvailable, DiscountItem } from "@ecommerce/shared";
+import { getDiscountDisplay } from "@ecommerce/shared";
 import type { CheckoutState, AddressFields } from "./checkoutReducer";
+
+const PLATFORM_COUNTRY = process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY ?? "US";
 
 // ─── Shared UI helpers ──────────────────────────────────────────────────────
 
@@ -159,7 +162,7 @@ function AddressFormFields({
         style={styles.input}
         value={address.country}
         onChangeText={(v) => onChange({ country: v.toUpperCase() })}
-        placeholder="US"
+        placeholder={getCountryPlaceholder(PLATFORM_COUNTRY)}
         autoCapitalize="characters"
         maxLength={2}
         editable={editable}
@@ -516,7 +519,7 @@ export function BillingStep({
             style={styles.input}
             value={billing.address.country}
             onChangeText={(v) => onUpdateAddress({ country: v.toUpperCase() })}
-            placeholder="US"
+            placeholder={getCountryPlaceholder(PLATFORM_COUNTRY)}
             autoCapitalize="characters"
             maxLength={2}
           />
@@ -572,6 +575,99 @@ export function PaymentStep({ state, onSubmit }: { state: CheckoutState; onSubmi
           <ThemedText style={styles.placeOrderText}>Place Order</ThemedText>
         )}
       </TouchableOpacity>
+    </Section>
+  );
+}
+
+// ─── Discount Step ───────────────────────────────────────────────────────────
+
+export function DiscountStep({
+  discounts,
+  discountTotal,
+  promoCode,
+  isApplying,
+  error,
+  onUpdatePromoCode,
+  onApplyPromo,
+  onRemoveDiscount,
+}: {
+  discounts: DiscountItem[];
+  discountTotal: number;
+  promoCode: string;
+  isApplying: boolean;
+  error: string | null;
+  onUpdatePromoCode: (code: string) => void;
+  onApplyPromo: () => void;
+  onRemoveDiscount: (discountId: string) => void;
+}) {
+  return (
+    <Section>
+      <SectionTitle>PROMO CODE</SectionTitle>
+
+      {/* Applied discounts */}
+      {discounts.map((d) => {
+        const display = getDiscountDisplay(d.status);
+        return (
+          <View key={d.id} style={styles.discountRow}>
+            <View style={styles.discountInfo}>
+              <ThemedText style={styles.discountCode}>{d.code}</ThemedText>
+              {d.status === "APPLIED" && d.amountTotal != null && (
+                <ThemedText style={styles.discountAmount}>-{formatPrice(d.amountTotal)}</ThemedText>
+              )}
+              {display.variant === "muted" && (
+                <ThemedText style={styles.discountStatus}>{display.label}</ThemedText>
+              )}
+              {display.variant === "danger" && (
+                <ThemedText style={styles.discountStatusInvalid}>{display.label}</ThemedText>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.discountRemoveBtn}
+              onPress={() => onRemoveDiscount(d.id)}
+              disabled={isApplying}
+              accessibilityLabel={`Remove discount ${d.code}`}
+            >
+              <ThemedText style={styles.discountRemoveText}>✕</ThemedText>
+            </TouchableOpacity>
+          </View>
+        );
+      })}
+
+      {/* Discount total */}
+      {discountTotal > 0 && (
+        <View style={styles.discountTotalRow}>
+          <ThemedText style={styles.discountTotalLabel}>Discount</ThemedText>
+          <ThemedText style={styles.discountTotalAmount}>-{formatPrice(discountTotal)}</ThemedText>
+        </View>
+      )}
+
+      {/* Promo code input */}
+      <View style={styles.promoRow}>
+        <TextInput
+          style={styles.promoInput}
+          value={promoCode}
+          onChangeText={onUpdatePromoCode}
+          placeholder="Enter promo code"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isApplying}
+          onSubmitEditing={onApplyPromo}
+          returnKeyType="go"
+        />
+        <TouchableOpacity
+          style={[styles.promoButton, (!promoCode.trim() || isApplying) && styles.buttonDisabled]}
+          onPress={onApplyPromo}
+          disabled={!promoCode.trim() || isApplying}
+        >
+          {isApplying ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <ThemedText style={styles.promoButtonText}>Apply</ThemedText>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {error && <ErrorText>{error}</ErrorText>}
     </Section>
   );
 }
@@ -730,6 +826,53 @@ const styles = StyleSheet.create({
   consentChecked: { backgroundColor: "#8b7355" },
   consentCheckmark: { color: "#fff", fontSize: 12, fontWeight: "700" },
   consentLabel: { fontSize: 13, flex: 1, opacity: 0.8 },
+
+  // ── Discount
+  discountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.one,
+    paddingVertical: Spacing.one,
+  },
+  discountInfo: { flexDirection: "row", alignItems: "center", flex: 1, gap: Spacing.two },
+  discountCode: { fontSize: 14, fontWeight: "500" },
+  discountAmount: { fontSize: 14, fontWeight: "500", color: "#5a7a4a" },
+  discountStatus: { fontSize: 12, opacity: 0.6, fontStyle: "italic" },
+  discountStatusInvalid: { fontSize: 12, color: "#b54a4a", fontStyle: "italic" },
+  discountRemoveBtn: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
+  discountRemoveText: { fontSize: 16, color: "#b54a4a" },
+  discountTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "#e8e4df",
+    paddingTop: Spacing.two,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.two,
+  },
+  discountTotalLabel: { fontSize: 14, fontWeight: "500" },
+  discountTotalAmount: { fontSize: 14, fontWeight: "600", color: "#5a7a4a" },
+  promoRow: { flexDirection: "row", gap: Spacing.two, marginTop: Spacing.two },
+  promoInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#d5cec6",
+    borderRadius: 8,
+    padding: Spacing.two,
+    fontSize: 15,
+    color: "#1a1a1a",
+    backgroundColor: "#fff",
+  },
+  promoButton: {
+    backgroundColor: "#2c2c2c",
+    borderRadius: 8,
+    paddingHorizontal: Spacing.three,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 80,
+  },
+  promoButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 
   // ── Payment
   paymentInfo: { fontSize: 14, opacity: 0.7, marginBottom: Spacing.three, lineHeight: 20 },

@@ -32,6 +32,13 @@
  */
 
 import type { ShippingMethodsAvailable } from "@ecommerce/shared";
+import { getDefaultCountry } from "@ecommerce/shared";
+import Constants from "expo-constants";
+
+const PLATFORM_COUNTRY =
+  Constants.expoConfig?.extra?.STRIPE_ACCOUNT_COUNTRY ??
+  process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY ??
+  "US";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +91,16 @@ export interface PaymentState {
   error: string | null;
 }
 
+/** Discount step state — promo codes applied to the cart. */
+export interface DiscountState {
+  /** Promo code input value */
+  promoCode: string;
+  /** Currently applying a code */
+  isApplying: boolean;
+  /** Error from last add/remove attempt */
+  error: string | null;
+}
+
 /** Top-level checkout state — replaces 21 useState calls. */
 export interface CheckoutState {
   step: CheckoutStep;
@@ -103,6 +120,8 @@ export interface CheckoutState {
   billing: BillingState;
   // Payment
   payment: PaymentState;
+  // Discounts
+  discount: DiscountState;
 }
 
 // ─── Actions ────────────────────────────────────────────────────────────────
@@ -142,7 +161,16 @@ export type CheckoutAction =
   | { type: "PAYMENT_START" }
   | { type: "PAYMENT_SUCCESS" }
   | { type: "PAYMENT_ERROR"; error: string }
-  | { type: "PAYMENT_CANCEL" };
+  | { type: "PAYMENT_CANCEL" }
+  // ── Discount actions ──────────────────────────────────────────
+  | { type: "DISCOUNT_UPDATE_PROMO"; promoCode: string }
+  | { type: "DISCOUNT_APPLY_START" }
+  | { type: "DISCOUNT_APPLY_SUCCESS" }
+  | { type: "DISCOUNT_APPLY_ERROR"; error: string }
+  | { type: "DISCOUNT_REMOVE_START"; discountId: string }
+  | { type: "DISCOUNT_REMOVE_SUCCESS" }
+  | { type: "DISCOUNT_REMOVE_ERROR"; error: string }
+  | { type: "DISCOUNT_CLEAR_ERROR" };
 
 // ─── Initial state ──────────────────────────────────────────────────────────
 
@@ -151,7 +179,7 @@ const EMPTY_ADDRESS: AddressFields = {
   city: "",
   state: "",
   postalCode: "",
-  country: "US",
+  country: getDefaultCountry(PLATFORM_COUNTRY),
   phone: "",
 };
 
@@ -182,6 +210,11 @@ export const initialCheckoutState: CheckoutState = {
     sameAsShipping: true,
     address: { ...EMPTY_ADDRESS },
     isSubmitting: false,
+    error: null,
+  },
+  discount: {
+    promoCode: "",
+    isApplying: false,
     error: null,
   },
   payment: {
@@ -363,6 +396,43 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
     case "PAYMENT_CANCEL":
       // User canceled PaymentSheet — reset processing flag, no error shown
       return { ...state, payment: { isProcessing: false, error: null } };
+
+    // ── Discount actions ───────────────────────────────────────────
+    case "DISCOUNT_UPDATE_PROMO":
+      return {
+        ...state,
+        discount: { ...state.discount, promoCode: action.promoCode, error: null },
+      };
+
+    case "DISCOUNT_APPLY_START":
+      return { ...state, discount: { ...state.discount, isApplying: true, error: null } };
+
+    case "DISCOUNT_APPLY_SUCCESS":
+      return {
+        ...state,
+        discount: { promoCode: "", isApplying: false, error: null },
+      };
+
+    case "DISCOUNT_APPLY_ERROR":
+      return {
+        ...state,
+        discount: { ...state.discount, isApplying: false, error: action.error },
+      };
+
+    case "DISCOUNT_REMOVE_START":
+      return { ...state, discount: { ...state.discount, isApplying: true, error: null } };
+
+    case "DISCOUNT_REMOVE_SUCCESS":
+      return { ...state, discount: { ...state.discount, isApplying: false, error: null } };
+
+    case "DISCOUNT_REMOVE_ERROR":
+      return {
+        ...state,
+        discount: { ...state.discount, isApplying: false, error: action.error },
+      };
+
+    case "DISCOUNT_CLEAR_ERROR":
+      return { ...state, discount: { ...state.discount, error: null } };
 
     default:
       throw Error(`Unknown checkout action: ${JSON.stringify((action as { type: string }).type)}`);

@@ -38,3 +38,4 @@ supabase/.supabase/
 supabase/.branches/
 supabase/.temp/
 claude-memory-compiler/
+docs/violet-stripe-credentials-encrypted.json

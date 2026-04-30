@@ -26,6 +26,8 @@ import {
   setBillingAddress,
   getPaymentIntent,
   submitOrder,
+  addDiscount,
+  removeDiscount,
 } from "../server/getCheckout";
 import { fetchCartMobile } from "../server/getCart";
 
@@ -571,4 +573,104 @@ export function usePaymentStep(
   }, [dispatch, presentPaymentSheet, appOrderId, onSuccess]);
 
   return { submit };
+}
+
+// ─── Discount Step ───────────────────────────────────────────────────────────
+
+/**
+ * Hook for discount/promo code management.
+ *
+ * @param bags - Cart bags from parent state (avoids extra fetchCartMobile call).
+ *   The checkout page already has cart data — pass it in rather than re-fetching.
+ */
+export function useDiscountStep(
+  state: CheckoutState,
+  dispatch: React.Dispatch<CheckoutAction>,
+  bags: import("@ecommerce/shared").Bag[],
+) {
+  const updatePromoCode = useCallback(
+    (promoCode: string) => {
+      dispatch({ type: "DISCOUNT_UPDATE_PROMO", promoCode });
+    },
+    [dispatch],
+  );
+
+  const applyPromo = useCallback(async () => {
+    const code = state.discount.promoCode.trim();
+    if (!code) return;
+
+    if (bags.length === 0) {
+      dispatch({ type: "DISCOUNT_APPLY_ERROR", error: "Cart is empty." });
+      return;
+    }
+
+    const cartId = await resolveCartId();
+    if (!cartId) {
+      dispatch({ type: "DISCOUNT_APPLY_ERROR", error: "No active cart found." });
+      return;
+    }
+
+    // Use the first bag's merchant (matches web behavior)
+    const targetBag = bags[0];
+
+    dispatch({ type: "DISCOUNT_APPLY_START" });
+
+    try {
+      // Use guest email if available (for customer-restricted discounts)
+      const email = state.guest.email.trim() || undefined;
+
+      const json = await addDiscount(cartId, {
+        code,
+        merchant_id: Number(targetBag.merchantId),
+        ...(email ? { email } : {}),
+      });
+
+      if (json.error) {
+        dispatch({
+          type: "DISCOUNT_APPLY_ERROR",
+          error: json.error.message ?? "Invalid promo code.",
+        });
+        return;
+      }
+
+      dispatch({ type: "DISCOUNT_APPLY_SUCCESS" });
+    } catch {
+      dispatch({ type: "DISCOUNT_APPLY_ERROR", error: "Network error. Please try again." });
+    }
+  }, [state.discount.promoCode, state.guest.email, bags, dispatch]);
+
+  const removeDiscountCode = useCallback(
+    async (discountId: string) => {
+      const cartId = await resolveCartId();
+      if (!cartId) {
+        dispatch({ type: "DISCOUNT_REMOVE_ERROR", error: "No active cart found." });
+        return;
+      }
+
+      dispatch({ type: "DISCOUNT_REMOVE_START", discountId });
+
+      try {
+        const json = await removeDiscount(cartId, discountId);
+
+        if (json.error) {
+          dispatch({
+            type: "DISCOUNT_REMOVE_ERROR",
+            error: json.error.message ?? "Failed to remove discount.",
+          });
+          return;
+        }
+
+        dispatch({ type: "DISCOUNT_REMOVE_SUCCESS" });
+      } catch {
+        dispatch({ type: "DISCOUNT_REMOVE_ERROR", error: "Network error. Please try again." });
+      }
+    },
+    [dispatch],
+  );
+
+  const clearError = useCallback(() => {
+    dispatch({ type: "DISCOUNT_CLEAR_ERROR" });
+  }, [dispatch]);
+
+  return { updatePromoCode, applyPromo, removeDiscountCode, clearError };
 }

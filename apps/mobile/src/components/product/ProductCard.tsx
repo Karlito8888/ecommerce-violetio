@@ -45,19 +45,6 @@ function ProductCard({ product }: { product: Product }) {
     [router, product.merchantId],
   );
 
-  // Delivery info — mirrors web BaseProductCard logic
-  const shipping = product.shippingInfo;
-  let deliveryLabel: string | null = null;
-  let deliveryIsAvailable = false;
-
-  if (shipping?.deliveryEstimate) {
-    deliveryLabel = shipping.deliveryEstimate.label;
-    deliveryIsAvailable = true;
-  } else if (shipping?.source === "OTHER") {
-    deliveryLabel = "Shipping TBD";
-    deliveryIsAvailable = false;
-  }
-
   return (
     <Pressable
       style={({ pressed }) => [
@@ -126,20 +113,6 @@ function ProductCard({ product }: { product: Product }) {
         </Pressable>
 
         <ThemedText style={[styles.price, { color: theme.text }]}>{priceDisplay}</ThemedText>
-
-        {/* Delivery estimate */}
-        {deliveryLabel && (
-          <ThemedText
-            type="small"
-            style={[
-              styles.delivery,
-              { color: deliveryIsAvailable ? theme.success : theme.textSecondary },
-              !deliveryIsAvailable && styles.deliveryTbd,
-            ]}
-          >
-            {deliveryLabel}
-          </ThemedText>
-        )}
       </View>
     </Pressable>
   );
@@ -210,12 +183,5 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 14,
     fontWeight: "600",
-  },
-  delivery: {
-    marginTop: Spacing.half,
-    fontSize: 12,
-  },
-  deliveryTbd: {
-    fontStyle: "italic",
   },
 });

@@ -10,7 +10,13 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { useCartContext } from "../../contexts/CartContext";
-import { useCartQuery, queryKeys, formatPrice, buildPageMeta } from "@ecommerce/shared";
+import {
+  useCartQuery,
+  queryKeys,
+  formatPrice,
+  buildPageMeta,
+  getDiscountDisplay,
+} from "@ecommerce/shared";
 import type {
   CartFetchFn,
   ShippingMethodsAvailable,
@@ -35,7 +41,11 @@ import {
   logClientErrorFn,
 } from "../../server/checkout";
 import { useAuthSession } from "../../hooks/useAuthSession";
-import { COUNTRIES_WITHOUT_POSTAL_CODE } from "@ecommerce/shared";
+import {
+  COUNTRIES_WITHOUT_POSTAL_CODE,
+  getSupportedCountries,
+  COUNTRY_LABELS,
+} from "@ecommerce/shared";
 import { CheckoutErrorBoundary } from "../../components/checkout/CheckoutErrorBoundary";
 import { BagErrors } from "../../components/checkout/BagErrors";
 import { InventoryAlert } from "../../components/checkout/InventoryAlert";
@@ -106,54 +116,18 @@ function getStripePromise(publishableKey: string): ReturnType<typeof loadStripe>
 }
 
 /**
- * Countries supported by Violet's Stripe platform account (US/UK/EU).
- * Used for a client-side warning — Violet enforces the real restriction server-side.
+ * Countries supported for shipping address selection.
+ *
+ * Dynamically determined based on the Stripe Platform account country:
+ * - US platform (sandbox): US + UK + EEA — matches Violet demo merchants (US Shopify)
+ * - EU/EEA platform (production): UK + EEA only — we can only work with EEA merchants
+ *
+ * @see packages/shared/src/utils/eeaCountries.ts — source of truth
+ * @see https://docs.violet.io/prism/payments/payment-settings/supported-countries
  */
-const SUPPORTED_COUNTRIES = [
-  "US",
-  "GB",
-  "DE",
-  "FR",
-  "IT",
-  "ES",
-  "NL",
-  "BE",
-  "AT",
-  "PT",
-  "FI",
-  "SE",
-  "DK",
-  "NO",
-  "IE",
-  "PL",
-  "CZ",
-  "SK",
-  "HU",
-  "RO",
-];
-
-const EU_COUNTRY_LABELS: Record<string, string> = {
-  US: "United States",
-  GB: "United Kingdom",
-  DE: "Germany",
-  FR: "France",
-  IT: "Italy",
-  ES: "Spain",
-  NL: "Netherlands",
-  BE: "Belgium",
-  AT: "Austria",
-  PT: "Portugal",
-  FI: "Finland",
-  SE: "Sweden",
-  DK: "Denmark",
-  NO: "Norway",
-  IE: "Ireland",
-  PL: "Poland",
-  CZ: "Czech Republic",
-  SK: "Slovakia",
-  HU: "Hungary",
-  RO: "Romania",
-};
+const STRIPE_PLATFORM_COUNTRY = import.meta.env.VITE_STRIPE_ACCOUNT_COUNTRY || "US";
+const SUPPORTED_COUNTRIES = getSupportedCountries(STRIPE_PLATFORM_COUNTRY);
+const COUNTRY_LABELS_MAP = COUNTRY_LABELS;
 
 /**
  * Checkout step state machine.
@@ -1199,7 +1173,7 @@ function CheckoutPage() {
         city: "",
         state: "",
         postalCode: "",
-        country: "US",
+        country: STRIPE_PLATFORM_COUNTRY === "US" ? "US" : STRIPE_PLATFORM_COUNTRY,
         phone: "",
       }
     );
@@ -1245,7 +1219,7 @@ function CheckoutPage() {
         city: "",
         state: "",
         postalCode: "",
-        country: "US",
+        country: STRIPE_PLATFORM_COUNTRY === "US" ? "US" : STRIPE_PLATFORM_COUNTRY,
         phone: "",
       }
     );
@@ -1934,7 +1908,7 @@ function CheckoutPage() {
                     <option value="">Select a country…</option>
                     {SUPPORTED_COUNTRIES.map((code) => (
                       <option key={code} value={code}>
-                        {EU_COUNTRY_LABELS[code] ?? code}
+                        {COUNTRY_LABELS_MAP[code] ?? code}
                       </option>
                     ))}
                   </select>
@@ -1985,7 +1959,7 @@ function CheckoutPage() {
               {step !== "address" && (
                 <p style={{ fontSize: "0.875rem", color: "var(--color-steel)", marginTop: "1rem" }}>
                   {address.address1}, {address.city}, {address.state} {address.postalCode},{" "}
-                  {EU_COUNTRY_LABELS[address.country] ?? address.country}
+                  {COUNTRY_LABELS_MAP[address.country] ?? address.country}
                   {address.phone ? <> · {address.phone}</> : null}
                   {" · "}
                   <button
@@ -2359,7 +2333,7 @@ function CheckoutPage() {
                           <option value="">Select a country…</option>
                           {SUPPORTED_COUNTRIES.map((code) => (
                             <option key={code} value={code}>
-                              {EU_COUNTRY_LABELS[code] ?? code}
+                              {COUNTRY_LABELS_MAP[code] ?? code}
                             </option>
                           ))}
                         </select>
@@ -2572,32 +2546,35 @@ function CheckoutPage() {
             {/* Applied discounts */}
             {allDiscounts.length > 0 && (
               <div className="checkout__discounts">
-                {allDiscounts.map((d) => (
-                  <div key={d.id} className="checkout__discount-tag">
-                    <span className="checkout__discount-code">{d.code}</span>
-                    {d.status === "APPLIED" && d.amountTotal != null && (
-                      <span className="checkout__discount-amount">
-                        -{formatPrice(d.amountTotal)}
-                      </span>
-                    )}
-                    {d.status === "PENDING" && (
-                      <span className="checkout__discount-status">(pending)</span>
-                    )}
-                    {(d.status === "INVALID" || d.status === "EXPIRED" || d.status === "ERROR") && (
-                      <span className="checkout__discount-status checkout__discount-status--invalid">
-                        ({d.status.toLowerCase()})
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      className="checkout__discount-remove"
-                      onClick={() => handleRemoveDiscount(d.id)}
-                      aria-label={`Remove discount ${d.code}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                {allDiscounts.map((d) => {
+                  const display = getDiscountDisplay(d.status);
+                  return (
+                    <div key={d.id} className="checkout__discount-tag">
+                      <span className="checkout__discount-code">{d.code}</span>
+                      {d.status === "APPLIED" && d.amountTotal != null && (
+                        <span className="checkout__discount-amount">
+                          -{formatPrice(d.amountTotal)}
+                        </span>
+                      )}
+                      {display.variant === "muted" && (
+                        <span className="checkout__discount-status">{display.label}</span>
+                      )}
+                      {display.variant === "danger" && (
+                        <span className="checkout__discount-status checkout__discount-status--invalid">
+                          {display.label}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="checkout__discount-remove"
+                        onClick={() => handleRemoveDiscount(d.id)}
+                        aria-label={`Remove discount ${d.code}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

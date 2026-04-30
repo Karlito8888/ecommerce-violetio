@@ -29,10 +29,6 @@ export interface BaseProductCardProps {
   available: boolean;
   minPrice: number;
   currency: string;
-  /** Delivery estimate label (e.g., "5-8 days") or "Shipping TBD" for non-Shopify. */
-  deliveryLabel?: string | null;
-  /** Controls delivery badge styling: "available" (green), "tbd" (muted italic). */
-  deliveryVariant?: "available" | "tbd";
 }
 
 /**
@@ -60,8 +56,6 @@ export default function BaseProductCard({
   available,
   minPrice,
   currency,
-  deliveryLabel,
-  deliveryVariant,
 }: BaseProductCardProps) {
   const [imageError, setImageError] = useState(false);
   const isOutOfStock = !available;
@@ -150,13 +144,6 @@ export default function BaseProductCard({
             )}
           </p>
           <p className="product-card__price">{priceDisplay}</p>
-          {deliveryLabel && (
-            <p
-              className={`product-card__delivery${deliveryVariant ? ` product-card__delivery--${deliveryVariant}` : ""}`}
-            >
-              {deliveryLabel}
-            </p>
-          )}
         </div>
       </Link>
     </article>
