@@ -6,6 +6,7 @@ import { Linking } from "react-native";
 import { StripeProvider, useStripe } from "@stripe/stripe-react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Colors } from "@/constants/theme";
+import { CART_STORAGE_KEY } from "@/constants/cart";
 
 import { ThemePreferenceProvider, useThemePreference } from "@/hooks/use-theme-preference";
 import { ColorSchemeContext } from "@/hooks/use-color-scheme-context";
@@ -56,8 +57,6 @@ try {
 // Controls how foreground notifications are displayed.
 setupNotificationHandler();
 
-const VIOLET_CART_KEY = "violet_cart_id";
-
 // Supabase client singleton — created once outside the render cycle to maintain
 // referential stability. Prevents useCartSync from re-subscribing on every render.
 const supabaseClient = createSupabaseClient();
@@ -97,7 +96,7 @@ function AppContent() {
   // Read current violet cart ID from SecureStore (async, but useCartSync handles null)
   const [currentVioletCartId, setCurrentVioletCartId] = useState<string | null>(null);
   React.useEffect(() => {
-    SecureStore.getItemAsync(VIOLET_CART_KEY).then(setCurrentVioletCartId);
+    SecureStore.getItemAsync(CART_STORAGE_KEY).then(setCurrentVioletCartId);
   }, [_cartSyncTrigger]);
 
   const handleCartUpdated = useCallback(() => {
@@ -106,7 +105,7 @@ function AppContent() {
   }, []);
 
   const handleRemoteCartChange = useCallback(async (newVioletCartId: string) => {
-    await SecureStore.setItemAsync(VIOLET_CART_KEY, newVioletCartId);
+    await SecureStore.setItemAsync(CART_STORAGE_KEY, newVioletCartId);
     setCurrentVioletCartId(newVioletCartId);
     setCartSyncTrigger((prev) => prev + 1);
   }, []);

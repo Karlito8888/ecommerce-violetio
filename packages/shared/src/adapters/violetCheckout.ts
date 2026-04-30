@@ -170,7 +170,23 @@ export async function getPaymentIntent(
     };
   }
 
-  const secret = parsed.data.payment_intent_client_secret;
+  /**
+   * Extract PI client secret from 3 possible locations (per Violet docs):
+   *   1. Root-level `payment_intent_client_secret`
+   *   2. Inside `payment_transactions[i].payment_intent_client_secret`
+   *   3. Inside `payment_transactions[i].metadata.payment_intent_client_secret`
+   *
+   * Prefer the STRIPE provider transaction when filtering payment_transactions.
+   *
+   * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-stripejs-v3
+   */
+  const stripeTx = parsed.data.payment_transactions?.find((tx) => tx.payment_provider === "STRIPE");
+  const secret =
+    parsed.data.payment_intent_client_secret ??
+    stripeTx?.payment_intent_client_secret ??
+    stripeTx?.metadata?.payment_intent_client_secret ??
+    parsed.data.payment_transactions?.[0]?.payment_intent_client_secret ??
+    parsed.data.payment_transactions?.[0]?.metadata?.payment_intent_client_secret;
   if (!secret) {
     return {
       data: null,

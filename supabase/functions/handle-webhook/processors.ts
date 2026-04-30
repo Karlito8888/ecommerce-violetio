@@ -42,7 +42,8 @@
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
-import { violetFetch } from "../_shared/fetchWithRetry.ts";
+import { violetFetch } from "../_shared/fetchWithRetry.ts"
+import { DEFAULT_VIOLET_API_BASE } from "../_shared/constants.ts";
 import type {
   VioletOfferPayload,
   VioletSyncPayload,
@@ -586,7 +587,7 @@ export async function processCollectionOffersUpdated(
  */
 async function autoEnableMerchantFlags(merchantId: string): Promise<void> {
   const flags = ["sync_collections", "sync_metadata", "sync_sku_metadata", "contextual_pricing"];
-  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? DEFAULT_VIOLET_API_BASE;
 
   for (const flag of flags) {
     try {

@@ -48,7 +48,9 @@ export interface ProductsResult extends PaginatedResult<Product> {
 export const getProductsFn = createServerFn({ method: "GET" })
   .inputValidator((input: ProductQuery) => input)
   .handler(async ({ data }): Promise<ApiResponse<ProductsResult>> => {
-    const { countryCode } = await getCountryCookieFn();
+    // Mobile passes country explicitly; web uses the cookie. Param takes precedence.
+    const { countryCode: cookieCountry } = await getCountryCookieFn();
+    const countryCode = data.country ?? cookieCountry;
     const adapter = getAdapter();
     const result = await adapter.getProducts(
       {

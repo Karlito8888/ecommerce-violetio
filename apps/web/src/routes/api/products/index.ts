@@ -4,7 +4,7 @@
  * Returns paginated product listings from Violet API.
  * Public endpoint — no authentication required.
  *
- * Query params: page, pageSize, category, minPrice, maxPrice, inStock, sortBy, sortDirection
+ * Query params: page, pageSize, category, minPrice, maxPrice, inStock, sortBy, sortDirection, country
  *
  * Delegates to the shared getProductsFn server function to ensure consistent
  * filtering (country-based shipping) and contextual pricing.
@@ -31,6 +31,7 @@ export const Route = createFileRoute("/api/products/")({
             inStock: sp.get("inStock") === "true" ? true : undefined,
             sortBy: (sp.get("sortBy") as "relevance" | "price") ?? undefined,
             sortDirection: (sp.get("sortDirection") as "ASC" | "DESC") ?? undefined,
+            country: sp.get("country") ?? undefined,
           },
         });
 

@@ -38,8 +38,8 @@ import { useTrackProductView } from "@/hooks/useMobileTracking";
 import { apiGet, apiPost } from "@/server/apiClient";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+import { CART_STORAGE_KEY } from "../../constants/cart";
 
-const CART_KEY = "violet_cart_id";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const HERO_PX = Math.min(Math.round(SCREEN_WIDTH * PixelRatio.get()), 2160);
 const REC_PX = Math.min(Math.round(180 * PixelRatio.get()), 800);
@@ -135,7 +135,7 @@ export default function ProductDetailScreen() {
         setAddState("idle");
         return;
       }
-      let violetCartId = await SecureStore.getItemAsync(CART_KEY);
+      let violetCartId = await SecureStore.getItemAsync(CART_STORAGE_KEY);
       if (!violetCartId) {
         const createJson = await apiPost<{ data?: { violetCartId?: string } }>("/api/cart", {});
         violetCartId = createJson.data?.violetCartId ?? null;
@@ -143,7 +143,7 @@ export default function ProductDetailScreen() {
           setAddState("idle");
           return;
         }
-        await SecureStore.setItemAsync(CART_KEY, violetCartId);
+        await SecureStore.setItemAsync(CART_STORAGE_KEY, violetCartId);
       }
       const addJson = await apiPost<{ data?: unknown; error?: unknown }>(
         `/api/cart/${violetCartId}/skus`,

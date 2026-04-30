@@ -20,8 +20,6 @@ import type {
   ShippingMethodsAvailable,
   SetShippingMethodInput,
   Distribution,
-  Transfer,
-  SearchTransfersInput,
   CategoryItem,
   CollectionItem,
   DiscountInput,
@@ -157,6 +155,13 @@ export interface SupplierAdapter {
    * @see https://docs.violet.io/prism/catalog/metadata-syncing/sku-metadata
    */
   enableSkuMetadataSync(merchantId: string): Promise<ApiResponse<void>>;
+
+  /**
+   * Enables `contextual_pricing` feature flag for a merchant (presentment currencies).
+   *
+   * @see https://docs.violet.io/prism/catalog/contextual-pricing
+   */
+  enableContextualPricing(merchantId: string): Promise<ApiResponse<void>>;
 
   /**
    * Fetches the latest currency exchange rates from Violet.
@@ -332,9 +337,6 @@ export interface SupplierAdapter {
    */
   getOrderDistributions(violetOrderId: string): Promise<ApiResponse<Distribution[]>>;
 
-  /** Search Violet transfers with optional filters. */
-  searchTransfers(input?: SearchTransfersInput): Promise<ApiResponse<Transfer[]>>;
-
   /**
    * Search distributions across all orders with filters.
    *
@@ -348,61 +350,6 @@ export interface SupplierAdapter {
     page?: number,
     pageSize?: number,
   ): Promise<ApiResponse<import("../types/distribution.types.js").PaginatedDistributions>>;
-
-  /** Retry failed transfer for a single order. */
-  retryTransferForOrder(violetOrderId: string): Promise<ApiResponse<{ message: string }>>;
-
-  /** Retry failed transfer for a single bag. */
-  retryTransferForBag(violetBagId: string): Promise<ApiResponse<{ message: string }>>;
-
-  /** Retry failed transfers for multiple orders. */
-  retryTransfersForOrders(violetOrderIds: string[]): Promise<ApiResponse<{ message: string }>>;
-
-  /** Retry failed transfers for multiple bags. */
-  retryTransfersForBags(violetBagIds: string[]): Promise<ApiResponse<{ message: string }>>;
-
-  /**
-   * Get pending transfers aggregated by merchant.
-   *
-   * Calls `GET /payments/transfers/pending` — returns all transfers in PENDING status.
-   * Each entry represents a merchant with funds waiting to be transferred,
-   * including payout account details.
-   *
-   * Useful for proactive monitoring — transfers stuck in PENDING may indicate
-   * Stripe/Violet issues.
-   *
-   * @see https://docs.violet.io/api-reference/payments/transfers/get-pending-transfers
-   */
-  getPendingTransfers(
-    input?: import("../types/transfer.types.js").GetPendingTransfersInput,
-  ): Promise<ApiResponse<import("../types/transfer.types.js").PendingTransferSummary[]>>;
-
-  /**
-   * Get a single transfer by its Violet Transfer ID.
-   *
-   * Calls `GET /payments/transfers/{transfer_id}` — returns the full transfer detail
-   * including payout references, transfer mechanism, effective related entity IDs,
-   * and reversal IDs.
-   *
-   * Useful for manual refresh of a specific transfer's status.
-   *
-   * @see https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-id
-   */
-  getTransfer(
-    transferId: string,
-  ): Promise<ApiResponse<import("../types/transfer.types.js").TransferDetail>>;
-
-  /**
-   * Get a transfer by its payment provider (Stripe) transfer ID.
-   *
-   * Calls `GET /payments/transfers/external/{external_transfer_id}`.
-   * Useful for reconciliation — matching Stripe Dashboard transfers to Violet orders.
-   *
-   * @see https://docs.violet.io/api-reference/payments/transfers/get-transfer-by-payment-provider-transfer-id
-   */
-  getTransferByProviderId(
-    providerTransferId: string,
-  ): Promise<ApiResponse<import("../types/transfer.types.js").TransferDetail>>;
 
   getOrders(userId: string): Promise<ApiResponse<Order[]>>;
 

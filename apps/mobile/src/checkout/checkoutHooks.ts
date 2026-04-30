@@ -16,7 +16,11 @@
 
 import { useCallback } from "react";
 import * as SecureStore from "expo-secure-store";
-import { COUNTRIES_WITHOUT_POSTAL_CODE, BLOCKED_ADDRESS_USER_MESSAGE } from "@ecommerce/shared";
+import {
+  COUNTRIES_WITHOUT_POSTAL_CODE,
+  BLOCKED_ADDRESS_USER_MESSAGE,
+  ORDER_STATUS_MESSAGES,
+} from "@ecommerce/shared";
 import type { CheckoutState, CheckoutAction, AddressFields } from "../checkout/checkoutReducer";
 import {
   setShippingAddress,
@@ -26,20 +30,18 @@ import {
   setBillingAddress,
   getPaymentIntent,
   submitOrder,
+  priceCart,
   addDiscount,
   removeDiscount,
 } from "../server/getCheckout";
+import { CART_STORAGE_KEY } from "../constants/cart";
 import { fetchCartMobile } from "../server/getCart";
 
-/** SecureStore key for the Violet cart ID. */
-const CART_KEY = "violet_cart_id";
-
-/**
- * Resolves the Violet cart ID from SecureStore.
+/** Resolves the Violet cart ID from SecureStore.
  * Returns null if not found — caller should show an appropriate error.
  */
 async function resolveCartId(): Promise<string | null> {
-  return SecureStore.getItemAsync(CART_KEY);
+  return SecureStore.getItemAsync(CART_STORAGE_KEY);
 }
 
 // ─── Address Step ────────────────────────────────────────────────────────────
@@ -262,6 +264,26 @@ export function useShippingStep(state: CheckoutState, dispatch: React.Dispatch<C
           error: json.error.message ?? "Failed to confirm shipping",
         });
         return;
+      }
+
+      // Price Cart — tax_total check per Violet docs.
+      // "When building your own integration, there are instances where carts are
+      // not priced automatically after applying shipping methods. You will know
+      // this is needed when the response from the apply shipping methods call has
+      // a 0 value for tax_total. If that happens, make a call to price cart before
+      // calling submit."
+      //
+      // We call priceCart non-blockingly after every shipping submit.
+      // It's a GET (idempotent) that returns the priced cart. If pricing already
+      // happened, it's a no-op server-side. This avoids needing the full cart
+      // response from setShippingMethods to check bag.tax === 0.
+      //
+      // @see https://docs.violet.io/api-reference/orders-and-checkout/cart-pricing/price-cart
+      // @see https://docs.violet.io/prism/overview/place-an-order/submit-cart
+      try {
+        await priceCart(cartId);
+      } catch {
+        // Non-fatal: pricing may succeed at submit time. Don't block checkout.
       }
 
       dispatch({ type: "SHIPPING_SUBMIT_SUCCESS" });
@@ -523,6 +545,37 @@ export function usePaymentStep(
       const submitJson = await submitOrder(cartId, appOrderId);
 
       if (submitJson.error) {
+        // Lost confirmation polling (Story 4.7 AC#3).
+        // When submit returns a network/timeout error (not a Violet business error),
+        // the order may have actually been placed. Before showing an error, poll
+        // the cart status to check if it transitioned to "completed".
+        // Mirrors web: 5×2s polling via getCartFn().
+        //
+        // Uses the Violet cart ID (numeric) not appOrderId (UUID) — same as web.
+        // @see checkout/index.tsx — identical pattern.
+        const isNetworkError =
+          submitJson.error.code === "VIOLET.API_ERROR" ||
+          submitJson.error.message.toLowerCase().includes("timeout");
+
+        if (isNetworkError) {
+          for (let i = 0; i < 5; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            const cartCheck = await fetchCartMobile(cartId);
+            if (cartCheck.data?.status === "completed") {
+              // Order actually went through — clear cart and notify parent
+              dispatch({ type: "PAYMENT_SUCCESS" });
+              await SecureStore.deleteItemAsync(CART_STORAGE_KEY);
+              onSuccess("");
+              return;
+            }
+          }
+          dispatch({
+            type: "PAYMENT_ERROR",
+            error: ORDER_STATUS_MESSAGES.LOST_CONFIRMATION,
+          });
+          return;
+        }
+
         dispatch({
           type: "PAYMENT_ERROR",
           error:
@@ -536,16 +589,20 @@ export function usePaymentStep(
       if (orderData?.status === "REJECTED") {
         dispatch({
           type: "PAYMENT_ERROR",
-          error: "Your order was rejected. Please try a different payment method.",
+          error: ORDER_STATUS_MESSAGES.REJECTED,
         });
         return;
       }
 
       if (orderData?.status === "REQUIRES_ACTION") {
+        // REQUIRES_ACTION post-submit is rare on mobile — PaymentSheet handles
+        // 3DS2 natively during presentPaymentSheet() (SCA-Ready). This edge case
+        // occurs for legacy 3DS1 or bank redirects that the SDK couldn't process.
+        // @see https://docs.stripe.com/payments/accept-a-payment?platform=react-native
         dispatch({
           type: "PAYMENT_ERROR",
           error:
-            "Additional verification was required. Your payment may still be processing. Please check your email for confirmation.",
+            "Additional verification is required by your bank. Please check your banking app or email for instructions, then try again.",
         });
         return;
       }
@@ -553,15 +610,14 @@ export function usePaymentStep(
       if (orderData?.status === "CANCELED") {
         dispatch({
           type: "PAYMENT_ERROR",
-          error:
-            "Your order was canceled by the merchant. Your card was not charged. Please try again.",
+          error: ORDER_STATUS_MESSAGES.CANCELED,
         });
         return;
       }
 
       // Success — clear cart and notify parent
       dispatch({ type: "PAYMENT_SUCCESS" });
-      await SecureStore.deleteItemAsync(CART_KEY);
+      await SecureStore.deleteItemAsync(CART_STORAGE_KEY);
       const orderId = String(orderData?.id ?? "");
       onSuccess(orderId);
     } catch {

@@ -21,6 +21,27 @@
 import Constants from "expo-constants";
 import { createSupabaseClient } from "@ecommerce/shared";
 
+/** Per-request timeout in ms — prevents indefinite hangs on slow/stalled backend. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Wraps fetch with an AbortController timeout.
+ * Each call gets a fresh controller so timeouts are independent.
+ * On timeout, throws a clear Error instead of the generic DOMException "AbortError".
+ */
+function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal })
+    .catch((err) => {
+      if (err.name === "AbortError") {
+        throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+      }
+      throw err;
+    })
+    .finally(() => clearTimeout(timeoutId));
+}
+
 function getApiUrl(): string {
   return (
     Constants.expoConfig?.extra?.apiUrl ?? process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:3000"
@@ -47,7 +68,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export async function apiGet<T>(path: string): Promise<T> {
   const url = `${getApiUrl()}${path}`;
   const headers = await getAuthHeaders();
-  const res = await fetch(url, { headers });
+  const res = await fetchWithTimeout(url, { headers });
 
   if (!res.ok) {
     throw new Error(`API GET ${path} → ${res.status}`);
@@ -65,7 +86,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const url = `${getApiUrl()}${path}`;
   const headers = await getAuthHeaders();
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -87,7 +108,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   const url = `${getApiUrl()}${path}`;
   const headers = await getAuthHeaders();
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -109,7 +130,7 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
 export async function apiDelete<T>(path: string): Promise<T> {
   const url = `${getApiUrl()}${path}`;
   const headers = await getAuthHeaders();
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "DELETE",
     headers,
   });

@@ -12,6 +12,7 @@ import {
   resetBiometricFailCount,
 } from "../services/biometricService";
 import { apiGet, apiPost } from "@/server/apiClient";
+import { CART_STORAGE_KEY } from "@/constants/cart";
 
 /** Extended auth context with biometric state and actions. */
 interface BiometricAuthSession extends AuthSession {
@@ -35,8 +36,6 @@ const defaultBiometricSession: BiometricAuthSession = {
 };
 
 const AuthContext = createContext<BiometricAuthSession>(defaultBiometricSession);
-
-const VIOLET_CART_KEY = "violet_cart_id";
 
 /** Provides auth state (including biometric) to the entire app. */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -95,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mergeInProgressRef.current = true;
 
         try {
-          const currentVioletCartId = await SecureStore.getItemAsync(VIOLET_CART_KEY);
+          const currentVioletCartId = await SecureStore.getItemAsync(CART_STORAGE_KEY);
           if (currentVioletCartId) {
             // Check if user has an existing authenticated cart
             const userCart = await apiGet<{ violetCartId?: string | null }>("/api/cart/user");
@@ -108,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 targetVioletCartId: existingCartId,
               });
               if (mergeResult.success) {
-                await SecureStore.setItemAsync(VIOLET_CART_KEY, existingCartId);
+                await SecureStore.setItemAsync(CART_STORAGE_KEY, existingCartId);
               }
             } else if (!existingCartId) {
               // No existing cart → claim the anonymous cart

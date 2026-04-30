@@ -445,11 +445,15 @@ describe("VioletAdapter", () => {
       vi.useRealTimers();
     });
 
-    it("maps 401 to VIOLET.AUTH_FAILED", async () => {
+    it("maps 401 to VIOLET.AUTH_FAILED after token refresh attempt", async () => {
       vi.stubGlobal("fetch", mockFetchResponse({}, 401));
 
       const result = await adapter.getProduct("1");
       expect(result.error!.code).toBe("VIOLET.AUTH_FAILED");
+      // Verify the token manager was asked to invalidate and re-auth
+      expect(tokenManager.invalidateToken).toHaveBeenCalledTimes(1);
+      // getAuthHeaders called twice: initial request + retry after token refresh
+      expect(tokenManager.getAuthHeaders).toHaveBeenCalledTimes(2);
     });
 
     it("maps 403 to VIOLET.AUTH_FAILED", async () => {

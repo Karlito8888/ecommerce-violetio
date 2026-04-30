@@ -285,7 +285,7 @@ async function simulatePaymentSubmit(opts: {
       dispatch({
         type: "PAYMENT_ERROR",
         error:
-          "Additional verification was required. Your payment may still be processing. Please check your email for confirmation.",
+          "Additional verification is required by your bank. Please check your banking app or email for instructions, then try again.",
       });
       return;
     }
@@ -688,7 +688,7 @@ describe("usePaymentStep — submit flow", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "PAYMENT_ERROR",
       error:
-        "Additional verification was required. Your payment may still be processing. Please check your email for confirmation.",
+        "Additional verification is required by your bank. Please check your banking app or email for instructions, then try again.",
     });
   });
 

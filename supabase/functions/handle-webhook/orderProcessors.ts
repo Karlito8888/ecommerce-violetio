@@ -72,7 +72,8 @@
  */
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import type { VioletOrderPayload, VioletBagPayload } from "../_shared/schemas.ts";
+import type { VioletOrderPayload, VioletBagPayload } from "../_shared/schemas.ts"
+import { DEFAULT_VIOLET_API_BASE } from "../_shared/constants.ts";
 import { updateEventStatus } from "./processors.ts";
 
 import { violetFetch } from "../_shared/fetchWithRetry.ts";
@@ -487,7 +488,7 @@ async function syncDistributionsForOrder(
   supabase: SupabaseClient,
   violetOrderId: string,
 ): Promise<void> {
-  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? DEFAULT_VIOLET_API_BASE;
   const url = `${apiBase}/orders/${violetOrderId}/distributions`;
 
   try {
@@ -602,7 +603,7 @@ async function fetchAndStoreRefundDetails(
   payload: VioletBagPayload,
   orderBagId: string,
 ): Promise<void> {
-  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? DEFAULT_VIOLET_API_BASE;
   const url = `${apiBase}/orders/${payload.order_id}/bags/${payload.id}/refunds`;
   try {
     const res = await violetFetch(url);

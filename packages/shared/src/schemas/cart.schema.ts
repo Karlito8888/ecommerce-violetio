@@ -134,6 +134,22 @@ export const violetCartResponseSchema = z.object({
    * We don't use this — prefer the env var to avoid exposing it via API responses.
    */
   stripe_key: z.string().optional(),
+  /**
+   * Payment transactions from Violet — contains PI client secret as a fallback source.
+   * The secret can appear in 3 locations (root, payment_transactions[i], metadata).
+   *
+   * @see https://docs.violet.io/prism/payments/payments-during-checkout/payment-transactions
+   * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-stripejs-v3 — recommended extraction pattern
+   */
+  payment_transactions: z
+    .array(
+      z.object({
+        payment_intent_client_secret: z.string().optional(),
+        payment_provider: z.string().optional(),
+        metadata: z.object({ payment_intent_client_secret: z.string().optional() }).optional(),
+      }),
+    )
+    .optional(),
   bags: z.array(violetBagSchema).optional().default([]),
   /** CRITICAL: check this array even on HTTP 200 */
   errors: z.array(violetBagErrorSchema).optional().default([]),

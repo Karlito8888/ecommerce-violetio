@@ -25,7 +25,8 @@
  */
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders } from "../_shared/cors.ts"
+import { DEFAULT_VIOLET_API_BASE } from "../_shared/constants.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 import { violetFetch } from "../_shared/fetchWithRetry.ts";
@@ -64,7 +65,7 @@ async function fetchVioletProducts(productIds: string[]): Promise<Map<string, Vi
   const result = new Map<string, VioletProduct>();
   if (productIds.length === 0) return result;
 
-  const violetApiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const violetApiBase = Deno.env.get("VIOLET_API_BASE") ?? DEFAULT_VIOLET_API_BASE;
 
   const fetches = productIds.map(async (id) => {
     try {

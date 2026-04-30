@@ -207,6 +207,12 @@ export interface ProductQuery {
   sortBy?: "relevance" | "price";
   /** Sort direction. Only meaningful when `sortBy` is set. */
   sortDirection?: "ASC" | "DESC";
+  /**
+   * ISO 3166-1 alpha-2 country code for contextual pricing and geo-filtering.
+   * When provided, takes precedence over the server-side country cookie.
+   * Used by mobile clients that don't have cookies.
+   */
+  country?: string;
 }
 
 /**

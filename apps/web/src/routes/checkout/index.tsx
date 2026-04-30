@@ -2,13 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { loadStripe } from "@stripe/stripe-js";
-import {
-  Elements,
-  PaymentElement,
-  PaymentRequestButtonElement,
-  useStripe,
-  useElements,
-} from "@stripe/react-stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import { useCartContext } from "../../contexts/CartContext";
 import {
   useCartQuery,
@@ -35,8 +29,6 @@ import {
   addDiscountFn,
   removeDiscountFn,
   getPaymentIntentFn,
-  submitOrderFn,
-  clearCartCookieFn,
   persistAndConfirmOrderFn,
   logClientErrorFn,
 } from "../../server/checkout";
@@ -45,12 +37,22 @@ import {
   COUNTRIES_WITHOUT_POSTAL_CODE,
   getSupportedCountries,
   COUNTRY_LABELS,
+  getDefaultCountry,
 } from "@ecommerce/shared";
 import { CheckoutErrorBoundary } from "../../components/checkout/CheckoutErrorBoundary";
 import { BagErrors } from "../../components/checkout/BagErrors";
 import { InventoryAlert } from "../../components/checkout/InventoryAlert";
 import { CartRecovery } from "../../components/checkout/CartRecovery";
 import { RetryPrompt } from "../../components/checkout/RetryPrompt";
+// Extracted components (P3-5 refactor)
+import { PaymentForm } from "./PaymentForm";
+import { WalletCheckoutForm } from "./WalletCheckoutForm";
+import {
+  readCheckoutStorage,
+  clearCheckoutStorage,
+  persistCheckoutStorage,
+} from "./checkoutStorage";
+import type { CheckoutPersistedState } from "./checkoutStorage";
 
 /**
  * /checkout — Full checkout flow: address → methods → guest info → billing → payment.
@@ -127,758 +129,14 @@ function getStripePromise(publishableKey: string): ReturnType<typeof loadStripe>
  */
 const STRIPE_PLATFORM_COUNTRY = import.meta.env.VITE_STRIPE_ACCOUNT_COUNTRY || "US";
 const SUPPORTED_COUNTRIES = getSupportedCountries(STRIPE_PLATFORM_COUNTRY);
-const COUNTRY_LABELS_MAP = COUNTRY_LABELS;
 
-/**
- * Checkout step state machine.
- *
- * Story 4.3: address → methods → confirmed
- * Story 4.4: confirmed → guestInfo → billing → payment → complete
- */
-type CheckoutStep = "address" | "methods" | "confirmed" | "guestInfo" | "billing" | "payment";
+import type { CheckoutStep, AddressFormState, AddressFormErrors } from "./useCheckoutState";
 
-interface AddressFormState {
-  address1: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  /** Contact phone for carrier delivery notifications — optional per Violet docs. */
-  phone: string;
-}
-
-interface AddressFormErrors {
-  address1?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: string;
-  phone?: string;
-}
-
-// ─── PaymentForm ──────────────────────────────────────────────────────────
-// Extracted as a child component because `useStripe()` and `useElements()`
-// hooks MUST be called inside an `<Elements>` provider. They throw if called
-// in the same component that renders `<Elements>`.
-
-/**
- * Inner payment form rendered inside `<Elements>` provider.
- *
- * ## Stripe hooks requirement
- * `useStripe()` and `useElements()` only work inside an `<Elements>` provider.
- * This is a Stripe architectural constraint — the hooks access the Stripe
- * instance from React context provided by `<Elements>`.
- *
- * ## Submit flow
- * 1. `stripe.confirmPayment({ redirect: "if_required" })` — authorizes card
- * 2. On success: call `submitOrderFn` — Violet charges the card
- * 3. If REQUIRES_ACTION: `stripe.handleNextAction()` for 3DS, then re-submit
- * 4. If COMPLETED: navigate to confirmation
- * 5. If REJECTED: show error
- *
- * @see Story 4.4 C3 — complete submit flow reference
- */
-function PaymentForm({
-  appOrderId,
-  violetCartId,
-  onSuccess,
-  onPreSubmitValidation,
-}: {
-  appOrderId: string;
-  /**
-   * Violet cart ID — needed for lost confirmation polling (Story 4.7 AC#3).
-   *
-   * ## Why this prop exists (Code Review Fix — C2)
-   * The original implementation passed `appOrderId` (a UUID v4 idempotency key) to
-   * `getCartFn()` during polling, but `getCartFn` expects a Violet cart integer ID.
-   * This caused the polling to always 404 — making lost confirmation recovery useless.
-   *
-   * `violetCartId` must be the Violet integer cart ID (as string), NOT the UUID.
-   * PaymentForm cannot access CartContext directly because it renders inside
-   * `<Elements>` (Stripe provider), so we pass it explicitly from the parent.
-   */
-  violetCartId: string;
-  onSuccess: (orderId: string) => void;
-  /** Story 4.7: Pre-submit inventory validation callback */
-  onPreSubmitValidation?: () => Promise<boolean>;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [paymentLoadError, setPaymentLoadError] = useState<string | null>(null);
-
-  async function handlePlaceOrder(e: React.FormEvent) {
-    e.preventDefault();
-    if (!stripe || !elements || isSubmitting) return;
-
-    setIsSubmitting(true);
-    setSubmitError(null);
-
-    // Story 4.7: Pre-submit inventory validation (FR18)
-    if (onPreSubmitValidation) {
-      const isValid = await onPreSubmitValidation();
-      if (!isValid) {
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
-    /**
-     * Step 0: Trigger Stripe Elements form validation and collect wallet payment methods.
-     *
-     * Per Stripe docs, elements.submit() must be called before confirmPayment() to
-     * trigger form validation and collect wallet payment methods (Apple Pay, Google Pay).
-     * Skipping this step can cause validation errors to be missed.
-     *
-     * @see https://docs.stripe.com/js/payment_intents/confirm_payment
-     */
-    const { error: submitError } = await elements.submit();
-    if (submitError) {
-      setSubmitError(submitError.message ?? "Please check your payment details and try again.");
-      setIsSubmitting(false);
-      logClientErrorFn({
-        data: {
-          error_type: "STRIPE.ELEMENTS_SUBMIT_FAILED",
-          message: submitError.message ?? "Elements submit failed",
-          context: { code: submitError.code },
-        },
-      });
-      return;
-    }
-
-    /**
-     * Step 1: Confirm payment client-side.
-     *
-     * `redirect: "if_required"` prevents Stripe from redirecting for standard
-     * card payments. For Apple Pay / Google Pay, Stripe handles natively.
-     * This call AUTHORIZES the card but does NOT charge it.
-     *
-     * @see https://docs.violet.io/guides/checkout/payments
-     */
-    const { error: stripeError } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required",
-    });
-
-    if (stripeError) {
-      setSubmitError(getStripeErrorMessage(stripeError));
-      setIsSubmitting(false);
-      logClientErrorFn({
-        data: {
-          error_type: "STRIPE.PAYMENT_FAILED",
-          message: stripeError.message ?? "Payment confirmation failed",
-          context: { code: stripeError.code, type: stripeError.type },
-        },
-      });
-      return;
-    }
-
-    /**
-     * Step 2: Submit to Violet — this charges the card.
-     *
-     * Uses the same `appOrderId` for idempotency. If the user clicks submit
-     * twice, or retries after 3DS, Violet deduplicates via this ID.
-     */
-    const result = await submitOrderFn({ data: { appOrderId } });
-
-    if (result.error) {
-      /**
-       * Story 4.7 AC#3: Lost confirmation polling.
-       *
-       * When submit returns a network/timeout error (not a Violet business error),
-       * the order may have actually been placed. Before showing an error, we poll
-       * the cart status to check if it transitioned to "completed".
-       *
-       * ## Why `violetCartId` and not `appOrderId` (Code Review Fix — C2)
-       * `getCartFn` calls Violet's GET /checkout/cart/{id} which expects the
-       * numeric Violet cart ID. `appOrderId` is a UUID v4 used only for
-       * idempotency — passing it here would always 404.
-       */
-      if (
-        result.error.code === "VIOLET.API_ERROR" ||
-        result.error.message.toLowerCase().includes("timeout")
-      ) {
-        /**
-         * Lost confirmation polling — check if the order completed despite the error.
-         *
-         * cartCheck.data.id is the Supabase UUID (cart row ID), NOT the Violet order ID.
-         * The onSuccess handler expects a Violet order ID for the confirmation page
-         * navigation. Since the cart response does not contain the Violet order ID,
-         * we navigate the user to home with a success message instead of attempting
-         * to build a confirmation URL with the wrong ID type.
-         */
-        for (let i = 0; i < 5; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          const cartCheck = await getCartFn({ data: violetCartId });
-          if (cartCheck.data?.status === "completed") {
-            await clearCartCookieFn();
-            setSubmitError(null);
-            setIsSubmitting(false);
-            onSuccess("");
-            return;
-          }
-        }
-        setSubmitError(
-          "Your order may have been placed. Please check your email for confirmation before trying again.",
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      /**
-       * 409 Conflict — duplicate submission with a different app_order_id.
-       * This typically means the cart was already submitted. Don't retry — poll instead.
-       */
-      if (result.error.code === "VIOLET.CONFLICT") {
-        setSubmitError(
-          "This order may have already been placed. Please check your email before trying again.",
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      /**
-       * 412 Precondition Failed — cart not priced or checkout incomplete.
-       * This means our checkout flow missed a required step. User should start a new cart.
-       */
-      if (result.error.code === "VIOLET.PRECONDITION_FAILED") {
-        setSubmitError(
-          "Your cart could not be submitted because checkout was incomplete. Please start a new order.",
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      setSubmitError(result.error.message);
-      setIsSubmitting(false);
-      return;
-    }
-
-    /**
-     * Step 3: Handle 3D Secure challenge if needed.
-     *
-     * When Violet returns REQUIRES_ACTION, the bank requires additional
-     * authentication. `stripe.handleNextAction()` opens the 3DS challenge
-     * modal. After resolution, re-submit with the same appOrderId.
-     */
-    if (result.data?.status === "REQUIRES_ACTION") {
-      const secret = result.data.paymentIntentClientSecret;
-      if (!secret) {
-        setSubmitError("3D Secure required but no client secret returned");
-        setIsSubmitting(false);
-        return;
-      }
-
-      const { error: actionError } = await stripe.handleNextAction({
-        clientSecret: secret,
-      });
-
-      if (actionError) {
-        setSubmitError(actionError.message ?? "3D Secure authentication failed");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Re-submit after 3DS success (reuse same appOrderId for idempotency)
-      const retryResult = await submitOrderFn({ data: { appOrderId } });
-      if (
-        retryResult.error ||
-        retryResult.data?.status === "REJECTED" ||
-        retryResult.data?.status === "CANCELED"
-      ) {
-        setSubmitError(
-          retryResult.error?.message ??
-            "Order could not be completed after verification. Your card was not charged.",
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      onSuccess(retryResult.data?.id ?? "");
-      return;
-    }
-
-    if (result.data?.status === "REJECTED") {
-      setSubmitError("Your order was rejected. Please try a different payment method.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    /**
-     * Handle CANCELED status — merchant canceled the order after initial acceptance.
-     * This is distinct from REJECTED (payment failure). The user was NOT charged.
-     *
-     * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states
-     */
-    if (result.data?.status === "CANCELED") {
-      setSubmitError(
-        "Your order was canceled by the merchant. Your card was not charged. Please try again.",
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    /**
-     * Success — COMPLETED status (full or partial).
-     *
-     * ## Partial success handling
-     * Multi-bag carts may have some bags succeed and some fail. When this happens,
-     * Violet returns `status: "COMPLETED"` with `errors[]` populated for failed bags.
-     * Failed bags have `status: "REJECTED"` / `financialStatus: "VOIDED"`.
-     * The card is only charged for successful bags — no overcharge risk.
-     *
-     * We navigate to the confirmation page regardless. The confirmation page fetches
-     * `OrderDetail` from Violet which includes per-bag statuses (ACCEPTED vs REJECTED),
-     * so the user sees exactly which items were fulfilled and which weren't.
-     *
-     * @see packages/shared/src/types/order.types.ts — OrderSubmitResult.errors
-     * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-completion/submit-cart
-     */
-    onSuccess(result.data?.id ?? "");
-  }
-
-  /**
-   * Maps Stripe error codes to human-readable messages.
-   *
-   * Stripe returns machine-readable `error.code` values. We map common payment
-   * errors to clear, actionable messages for the user. The fallback uses
-   * Stripe's own `error.message` which is already user-friendly for most cases.
-   *
-   * @see https://stripe.com/docs/error-codes
-   */
-  function getStripeErrorMessage(error: { code?: string; message?: string }): string {
-    switch (error.code) {
-      case "card_declined":
-        return "Your card was declined. Please try a different payment method.";
-      case "expired_card":
-        return "Your card has expired. Please use a different card.";
-      case "incorrect_cvc":
-        return "The security code is incorrect. Please check and try again.";
-      case "processing_error":
-        return "A processing error occurred. Please try again in a moment.";
-      case "insufficient_funds":
-        return "Insufficient funds. Please try a different payment method.";
-      default:
-        return error.message ?? "Payment could not be processed. Please try again.";
-    }
-  }
-
-  return (
-    <form onSubmit={handlePlaceOrder}>
-      <PaymentElement
-        onLoadError={(event) => {
-          setPaymentLoadError(
-            event.error?.message ??
-              "Payment form could not be loaded. Please refresh and try again.",
-          );
-        }}
-      />
-
-      {paymentLoadError && (
-        <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
-          {paymentLoadError}
-        </p>
-      )}
-
-      {submitError && (
-        <p className="checkout__field-error" role="alert" style={{ marginTop: "1rem" }}>
-          {submitError}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        className={`checkout__submit checkout__submit--place-order${isSubmitting ? " checkout__submit--loading" : ""}`}
-        disabled={isSubmitting || !stripe || !elements || !!paymentLoadError}
-        style={{ marginTop: "1.5rem" }}
-      >
-        {isSubmitting ? (
-          <span className="checkout__submit-spinner" aria-label="Processing payment…">
-            Processing…
-          </span>
-        ) : (
-          "Place Order"
-        )}
-      </button>
-    </form>
-  );
-}
-
-// ─── WalletCheckoutForm (Apple Pay / Google Pay Checkout) ────────────────
-// Renders a PaymentRequestButtonElement that handles the full checkout flow
-// through the Apple Pay / Google Pay sheet: address, shipping, payment.
-//
-// ## Flow (per Violet docs)
-// 1. User taps Apple Pay / Google Pay button
-// 2. `shippingaddresschange`: apply customer address to cart, fetch shipping methods
-// 3. `shippingoptionchange`: apply selected shipping method to cart
-// 4. `paymentmethod`: confirm payment via Stripe, then submit to Violet
-//    with `order_customer` containing the full (unredacted) address
-//
-// ## Multi-merchant limitation
-// Apple Pay sheet cannot show different shipping methods per merchant.
-// For multi-bag carts, only the first bag's shipping methods are shown.
-// The doc recommends using the payment-only flow for multi-merchant carts.
-//
-// @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-apple-pay
-
-function WalletCheckoutForm({
-  clientSecret,
-  appOrderId,
-  violetCartId: _violetCartId,
-  cartTotal,
-  currency,
-  onSuccess,
-}: {
-  clientSecret: string;
-  appOrderId: string;
-  violetCartId: string;
-  cartTotal: number;
-  currency: string;
-  onSuccess: (orderId: string) => void;
-}) {
-  const stripe = useStripe();
-  const [paymentRequest, setPaymentRequest] = useState<
-    import("@stripe/stripe-js").PaymentRequest | null
-  >(null);
-  const [canMakePayment, setCanMakePayment] = useState(false);
-  const [isSubmitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!stripe || !clientSecret) return;
-
-    // Country code of the Stripe platform account — determines Apple Pay/Google Pay availability.
-    // US for sandbox (Violet's internal Stripe), FR for production (our Stripe platform account).
-    // @see https://stripe.com/docs/js/payment_request
-    const accountCountry = import.meta.env.VITE_STRIPE_ACCOUNT_COUNTRY || "US";
-
-    const pr = stripe.paymentRequest({
-      country: accountCountry,
-      currency: currency.toLowerCase(),
-      total: {
-        label: "Order Total",
-        amount: cartTotal,
-      },
-      requestPayerName: true,
-      requestPayerEmail: true,
-      requestShipping: true,
-    });
-
-    pr.canMakePayment().then((result) => {
-      if (result) {
-        setPaymentRequest(pr);
-        setCanMakePayment(true);
-      }
-    });
-
-    return () => {
-      // Cleanup listeners
-      pr.off("shippingaddresschange");
-      pr.off("shippingoptionchange");
-      pr.off("paymentmethod");
-    };
-  }, [stripe, clientSecret, cartTotal, currency]);
-
-  // ── shippingaddresschange ──────────────────────────────────────────
-  // Apple Pay returns the shipping address but omits address_1 for privacy.
-  // Violet allows empty string for address_1 on wallet-based carts at this stage.
-  // The real address is provided after payment confirmation in the submit step.
-  useEffect(() => {
-    if (!paymentRequest) return;
-
-    paymentRequest.on("shippingaddresschange", async (event) => {
-      const addr = event.shippingAddress;
-
-      try {
-        // Step 1: Apply customer info with partial address (empty address_1)
-        await setShippingAddressFn({
-          data: {
-            address1: "", // Apple redacts this until payment confirmed
-            city: addr.city ?? "",
-            state: addr.region ?? "",
-            postalCode: addr.postalCode ?? "",
-            country: addr.country ?? "US",
-          },
-        });
-
-        // Step 2: Fetch available shipping methods
-        const methodsResult = await getAvailableShippingMethodsFn();
-
-        if (methodsResult.error || !methodsResult.data) {
-          event.updateWith({ status: "invalid_shipping_address" });
-          return;
-        }
-
-        // Collect all shipping methods across all bags
-        const allMethods = methodsResult.data.flatMap((b) => b.shippingMethods);
-
-        if (allMethods.length === 0) {
-          event.updateWith({ status: "invalid_shipping_address" });
-          return;
-        }
-
-        const shippingOptions = allMethods.map((m, i) => ({
-          id: m.id || String(i),
-          label: m.label,
-          detail: m.carrier ?? "",
-          amount: m.price,
-        }));
-
-        // Update total with first shipping method price
-        const shippingCost = allMethods[0]?.price ?? 0;
-        event.updateWith({
-          status: "success",
-          shippingOptions,
-          total: { label: "Order Total", amount: cartTotal + shippingCost },
-        });
-      } catch {
-        event.updateWith({ status: "invalid_shipping_address" });
-      }
-    });
-  }, [paymentRequest, cartTotal]);
-
-  // ── shippingoptionchange ──────────────────────────────────────────
-  useEffect(() => {
-    if (!paymentRequest) return;
-
-    paymentRequest.on("shippingoptionchange", async (event) => {
-      try {
-        // Get available methods to find the matching one
-        const methodsResult = await getAvailableShippingMethodsFn();
-        if (methodsResult.error || !methodsResult.data) {
-          event.updateWith({ status: "fail" });
-          return;
-        }
-
-        // Find the method matching the selected option
-        const allMethods = methodsResult.data.flatMap((b) => b.shippingMethods);
-        const selected = allMethods.find(
-          (m) => m.id === event.shippingOption.id || m.label === event.shippingOption.label,
-        );
-
-        if (!selected) {
-          event.updateWith({ status: "fail" });
-          return;
-        }
-
-        // Apply shipping method to all bags
-        const selections = methodsResult.data.map((bag) => ({
-          bagId: bag.bagId,
-          shippingMethodId: selected.id,
-        }));
-
-        await setShippingMethodsFn({ data: { selections } });
-
-        event.updateWith({
-          status: "success",
-          total: { label: "Order Total", amount: cartTotal + selected.price },
-        });
-      } catch {
-        event.updateWith({ status: "fail" });
-      }
-    });
-  }, [paymentRequest, cartTotal]);
-
-  // ── paymentmethod (confirm + submit) ──────────────────────────────
-  useEffect(() => {
-    if (!paymentRequest) return;
-
-    paymentRequest.on("paymentmethod", async (ev) => {
-      setSubmitting(true);
-      setError(null);
-
-      if (!stripe) {
-        ev.complete("fail");
-        setError("Stripe not loaded");
-        setSubmitting(false);
-        return;
-      }
-
-      try {
-        // Step 1: Confirm the payment intent with the wallet payment method
-        const { paymentIntent, error: confirmError } = await stripe.confirmCardPayment(
-          clientSecret,
-          { payment_method: ev.paymentMethod.id },
-          { handleActions: false },
-        );
-
-        if (confirmError) {
-          ev.complete("fail");
-          setError(confirmError.message ?? "Payment failed");
-          setSubmitting(false);
-          return;
-        }
-
-        // Report success to close the Apple Pay / Google Pay sheet
-        ev.complete("success");
-
-        // Step 2: Handle 3D Secure if required
-        if (paymentIntent?.status === "requires_action") {
-          const { error: actionError } = await stripe.confirmCardPayment(clientSecret);
-          if (actionError) {
-            setError(actionError.message ?? "3D Secure authentication failed");
-            setSubmitting(false);
-            return;
-          }
-        }
-
-        // Step 3: Submit to Violet with order_customer containing the full address
-        // Apple now provides the unredacted address (including address_1)
-        const walletName = ev.paymentMethod.billing_details?.name ?? "";
-        const nameParts = walletName.split(" ");
-        const firstName = nameParts[0] || ev.payerName?.split(" ")[0] || "";
-        const lastName =
-          nameParts.slice(1).join(" ") || ev.payerName?.split(" ").slice(1).join(" ") || "";
-
-        // ev.shippingAddress is PaymentRequestShippingAddress (addressLine, region, city...)
-        // ev.paymentMethod.billing_details.address is Stripe Address (line1, state, postal_code...)
-        const shippingAddr = ev.shippingAddress;
-        const billingAddr = ev.paymentMethod.billing_details?.address;
-
-        // Build order_customer with the full address from the wallet
-        const hasShippingAddress =
-          shippingAddr && (shippingAddr.addressLine?.[0] || shippingAddr.city);
-
-        const result = await submitOrderFn({
-          data: {
-            appOrderId,
-            orderCustomer: hasShippingAddress
-              ? {
-                  firstName,
-                  lastName,
-                  email: ev.payerEmail ?? "",
-                  shippingAddress: {
-                    address1: shippingAddr!.addressLine?.[0] ?? "",
-                    city: shippingAddr!.city ?? "",
-                    state: shippingAddr!.region ?? "",
-                    postalCode: shippingAddr!.postalCode ?? "",
-                    country: shippingAddr!.country ?? "US",
-                  },
-                  sameAddress: true,
-                  // Include billing address if different
-                  ...(billingAddr && billingAddr.line1
-                    ? {
-                        sameAddress: false as const,
-                        billingAddress: {
-                          address1: billingAddr.line1,
-                          city: billingAddr.city ?? "",
-                          state: billingAddr.state ?? "",
-                          postalCode: billingAddr.postal_code ?? "",
-                          country: billingAddr.country ?? "US",
-                        },
-                      }
-                    : {}),
-                }
-              : undefined,
-          },
-        });
-
-        if (result.error) {
-          setError(result.error.message);
-          setSubmitting(false);
-          return;
-        }
-
-        // Handle partial success / 3DS
-        if (result.data?.status === "REQUIRES_ACTION") {
-          const secret = result.data.paymentIntentClientSecret;
-          if (secret) {
-            const { error: actionError } = await stripe!.handleNextAction({ clientSecret: secret });
-            if (!actionError) {
-              const retryResult = await submitOrderFn({ data: { appOrderId } });
-              if (!retryResult.error && retryResult.data?.status !== "REJECTED") {
-                onSuccess(retryResult.data?.id ?? "");
-                return;
-              }
-            }
-          }
-          setError("Payment verification failed. Please try again.");
-          setSubmitting(false);
-          return;
-        }
-
-        if (result.data?.status === "REJECTED" || result.data?.status === "CANCELED") {
-          setError("Your order could not be completed. Your card was not charged.");
-          setSubmitting(false);
-          return;
-        }
-
-        onSuccess(result.data?.id ?? "");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An unexpected error occurred");
-        setSubmitting(false);
-      }
-    });
-  }, [paymentRequest, clientSecret, appOrderId, stripe, onSuccess]);
-
-  if (!canMakePayment || !paymentRequest) {
-    return null;
-  }
-
-  return (
-    <div className="checkout__wallet">
-      <PaymentRequestButtonElement
-        options={{
-          paymentRequest,
-          style: {
-            paymentRequestButton: {
-              type: "default",
-              theme: "dark",
-              height: "48px",
-            },
-          },
-        }}
-      />
-      {isSubmitting && (
-        <p
-          className="checkout__wallet-status"
-          style={{ marginTop: "0.75rem", fontSize: "0.875rem", color: "var(--color-steel)" }}
-        >
-          Processing your order…
-        </p>
-      )}
-      {error && (
-        <p
-          className="checkout__wallet-error"
-          style={{ marginTop: "0.75rem", fontSize: "0.875rem", color: "var(--color-danger)" }}
-        >
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-const CHECKOUT_STORAGE_KEY = "checkout-form";
-
-interface CheckoutPersistedState {
-  step: CheckoutStep;
-  address: AddressFormState;
-  selectedMethods: Record<string, string>;
-  guestInfo: CustomerInput;
-  billingSameAsShipping: boolean;
-  billingAddress: AddressFormState;
-}
-
-function readCheckoutStorage(): Partial<CheckoutPersistedState> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = sessionStorage.getItem(CHECKOUT_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Partial<CheckoutPersistedState>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function clearCheckoutStorage() {
-  if (typeof window !== "undefined") {
-    sessionStorage.removeItem(CHECKOUT_STORAGE_KEY);
-  }
-}
-
-// ─── CheckoutPage ─────────────────────────────────────────────────────────
+// ─── Extracted to separate files ──────────────────────────────────────────
+// PaymentForm → ./PaymentForm.tsx
+// WalletCheckoutForm → ./WalletCheckoutForm.tsx
+// Storage helpers → ./checkoutStorage.ts
+// Types → ./useCheckoutState.ts
 
 function CheckoutPage() {
   const { violetCartId, cartHealth, setCartHealth, resetCart } = useCartContext();
@@ -1173,7 +431,7 @@ function CheckoutPage() {
         city: "",
         state: "",
         postalCode: "",
-        country: STRIPE_PLATFORM_COUNTRY === "US" ? "US" : STRIPE_PLATFORM_COUNTRY,
+        country: getDefaultCountry(STRIPE_PLATFORM_COUNTRY),
         phone: "",
       }
     );
@@ -1219,7 +477,7 @@ function CheckoutPage() {
         city: "",
         state: "",
         postalCode: "",
-        country: STRIPE_PLATFORM_COUNTRY === "US" ? "US" : STRIPE_PLATFORM_COUNTRY,
+        country: getDefaultCountry(STRIPE_PLATFORM_COUNTRY),
         phone: "",
       }
     );
@@ -1257,7 +515,7 @@ function CheckoutPage() {
       billingSameAsShipping,
       billingAddress,
     };
-    sessionStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(state));
+    persistCheckoutStorage(state);
   }, [step, address, selectedMethods, guestInfo, billingSameAsShipping, billingAddress]);
 
   // Only physical bags need shipping methods — digital bags are excluded.
@@ -1908,7 +1166,7 @@ function CheckoutPage() {
                     <option value="">Select a country…</option>
                     {SUPPORTED_COUNTRIES.map((code) => (
                       <option key={code} value={code}>
-                        {COUNTRY_LABELS_MAP[code] ?? code}
+                        {COUNTRY_LABELS[code] ?? code}
                       </option>
                     ))}
                   </select>
@@ -1959,7 +1217,7 @@ function CheckoutPage() {
               {step !== "address" && (
                 <p style={{ fontSize: "0.875rem", color: "var(--color-steel)", marginTop: "1rem" }}>
                   {address.address1}, {address.city}, {address.state} {address.postalCode},{" "}
-                  {COUNTRY_LABELS_MAP[address.country] ?? address.country}
+                  {COUNTRY_LABELS[address.country] ?? address.country}
                   {address.phone ? <> · {address.phone}</> : null}
                   {" · "}
                   <button
@@ -2333,7 +1591,7 @@ function CheckoutPage() {
                           <option value="">Select a country…</option>
                           {SUPPORTED_COUNTRIES.map((code) => (
                             <option key={code} value={code}>
-                              {COUNTRY_LABELS_MAP[code] ?? code}
+                              {COUNTRY_LABELS[code] ?? code}
                             </option>
                           ))}
                         </select>
@@ -2398,39 +1656,14 @@ function CheckoutPage() {
                   <WalletCheckoutForm
                     clientSecret={clientSecret}
                     appOrderId={appOrderIdRef.current}
-                    violetCartId={violetCartId!}
                     cartTotal={cart?.total ?? 0}
                     currency={cart?.currency ?? "usd"}
                     onSuccess={handleOrderSuccess}
                   />
 
                   {/* Divider — only shown when wallet button is present */}
-                  <div
-                    className="checkout__wallet-divider"
-                    role="separator"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      margin: "1.5rem 0",
-                      color: "var(--color-steel, #999)",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    <span
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background: "var(--color-border, #ddd)",
-                      }}
-                    />
-                    <span style={{ padding: "0 1rem" }}>or pay with card</span>
-                    <span
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background: "var(--color-border, #ddd)",
-                      }}
-                    />
+                  <div className="checkout__wallet-divider" role="separator">
+                    or pay with card
                   </div>
 
                   {/* Standard card payment form */}

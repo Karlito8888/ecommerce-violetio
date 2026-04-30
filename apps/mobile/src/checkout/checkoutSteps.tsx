@@ -22,7 +22,7 @@ import { router } from "expo-router";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import { formatPrice, getCountryPlaceholder } from "@ecommerce/shared";
+import { formatPrice, getDefaultCountry } from "@ecommerce/shared";
 import type { ShippingMethodsAvailable, DiscountItem } from "@ecommerce/shared";
 import { getDiscountDisplay } from "@ecommerce/shared";
 import type { CheckoutState, AddressFields } from "./checkoutReducer";
@@ -162,7 +162,7 @@ function AddressFormFields({
         style={styles.input}
         value={address.country}
         onChangeText={(v) => onChange({ country: v.toUpperCase() })}
-        placeholder={getCountryPlaceholder(PLATFORM_COUNTRY)}
+        placeholder={getDefaultCountry(PLATFORM_COUNTRY)}
         autoCapitalize="characters"
         maxLength={2}
         editable={editable}
@@ -519,7 +519,7 @@ export function BillingStep({
             style={styles.input}
             value={billing.address.country}
             onChangeText={(v) => onUpdateAddress({ country: v.toUpperCase() })}
-            placeholder={getCountryPlaceholder(PLATFORM_COUNTRY)}
+            placeholder={getDefaultCountry(PLATFORM_COUNTRY)}
             autoCapitalize="characters"
             maxLength={2}
           />

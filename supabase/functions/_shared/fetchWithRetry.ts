@@ -24,7 +24,7 @@
  * - Network errors (fetch rejection) — transient connectivity issues
  *
  * Does NOT retry on:
- * - HTTP 4xx (except 429) — client errors won't self-resolve
+ * - HTTP 4xx (except 401 and 429) — client errors won't self-resolve
  * - HTTP 5xx — server errors require Violet-side fixes
  *
  * Delays: 1s → 2s → 4s (exponential backoff with base 1000ms)

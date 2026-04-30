@@ -9,20 +9,18 @@
  *
  * @see audit-dry-kiss-duplications.md — Phase 2 migration
  */
-import type { Cart } from "@ecommerce/shared";
+import type { ApiResponse, Cart } from "@ecommerce/shared";
 import { apiGet, apiPut, apiDelete } from "./apiClient";
 
 /** Fetch the current cart by Violet cart ID. */
-export async function fetchCartMobile(
-  violetCartId: string,
-): Promise<{ data: Cart | null; error: string | null }> {
+export async function fetchCartMobile(violetCartId: string): Promise<ApiResponse<Cart>> {
   try {
-    const json = await apiGet<{ data?: Cart; error?: { message?: string } }>(
-      `/api/cart/${violetCartId}`,
-    );
-    return { data: json.data ?? null, error: json.error?.message ?? null };
+    return await apiGet<ApiResponse<Cart>>(`/api/cart/${violetCartId}`);
   } catch {
-    return { data: null, error: "Network error. Check your connection." };
+    return {
+      data: null,
+      error: { code: "CART.NETWORK_ERROR", message: "Network error. Check your connection." },
+    };
   }
 }
 
@@ -31,15 +29,14 @@ export async function updateCartItemMobile(
   violetCartId: string,
   skuId: string,
   quantity: number,
-): Promise<{ data: Cart | null; error: string | null }> {
+): Promise<ApiResponse<Cart>> {
   try {
-    const json = await apiPut<{ data?: Cart; error?: { message?: string } }>(
-      `/api/cart/${violetCartId}/skus/${skuId}`,
-      { quantity },
-    );
-    return { data: json.data ?? null, error: json.error?.message ?? null };
+    return await apiPut<ApiResponse<Cart>>(`/api/cart/${violetCartId}/skus/${skuId}`, { quantity });
   } catch {
-    return { data: null, error: "Network error. Check your connection." };
+    return {
+      data: null,
+      error: { code: "CART.NETWORK_ERROR", message: "Network error. Check your connection." },
+    };
   }
 }
 
@@ -47,13 +44,13 @@ export async function updateCartItemMobile(
 export async function removeCartItemMobile(
   violetCartId: string,
   skuId: string,
-): Promise<{ data: Cart | null; error: string | null }> {
+): Promise<ApiResponse<Cart>> {
   try {
-    const json = await apiDelete<{ data?: Cart; error?: { message?: string } }>(
-      `/api/cart/${violetCartId}/skus/${skuId}`,
-    );
-    return { data: json.data ?? null, error: json.error?.message ?? null };
+    return await apiDelete<ApiResponse<Cart>>(`/api/cart/${violetCartId}/skus/${skuId}`);
   } catch {
-    return { data: null, error: "Network error. Check your connection." };
+    return {
+      data: null,
+      error: { code: "CART.NETWORK_ERROR", message: "Network error. Check your connection." },
+    };
   }
 }

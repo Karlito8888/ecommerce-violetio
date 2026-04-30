@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { VioletTokenManager } from "@ecommerce/shared";
+import { VioletTokenManager, VIOLET_API_BASE } from "@ecommerce/shared";
 import type { ApiResponse, VioletAuthConfig, VioletAuthHeaders } from "@ecommerce/shared";
 
 function loadVioletConfig(): ApiResponse<VioletAuthConfig> {
@@ -7,7 +7,7 @@ function loadVioletConfig(): ApiResponse<VioletAuthConfig> {
   const appSecret = process.env.VIOLET_APP_SECRET;
   const username = process.env.VIOLET_USERNAME;
   const password = process.env.VIOLET_PASSWORD;
-  const apiBase = process.env.VIOLET_API_BASE ?? "https://sandbox-api.violet.io/v1";
+  const apiBase = VIOLET_API_BASE;
 
   if (!appId || !appSecret || !username || !password) {
     return {

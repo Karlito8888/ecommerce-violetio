@@ -137,21 +137,12 @@ export const COUNTRY_LABELS: Record<string, string> = {
 };
 
 /**
- * Returns the default country code for the checkout address form.
- *
- * - **US platform** (sandbox): defaults to "US"
- * - **EU/EEA platform** (production): defaults to the platform's own country (e.g., "FR")
- */
-export function getDefaultCountry(stripePlatformCountry: string): string {
-  return stripePlatformCountry === "US" ? "US" : stripePlatformCountry;
-}
-
-/**
- * Returns a placeholder text for the country input field.
+ * Returns the default country code for the checkout address form
+ * and country input placeholder.
  *
  * - **US platform** (sandbox): "US"
- * - **EU/EEA platform** (production): the platform's own country code
+ * - **EU/EEA platform** (production): the platform's own country (e.g., "FR")
  */
-export function getCountryPlaceholder(stripePlatformCountry: string): string {
-  return stripePlatformCountry === "US" ? "US" : stripePlatformCountry;
+export function getDefaultCountry(stripePlatformCountry: string): string {
+  return stripePlatformCountry;
 }

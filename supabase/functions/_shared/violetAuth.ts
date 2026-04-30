@@ -9,6 +9,8 @@
  * TODO(CI): Add a CI check that compares the core logic hash between both files.
  */
 
+import { DEFAULT_VIOLET_API_BASE } from "./constants.ts";
+
 interface VioletAuthConfig {
   appId: string;
   appSecret: string;
@@ -241,7 +243,7 @@ export async function getVioletHeaders(): Promise<ApiResponse<VioletAuthHeaders>
     const appSecret = Deno.env.get("VIOLET_APP_SECRET");
     const username = Deno.env.get("VIOLET_USERNAME");
     const password = Deno.env.get("VIOLET_PASSWORD");
-    const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+    const apiBase = Deno.env.get("VIOLET_API_BASE") ?? DEFAULT_VIOLET_API_BASE;
 
     if (!appId || !appSecret || !username || !password) {
       return {

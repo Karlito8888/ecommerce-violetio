@@ -23,7 +23,8 @@
  * Individual service failures don't crash the function — each is independent.
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders } from "../_shared/cors.ts"
+import { DEFAULT_VIOLET_API_BASE } from "../_shared/constants.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { fetchWithRetryRaw } from "../_shared/fetchWithRetry.ts";
 
@@ -109,7 +110,7 @@ async function checkMerchantConnectionHealth(): Promise<
 > {
   const appId = Deno.env.get("VIOLET_APP_ID");
   const appSecret = Deno.env.get("VIOLET_APP_SECRET");
-  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? DEFAULT_VIOLET_API_BASE;
 
   if (!appId || !appSecret) return null;
 
@@ -254,7 +255,7 @@ async function checkViolet(): Promise<ServiceStatus> {
   const start = Date.now();
   const appId = Deno.env.get("VIOLET_APP_ID");
   const appSecret = Deno.env.get("VIOLET_APP_SECRET");
-  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? "https://sandbox-api.violet.io/v1";
+  const apiBase = Deno.env.get("VIOLET_API_BASE") ?? DEFAULT_VIOLET_API_BASE;
 
   if (!appId || !appSecret) {
     return { status: "unknown", latency_ms: null, error: "VIOLET_APP_ID/SECRET not configured" };

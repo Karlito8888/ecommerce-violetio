@@ -11,8 +11,7 @@ import { Spacing } from "@/constants/theme";
 import type { Bag, CartItem } from "@ecommerce/shared";
 import { fetchCartMobile, updateCartItemMobile, removeCartItemMobile } from "@/server/getCart";
 
-/** Key for persisting the Violet cart ID in SecureStore. */
-const CART_KEY = "violet_cart_id";
+import { CART_STORAGE_KEY } from "../constants/cart";
 
 /** Formats integer cents to a dollar string. */
 function formatCents(cents: number): string {
@@ -118,7 +117,9 @@ function BagSection({
       </View>
       <View style={styles.bagSubtotal}>
         <ThemedText themeColor="textSecondary">Est. Tax</ThemedText>
-        <ThemedText themeColor="textSecondary">{formatCents(bag.tax)}</ThemedText>
+        <ThemedText themeColor="textSecondary">
+          {bag.tax > 0 ? formatCents(bag.tax) : "Calculated at checkout"}
+        </ThemedText>
       </View>
       <View style={styles.bagSubtotal}>
         <ThemedText themeColor="textSecondary">Est. Shipping</ThemedText>
@@ -141,7 +142,7 @@ export default function CartScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const savedId = await SecureStore.getItemAsync(CART_KEY);
+        const savedId = await SecureStore.getItemAsync(CART_STORAGE_KEY);
         if (savedId) setVioletCartId(savedId);
       } finally {
         setInitializing(false);
@@ -160,7 +161,7 @@ export default function CartScreen() {
     queryFn: async () => {
       if (!violetCartId) return null;
       const result = await fetchCartMobile(violetCartId);
-      if (result.error) throw new Error(result.error);
+      if (result.error) throw new Error(result.error.message);
       return result.data;
     },
     enabled: !!violetCartId,

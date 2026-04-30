@@ -1,4 +1,10 @@
-export type { ApiResponse, ApiError, PaginatedResult } from "./api.types.js";
+export type {
+  ApiResponse,
+  ApiError,
+  PaginatedResult,
+  PaymentIntentApiResponse,
+  SubmitOrderApiResponse,
+} from "./api.types.js";
 export type {
   Product,
   Offer,
@@ -198,21 +204,7 @@ export type {
   ShippingInfo,
   CountryOption,
 } from "./shipping.types.js";
-export type {
-  TransferStatus,
-  Transfer,
-  TransferError,
-  TransferRow,
-  RetryTransferInput,
-  SearchTransfersInput,
-  PendingTransferSummary,
-  PendingTransferPayoutAccount,
-  GetPendingTransfersInput,
-  TransferDetail,
-  TransferDetailError,
-  TransferType,
-  TransferMechanism,
-} from "./transfer.types.js";
+export type { TransferStatus } from "./transfer.types.js";
 export type {
   PayoutProvider,
   PayoutProviderAccountType,

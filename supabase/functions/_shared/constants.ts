@@ -18,6 +18,9 @@ export const BASE_DELAY_MS = 1000;
 /** Per-request timeout in milliseconds. */
 export const REQUEST_TIMEOUT_MS = 30_000;
 
+/** Default Violet API base URL (sandbox). Sync with packages/shared/src/utils/constants.ts. */
+export const DEFAULT_VIOLET_API_BASE = "https://sandbox-api.violet.io/v1";
+
 /**
  * Sleep for `ms` milliseconds.
  * SYNC: Same as packages/shared/src/adapters/violetConstants.ts delay().

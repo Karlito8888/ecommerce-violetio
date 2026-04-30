@@ -31,7 +31,6 @@ export {
   getSupportedCountries,
   COUNTRY_LABELS,
   getDefaultCountry,
-  getCountryPlaceholder,
 } from "./eeaCountries.js";
 export {
   convertPrice,
@@ -48,6 +47,7 @@ export {
 } from "./currency.js";
 export { getDiscountDisplay } from "./discountDisplay.js";
 export type { DiscountDisplay, DiscountVariant } from "./discountDisplay.js";
+export { ORDER_STATUS_MESSAGES } from "./orderMessages.js";
 
 // guestToken and orderPersistence are server-only (use node:crypto).
 // Import them directly: "@ecommerce/shared/src/utils/guestToken" / "orderPersistence"

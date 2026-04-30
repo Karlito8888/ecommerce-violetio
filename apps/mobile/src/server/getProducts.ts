@@ -11,6 +11,9 @@
 import type { CategoryItem, ProductsFetchFn } from "@ecommerce/shared";
 import { apiGet } from "./apiClient";
 
+/** Platform country for contextual pricing (US sandbox / FR production). */
+const PLATFORM_COUNTRY = process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY ?? "US";
+
 export const fetchProductsMobile: ProductsFetchFn = async (params) => {
   const qs = new URLSearchParams();
   if (params.page) qs.set("page", String(params.page));
@@ -21,6 +24,8 @@ export const fetchProductsMobile: ProductsFetchFn = async (params) => {
   if (params.inStock === true) qs.set("inStock", "true");
   if (params.sortBy) qs.set("sortBy", params.sortBy);
   if (params.sortDirection) qs.set("sortDirection", params.sortDirection);
+  // Pass platform country for contextual pricing (web backend uses it for base_currency)
+  qs.set("country", PLATFORM_COUNTRY);
 
   try {
     return await apiGet(`/api/products?${qs}`);

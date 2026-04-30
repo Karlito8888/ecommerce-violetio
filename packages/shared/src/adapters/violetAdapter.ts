@@ -21,11 +21,6 @@ import type {
   CountryOption,
   MerchantDetail,
   Distribution,
-  Transfer,
-  SearchTransfersInput,
-  PendingTransferSummary,
-  GetPendingTransfersInput,
-  TransferDetail,
   CollectionItem,
   DiscountInput,
   VioletPayoutAccount,
@@ -82,16 +77,6 @@ import {
   searchDistributions as searchDistributionsFn,
   getOrders as getOrdersFn,
 } from "./violetOrders.js";
-import {
-  searchTransfers as searchTransfersFn,
-  retryTransferForOrder as retryTransferForOrderFn,
-  retryTransferForBag as retryTransferForBagFn,
-  retryTransfersForOrders as retryTransfersForOrdersFn,
-  retryTransfersForBags as retryTransfersForBagsFn,
-  getPendingTransfers as getPendingTransfersFn,
-  getTransfer as getTransferFn,
-  getTransferByProviderId as getTransferByProviderIdFn,
-} from "./violetTransfers.js";
 import { searchProducts as searchProductsFn } from "./violetSearch.js";
 import { getExchangeRates as getExchangeRatesFn } from "./violetCurrency.js";
 import {
@@ -391,42 +376,6 @@ export class VioletAdapter implements SupplierAdapter {
   ): Promise<ApiResponse<import("../types/distribution.types.js").PaginatedDistributions>> {
     const appId = (typeof process !== "undefined" && process.env?.VIOLET_APP_ID) || "";
     return searchDistributionsFn(this.getCtx(), appId, input, page, pageSize);
-  }
-
-  async searchTransfers(input?: SearchTransfersInput): Promise<ApiResponse<Transfer[]>> {
-    return searchTransfersFn(this.getCtx(), input);
-  }
-
-  async retryTransferForOrder(violetOrderId: string): Promise<ApiResponse<{ message: string }>> {
-    return retryTransferForOrderFn(this.getCtx(), violetOrderId);
-  }
-
-  async retryTransferForBag(violetBagId: string): Promise<ApiResponse<{ message: string }>> {
-    return retryTransferForBagFn(this.getCtx(), violetBagId);
-  }
-
-  async retryTransfersForOrders(
-    violetOrderIds: string[],
-  ): Promise<ApiResponse<{ message: string }>> {
-    return retryTransfersForOrdersFn(this.getCtx(), violetOrderIds);
-  }
-
-  async retryTransfersForBags(violetBagIds: string[]): Promise<ApiResponse<{ message: string }>> {
-    return retryTransfersForBagsFn(this.getCtx(), violetBagIds);
-  }
-
-  async getPendingTransfers(
-    input?: GetPendingTransfersInput,
-  ): Promise<ApiResponse<PendingTransferSummary[]>> {
-    return getPendingTransfersFn(this.getCtx(), input);
-  }
-
-  async getTransfer(transferId: string): Promise<ApiResponse<TransferDetail>> {
-    return getTransferFn(this.getCtx(), transferId);
-  }
-
-  async getTransferByProviderId(providerTransferId: string): Promise<ApiResponse<TransferDetail>> {
-    return getTransferByProviderIdFn(this.getCtx(), providerTransferId);
   }
 
   async getOrders(_userId: string): Promise<ApiResponse<Order[]>> {

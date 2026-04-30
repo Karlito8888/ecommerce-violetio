@@ -1,4 +1,4 @@
-import { createSupplierAdapter } from "@ecommerce/shared";
+import { createSupplierAdapter, VIOLET_API_BASE } from "@ecommerce/shared";
 import type { SupplierAdapter } from "@ecommerce/shared";
 
 /**
@@ -46,16 +46,7 @@ export function getAdapter(): SupplierAdapter {
   const appSecret = process.env.VIOLET_APP_SECRET;
   const username = process.env.VIOLET_USERNAME;
   const password = process.env.VIOLET_PASSWORD;
-  const apiBase = process.env.VIOLET_API_BASE ?? "https://sandbox-api.violet.io/v1";
-
-  // eslint-disable-next-line no-console
-  console.log("[violet] env check:", {
-    appId: !!appId,
-    appSecret: !!appSecret,
-    username: !!username,
-    password: !!password,
-    apiBase,
-  });
+  const apiBase = VIOLET_API_BASE;
 
   if (!appId || !appSecret || !username || !password) {
     throw new Error(

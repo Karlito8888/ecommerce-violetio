@@ -35,6 +35,7 @@ import { useStripe } from "@stripe/stripe-react-native";
 import * as SecureStore from "expo-secure-store";
 
 import { Spacing } from "@/constants/theme";
+import { CART_STORAGE_KEY } from "@/constants/cart";
 import { useSetStripeKey } from "./_layout";
 import {
   checkoutReducer,
@@ -76,7 +77,7 @@ export default function CheckoutScreen() {
   React.useEffect(() => {
     async function loadCart() {
       try {
-        const id = await SecureStore.getItemAsync("violet_cart_id");
+        const id = await SecureStore.getItemAsync(CART_STORAGE_KEY);
         if (!id) return;
         const result = await fetchCartMobile(id);
         if (result.data) {

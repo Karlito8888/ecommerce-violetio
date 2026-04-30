@@ -646,3 +646,45 @@
   color: var(--color-success, #22c55e);
   font-weight: 500;
 }
+
+/* ─── Wallet (Apple Pay / Google Pay) ───────────────────────────────────── */
+
+.checkout__wallet {
+  /* Container for PaymentRequestButtonElement */
+}
+
+.checkout__wallet-status {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-steel);
+}
+
+.checkout__wallet-error {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-danger, #ef4444);
+}
+
+.checkout__wallet-divider {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+  color: var(--color-steel, #999);
+  font-size: 0.75rem;
+}
+
+.checkout__wallet-divider::before,
+.checkout__wallet-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border, #ddd);
+}
+
+.checkout__wallet-divider::before {
+  margin-right: 1rem;
+}
+
+.checkout__wallet-divider::after {
+  margin-left: 1rem;
+}

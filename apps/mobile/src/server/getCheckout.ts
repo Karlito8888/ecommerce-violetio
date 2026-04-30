@@ -8,37 +8,24 @@
  * 1. Set shipping address   → POST /api/cart/:cartId/shipping_address
  * 2. Get shipping methods   → GET  /api/cart/:cartId/shipping/available
  * 3. Set shipping methods   → POST /api/cart/:cartId/shipping
- * 4. Set customer info      → POST /api/cart/:cartId/customer
- * 5. Set billing address    → POST /api/cart/:cartId/billing_address (if different)
- * 6. Get payment intent     → GET  /api/cart/:cartId/payment-intent
- * 7. Submit order           → POST /api/cart/:cartId/submit
+ * 4. (Price cart if needed)  → GET  /api/cart/:cartId/price
+ * 5. Set customer info      → POST /api/cart/:cartId/customer
+ * 6. Set billing address    → POST /api/cart/:cartId/billing_address (if different)
+ * 7. Get payment intent     → GET  /api/cart/:cartId/payment-intent
+ * 8. Submit order           → POST /api/cart/:cartId/submit
  *
  * @see https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart
  * @see https://docs.violet.io/prism/checkout-guides/guides/violet-checkout-with-stripejs-v3
  * @see audit-dry-kiss-duplications.md — Phase 4 migration
  */
-import type { Cart, ShippingMethodsAvailable } from "@ecommerce/shared";
+import type {
+  ApiResponse,
+  Cart,
+  PaymentIntentApiResponse,
+  ShippingMethodsAvailable,
+  SubmitOrderApiResponse,
+} from "@ecommerce/shared";
 import { apiDelete, apiGet, apiPost } from "./apiClient";
-
-// ─── Response types ─────────────────────────────────────────────────────────
-
-/** Generic API response with optional error. */
-interface CheckoutApiResponse<T = unknown> {
-  data?: T;
-  error?: { message?: string; code?: string };
-}
-
-/** Payment intent response from Violet via web backend. */
-export interface PaymentIntentResponse {
-  clientSecret?: string;
-  stripePublishableKey?: string;
-}
-
-/** Order submission response from Violet via web backend. */
-export interface SubmitOrderResponse {
-  status?: string;
-  id?: string;
-}
 
 // ─── Fetch functions ────────────────────────────────────────────────────────
 
@@ -63,8 +50,8 @@ export async function setShippingAddress(
     country: string;
     phone?: string;
   },
-): Promise<CheckoutApiResponse> {
-  return apiPost<CheckoutApiResponse>(`/api/cart/${cartId}/shipping_address`, address);
+): Promise<ApiResponse<void>> {
+  return apiPost<ApiResponse<void>>(`/api/cart/${cartId}/shipping_address`, address);
 }
 
 /**
@@ -78,10 +65,8 @@ export async function setShippingAddress(
  */
 export async function getAvailableShippingMethods(
   cartId: string,
-): Promise<CheckoutApiResponse<ShippingMethodsAvailable[]>> {
-  return apiGet<CheckoutApiResponse<ShippingMethodsAvailable[]>>(
-    `/api/cart/${cartId}/shipping/available`,
-  );
+): Promise<ApiResponse<ShippingMethodsAvailable[]>> {
+  return apiGet<ApiResponse<ShippingMethodsAvailable[]>>(`/api/cart/${cartId}/shipping/available`);
 }
 
 /**
@@ -95,8 +80,8 @@ export async function getAvailableShippingMethods(
 export async function setShippingMethods(
   cartId: string,
   selections: Array<{ bag_id: number; shipping_method_id: string }>,
-): Promise<CheckoutApiResponse> {
-  return apiPost<CheckoutApiResponse>(`/api/cart/${cartId}/shipping`, selections);
+): Promise<ApiResponse<void>> {
+  return apiPost<ApiResponse<void>>(`/api/cart/${cartId}/shipping`, selections);
 }
 
 /**
@@ -115,8 +100,8 @@ export async function setCustomerInfo(
     last_name: string;
     communication_preferences?: Array<{ enabled: boolean }>;
   },
-): Promise<CheckoutApiResponse> {
-  return apiPost<CheckoutApiResponse>(`/api/cart/${cartId}/customer`, customer);
+): Promise<ApiResponse<void>> {
+  return apiPost<ApiResponse<void>>(`/api/cart/${cartId}/customer`, customer);
 }
 
 /**
@@ -133,8 +118,25 @@ export async function setBillingAddress(
     postal_code: string;
     country: string;
   },
-): Promise<CheckoutApiResponse> {
-  return apiPost<CheckoutApiResponse>(`/api/cart/${cartId}/billing_address`, address);
+): Promise<ApiResponse<void>> {
+  return apiPost<ApiResponse<void>>(`/api/cart/${cartId}/billing_address`, address);
+}
+
+/**
+ * Step 4b: Force cart pricing after shipping methods are applied.
+ *
+ * Per Violet docs: "there are instances where carts are not priced automatically
+ * after applying shipping methods. You will know this is needed when the response
+ * from the apply shipping methods call has a 0 value for tax_total."
+ *
+ * Should be called when `bag.subtotal > 0 && bag.tax === 0 && bag.shippingTotal >= 0`
+ * after `setShippingMethods`.
+ *
+ * @see https://docs.violet.io/api-reference/orders-and-checkout/cart-pricing/price-cart
+ * @see https://docs.violet.io/prism/overview/place-an-order/submit-cart
+ */
+export async function priceCart(cartId: string): Promise<ApiResponse<Cart>> {
+  return apiGet<ApiResponse<Cart>>(`/api/cart/${cartId}/price`);
 }
 
 /**
@@ -151,8 +153,8 @@ export async function setBillingAddress(
  */
 export async function getPaymentIntent(
   cartId: string,
-): Promise<CheckoutApiResponse<PaymentIntentResponse>> {
-  return apiGet<CheckoutApiResponse<PaymentIntentResponse>>(`/api/cart/${cartId}/payment-intent`);
+): Promise<ApiResponse<PaymentIntentApiResponse>> {
+  return apiGet<ApiResponse<PaymentIntentApiResponse>>(`/api/cart/${cartId}/payment-intent`);
 }
 
 /**
@@ -186,11 +188,11 @@ export async function getPaymentIntent(
 export async function addDiscount(
   cartId: string,
   discount: { code: string; merchant_id: number; email?: string },
-): Promise<CheckoutApiResponse<Cart>> {
+): Promise<ApiResponse<Cart>> {
   // Sends Violet-format body {code, merchant_id, email?} directly.
   // The API Route validates with Zod and converts to DiscountInput internally.
   // @see https://docs.violet.io/prism/checkout-guides/discounts/applying-discounts
-  return apiPost<CheckoutApiResponse<Cart>>(`/api/cart/${cartId}/discounts`, discount);
+  return apiPost<ApiResponse<Cart>>(`/api/cart/${cartId}/discounts`, discount);
 }
 
 /**
@@ -203,8 +205,8 @@ export async function addDiscount(
 export async function removeDiscount(
   cartId: string,
   discountId: string,
-): Promise<CheckoutApiResponse<Cart>> {
-  return apiDelete<CheckoutApiResponse<Cart>>(`/api/cart/${cartId}/discounts/${discountId}`);
+): Promise<ApiResponse<Cart>> {
+  return apiDelete<ApiResponse<Cart>>(`/api/cart/${cartId}/discounts/${discountId}`);
 }
 
 /**
@@ -224,8 +226,8 @@ export async function removeDiscount(
 export async function submitOrder(
   cartId: string,
   appOrderId: string,
-): Promise<CheckoutApiResponse<SubmitOrderResponse>> {
-  return apiPost<CheckoutApiResponse<SubmitOrderResponse>>(`/api/cart/${cartId}/submit`, {
+): Promise<ApiResponse<SubmitOrderApiResponse>> {
+  return apiPost<ApiResponse<SubmitOrderApiResponse>>(`/api/cart/${cartId}/submit`, {
     app_order_id: appOrderId,
   });
 }

@@ -141,7 +141,7 @@ function CartPage() {
                     </div>
                     <div className="cart__bag-row">
                       <span>Est. Tax</span>
-                      <span>{formatPrice(bag.tax)}</span>
+                      <span>{bag.tax > 0 ? formatPrice(bag.tax) : "Calculated at checkout"}</span>
                     </div>
                     <div className="cart__bag-row">
                       <span>Est. Shipping</span>
@@ -164,7 +164,7 @@ function CartPage() {
               </div>
               <div className="cart__summary-row">
                 <span>Est. Tax</span>
-                <span>{formatPrice(taxAll)}</span>
+                <span>{taxAll > 0 ? formatPrice(taxAll) : "Calculated at checkout"}</span>
               </div>
               <div className="cart__summary-row">
                 <span>Est. Shipping</span>
