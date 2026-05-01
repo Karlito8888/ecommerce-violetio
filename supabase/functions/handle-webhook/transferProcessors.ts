@@ -129,14 +129,36 @@ export async function processTransferFailed(
   try {
     await upsertTransfer(supabase, payload);
 
-    // Log detailed error info for admin visibility
+    // Extract error details from both webhook and API formats
+    // Webhook: { code: "insufficient_funds", message: "..." }
+    // API:     { error_code: 1001, error_message: "..." }
     const errorSummary = payload.errors
-      ?.map((e) => `[${e.error_code ?? "unknown"}] ${e.error_message ?? "No message"}`)
+      ?.map((e) => {
+        const code = e.error_code ?? e.code ?? "unknown";
+        const msg = e.error_message ?? e.message ?? "No message";
+        return `[${code}] ${msg}`;
+      })
       .join("; ") ?? "No error details provided";
 
     console.warn(
       `[transferProcessors] TRANSFER_FAILED: transfer=${payload.id} merchant=${payload.merchant_id} amount=${payload.amount} errors: ${errorSummary}`,
     );
+
+    // Log to error_logs for admin dashboard visibility
+    await supabase.from("error_logs").insert({
+      source: "edge-function",
+      error_type: "TRANSFER_FAILED",
+      message: `Transfer ${payload.id} failed for merchant ${payload.merchant_id}: ${errorSummary}`,
+      context: {
+        transfer_id: payload.id,
+        merchant_id: payload.merchant_id,
+        amount: payload.amount,
+        currency: payload.currency,
+        errors: payload.errors,
+        related_orders: payload.related_orders,
+        related_bags: payload.related_bags,
+      },
+    });
 
     await updateEventStatus(supabase, eventId, "processed");
   } catch (err) {

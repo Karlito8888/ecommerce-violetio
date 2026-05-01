@@ -420,8 +420,14 @@ export const violetTransferWebhookPayloadSchema = z.object({
     .array(
       z.object({
         payout_transfer_id: z.number().optional(),
+        // Search API format (numeric code)
         error_code: z.number().optional(),
         error_message: z.string().optional(),
+        // Webhook format (string code) — Violet uses different error structures
+        // depending on the source (webhook vs API search).
+        // @see https://docs.violet.io/prism/payments/payments-during-checkout/guides/handling-failed-transfers
+        code: z.string().optional(),
+        message: z.string().optional(),
         date_created: z.string().optional(),
       }),
     )
