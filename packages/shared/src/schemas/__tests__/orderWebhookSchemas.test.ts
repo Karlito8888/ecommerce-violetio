@@ -33,7 +33,7 @@ describe("webhookEventTypeSchema — order/bag events", () => {
 
   it("rejects unknown event types", () => {
     expect(webhookEventTypeSchema.safeParse("CART_UPDATED").success).toBe(false);
-    expect(webhookEventTypeSchema.safeParse("ORDER_SHIPPED").success).toBe(false);
+    expect(webhookEventTypeSchema.safeParse("SOMETHING_FAKE").success).toBe(false);
     expect(webhookEventTypeSchema.safeParse("").success).toBe(false);
   });
 });

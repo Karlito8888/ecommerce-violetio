@@ -52,9 +52,13 @@
  * | COLLECTION_REMOVED  | processCollectionRemoved   | Soft-delete collection + clear junction   |
  * | COLLECTION_OFFERS_UPDATED | processCollectionOffersUpdated | Log offer composition change       |
  * | TRANSFER_SENT            | processTransferSent                | Persist transfer success               |
+ * | TRANSFER_PARTIALLY_SENT  | processTransferSent                | Persist partial transfer               |
  * | TRANSFER_FAILED          | processTransferFailed              | Log failure + error details            |
+ * | TRANSFER_UPDATED         | processTransferSent                | Upsert transfer with latest status     |
  * | TRANSFER_REVERSED        | processTransferReversed            | Persist full reversal                   |
  * | TRANSFER_PARTIALLY_REVERSED | processTransferPartiallyReversed | Persist partial reversal              |
+ * | TRANSFER_REVERSAL_FAILED | processTransferFailed              | Log reversal failure + error details   |
+ * | PAYMENT_TRANSACTION_CAPTURE_STATUS_* | (audit trail)          | Log capture status for reconciliation  |
  * | MERCHANT_PAYOUT_ACCOUNT_CREATED | processPayoutAccountCreated | Persist PPA + KYC alerts               |
  * | MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED | processPayoutAccountRequirementsUpdated | Update PPA + KYC alerts |
  * | MERCHANT_PAYOUT_ACCOUNT_DELETED | processPayoutAccountDeleted | Soft-delete PPA + audit log  |
@@ -119,6 +123,7 @@ import {
   violetCollectionWebhookPayloadSchema,
   violetTransferWebhookPayloadSchema,
   violetPayoutAccountWebhookPayloadSchema,
+  violetPaymentTransactionWebhookPayloadSchema,
 } from "../_shared/schemas.ts";
 import {
   processOfferAdded,
@@ -204,17 +209,15 @@ Deno.serve(async (req: Request) => {
   const requiredResult = violetRequiredHeadersSchema.safeParse(rawHeaders);
 
   if (!requiredResult.success) {
+    // Phase 1 failure: malformed headers — return 200 to prevent Violet retries/disable.
+    // Even for malformed requests, we must not trigger Violet's failure counter
+    // (50 failures in 30 min → temporary/permanent disable). Log for debugging.
+    console.warn(
+      `[handle-webhook] Invalid headers from event ${rawHeaders.eventId || "unknown"}: ${requiredResult.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
+    );
     return new Response(
-      JSON.stringify({
-        data: null,
-        error: {
-          code: "WEBHOOK.INVALID_HEADERS",
-          message: requiredResult.error.issues
-            .map((i) => `${i.path.join(".")}: ${i.message}`)
-            .join("; "),
-        },
-      }),
-      { status: 400, headers: jsonHeaders },
+      JSON.stringify({ data: { message: "Received (invalid headers)" }, error: null }),
+      { status: 200, headers: jsonHeaders },
     );
   }
 
@@ -360,6 +363,10 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
+      // OFFER_CREATED is deprecated — aliased to OFFER_ADDED processor.
+      // @see https://docs.violet.io/prism/webhooks/events/offer-webhooks
+      case "OFFER_CREATED": {
+
       case "OFFER_UPDATED": {
         const result = violetOfferWebhookPayloadSchema.safeParse(payload);
         if (!result.success) {
@@ -407,7 +414,11 @@ Deno.serve(async (req: Request) => {
 
       case "PRODUCT_SYNC_STARTED":
       case "PRODUCT_SYNC_COMPLETED":
-      case "PRODUCT_SYNC_FAILED": {
+      case "PRODUCT_SYNC_FAILED":
+      // Collection sync events — same audit trail pattern as product sync
+      case "COLLECTION_SYNC_STARTED":
+      case "COLLECTION_SYNC_COMPLETED":
+      case "COLLECTION_SYNC_FAILED": {
         const result = violetSyncWebhookPayloadSchema.safeParse(payload);
         if (!result.success) {
           await updateEventStatus(
@@ -475,6 +486,46 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
+      // MERCHANT_COMPLETE: merchant has satisfied all connection health requirements.
+      // Audit trail only — our health-check already covers this proactively.
+      case "MERCHANT_COMPLETE": {
+        const result = violetMerchantWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        console.log(
+          `[handle-webhook] MERCHANT_COMPLETE: merchant ${result.data.id} has all connection health requirements satisfied`,
+        );
+        await updateEventStatus(supabase, eventId, "processed");
+        break;
+      }
+
+      // MERCHANT_NEEDS_ATTENTION: connection health check has incomplete/missing items.
+      // Audit trail only — admin /admin/health page shows the details.
+      case "MERCHANT_NEEDS_ATTENTION": {
+        const result = violetMerchantWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        console.log(
+          `[handle-webhook] MERCHANT_NEEDS_ATTENTION: merchant ${result.data.id} requires attention — check /admin/health`,
+        );
+        await updateEventStatus(supabase, eventId, "processed");
+        break;
+      }
+
       // ─── COLLECTION events ────────────────────────────────────
       // Requires `sync_collections` feature flag enabled per merchant.
       case "COLLECTION_CREATED": {
@@ -537,13 +588,21 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
-      // ─── ORDER events (Story 5.2) ────────────────────────────
+      // ─── ORDER events ────────────────────────────────────────
       // All ORDER_* events delegate to processOrderUpdated (Violet sends final status).
+      // ORDER_ACCEPTED/SHIPPED/DELIVERED/FAILED are sent alongside ORDER_UPDATED per Violet docs.
+      // ORDER_CANCELLED is the UK spelling variant of ORDER_CANCELED.
+      // @see https://docs.violet.io/prism/webhooks/events/order-webhooks
+      case "ORDER_ACCEPTED":
       case "ORDER_UPDATED":
       case "ORDER_COMPLETED":
       case "ORDER_CANCELED":
+      case "ORDER_CANCELLED":
       case "ORDER_REFUNDED":
-      case "ORDER_RETURNED": {
+      case "ORDER_RETURNED":
+      case "ORDER_SHIPPED":
+      case "ORDER_DELIVERED":
+      case "ORDER_FAILED": {
         const result = violetOrderWebhookPayloadSchema.safeParse(payload);
         if (!result.success) {
           await updateEventStatus(
@@ -631,6 +690,23 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
+      // TRANSFER_PARTIALLY_SENT: only part of the transfer succeeded.
+      // Same handler as TRANSFER_SENT — upsert with status from payload.
+      case "TRANSFER_PARTIALLY_SENT": {
+        const result = violetTransferWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processTransferSent(supabase, eventId, result.data);
+        break;
+      }
+
       case "TRANSFER_FAILED": {
         const result = violetTransferWebhookPayloadSchema.safeParse(payload);
         if (!result.success) {
@@ -643,6 +719,23 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processTransferFailed(supabase, eventId, result.data);
+        break;
+      }
+
+      // TRANSFER_UPDATED: catch-all for any transfer state change.
+      // Same handler as TRANSFER_SENT — upsert with status from payload.
+      case "TRANSFER_UPDATED": {
+        const result = violetTransferWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processTransferSent(supabase, eventId, result.data);
         break;
       }
 
@@ -673,6 +766,23 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processTransferPartiallyReversed(supabase, eventId, result.data);
+        break;
+      }
+
+      // TRANSFER_REVERSAL_FAILED: reversal attempt failed (e.g., insufficient funds).
+      // Same handler as TRANSFER_FAILED — log error + persist in order_transfers.
+      case "TRANSFER_REVERSAL_FAILED": {
+        const result = violetTransferWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        await processTransferFailed(supabase, eventId, result.data);
         break;
       }
 
@@ -754,6 +864,37 @@ Deno.serve(async (req: Request) => {
           break;
         }
         await processPayoutAccountDeactivated(supabase, eventId, result.data);
+        break;
+      }
+
+      // ─── Payment Transaction Events ──────────────────────────────────
+      // Payment capture lifecycle: authorized, captured, refunded, failed.
+      // Informational — our financial tracking uses distributions + transfers.
+      // These events provide payment-level granularity for future reconciliation.
+      // @see https://docs.violet.io/prism/webhooks/events/payment-transaction-webhooks
+
+      case "PAYMENT_TRANSACTION_CAPTURE_STATUS_UPDATED":
+      case "PAYMENT_TRANSACTION_CAPTURE_STATUS_AUTHORIZED":
+      case "PAYMENT_TRANSACTION_CAPTURE_STATUS_CAPTURED":
+      case "PAYMENT_TRANSACTION_CAPTURE_STATUS_REFUNDED":
+      case "PAYMENT_TRANSACTION_CAPTURE_STATUS_PARTIALLY_REFUNDED":
+      case "PAYMENT_TRANSACTION_CAPTURE_STATUS_FAILED": {
+        const result = violetPaymentTransactionWebhookPayloadSchema.safeParse(payload);
+        if (!result.success) {
+          await updateEventStatus(
+            supabase,
+            eventId,
+            "failed",
+            `Zod validation failed: ${result.error.message}`,
+          );
+          break;
+        }
+        // Audit trail — log capture status for financial reconciliation.
+        // Distributions + Transfers remain the primary financial tracking mechanism.
+        console.log(
+          `[handle-webhook] ${eventType}: transaction ${result.data.id} status=${result.data.capture_status} order=${result.data.order_id} bag=${result.data.bag_id}`,
+        );
+        await updateEventStatus(supabase, eventId, "processed");
         break;
       }
 

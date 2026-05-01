@@ -20,6 +20,7 @@ import {
   COUNTRIES_WITHOUT_POSTAL_CODE,
   BLOCKED_ADDRESS_USER_MESSAGE,
   ORDER_STATUS_MESSAGES,
+  getSupportedCountries,
 } from "@ecommerce/shared";
 import type { CheckoutState, CheckoutAction, AddressFields } from "../checkout/checkoutReducer";
 import {
@@ -44,6 +45,10 @@ async function resolveCartId(): Promise<string | null> {
   return SecureStore.getItemAsync(CART_STORAGE_KEY);
 }
 
+/** Supported country codes based on the current platform country. */
+const PLATFORM_COUNTRY = process.env.EXPO_PUBLIC_STRIPE_ACCOUNT_COUNTRY ?? "US";
+const SUPPORTED_COUNTRIES = getSupportedCountries(PLATFORM_COUNTRY);
+
 // ─── Address Step ────────────────────────────────────────────────────────────
 
 export function useAddressStep(state: CheckoutState, dispatch: React.Dispatch<CheckoutAction>) {
@@ -67,6 +72,15 @@ export function useAddressStep(state: CheckoutState, dispatch: React.Dispatch<Ch
       !address.country.trim()
     ) {
       dispatch({ type: "ADDRESS_SUBMIT_ERROR", error: "All address fields are required." });
+      return;
+    }
+
+    // Validate country is supported for shipping (matches web dropdown constraint)
+    if (!SUPPORTED_COUNTRIES.includes(address.country)) {
+      dispatch({
+        type: "ADDRESS_SUBMIT_ERROR",
+        error: `We don't ship to ${address.country}. Please select a supported country.`,
+      });
       return;
     }
 
@@ -422,6 +436,15 @@ export function useBillingStep(
           dispatch({
             type: "BILLING_SUBMIT_ERROR",
             error: "All billing address fields are required.",
+          });
+          return;
+        }
+
+        // Validate billing country is supported (matches web dropdown constraint)
+        if (!SUPPORTED_COUNTRIES.includes(billing.address.country)) {
+          dispatch({
+            type: "BILLING_SUBMIT_ERROR",
+            error: `Billing country ${billing.address.country} is not supported. Please select a supported country.`,
           });
           return;
         }

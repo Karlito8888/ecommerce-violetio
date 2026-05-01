@@ -101,36 +101,66 @@ import { z } from "zod";
  * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
  */
 export const webhookEventTypeSchema = z.enum([
+  // ─── Offer events ───────────────────────────────────────────────
+  "OFFER_CREATED", // Deprecated — aliased to OFFER_ADDED processor
   "OFFER_ADDED",
   "OFFER_UPDATED",
   "OFFER_REMOVED",
   "OFFER_DELETED",
+  // ─── Product Sync events ────────────────────────────────────────
   "PRODUCT_SYNC_STARTED",
   "PRODUCT_SYNC_COMPLETED",
   "PRODUCT_SYNC_FAILED",
+  // ─── Collection Sync events ─────────────────────────────────────
+  "COLLECTION_SYNC_STARTED",
+  "COLLECTION_SYNC_COMPLETED",
+  "COLLECTION_SYNC_FAILED",
+  // ─── Merchant events ─────────────────────────────────────────────
   "MERCHANT_CONNECTED",
   "MERCHANT_DISCONNECTED",
   "MERCHANT_ENABLED",
   "MERCHANT_DISABLED",
+  "MERCHANT_COMPLETE",
+  "MERCHANT_NEEDS_ATTENTION",
+  // ─── Collection events ──────────────────────────────────────────
   "COLLECTION_CREATED",
   "COLLECTION_UPDATED",
   "COLLECTION_REMOVED",
   "COLLECTION_OFFERS_UPDATED",
+  // ─── Order events ───────────────────────────────────────────────
+  "ORDER_ACCEPTED",
   "ORDER_UPDATED",
   "ORDER_COMPLETED",
   "ORDER_CANCELED",
+  "ORDER_CANCELLED", // UK spelling variant
   "ORDER_REFUNDED",
   "ORDER_RETURNED",
+  "ORDER_SHIPPED",
+  "ORDER_DELIVERED",
+  "ORDER_FAILED",
+  // ─── Bag events ────────────────────────────────────────────────
   "BAG_SUBMITTED",
   "BAG_ACCEPTED",
   "BAG_SHIPPED",
   "BAG_COMPLETED",
   "BAG_CANCELED",
   "BAG_REFUNDED",
+  // ─── Transfer events ───────────────────────────────────────────
   "TRANSFER_SENT",
+  "TRANSFER_PARTIALLY_SENT",
   "TRANSFER_FAILED",
+  "TRANSFER_UPDATED",
   "TRANSFER_REVERSED",
   "TRANSFER_PARTIALLY_REVERSED",
+  "TRANSFER_REVERSAL_FAILED",
+  // ─── Payment Transaction events ─────────────────────────────────
+  "PAYMENT_TRANSACTION_CAPTURE_STATUS_UPDATED",
+  "PAYMENT_TRANSACTION_CAPTURE_STATUS_AUTHORIZED",
+  "PAYMENT_TRANSACTION_CAPTURE_STATUS_CAPTURED",
+  "PAYMENT_TRANSACTION_CAPTURE_STATUS_REFUNDED",
+  "PAYMENT_TRANSACTION_CAPTURE_STATUS_PARTIALLY_REFUNDED",
+  "PAYMENT_TRANSACTION_CAPTURE_STATUS_FAILED",
+  // ─── Payout Account events ──────────────────────────────────────
   "MERCHANT_PAYOUT_ACCOUNT_CREATED",
   "MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED",
   "MERCHANT_PAYOUT_ACCOUNT_DELETED",
