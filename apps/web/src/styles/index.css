@@ -25,15 +25,12 @@
 @import "./components/product-grid.css";
 @import "./components/chip-bar.css";
 @import "./components/category-chips.css";
-@import "./components/search-bar.css";
-@import "./components/search-results.css";
 @import "./components/cart-drawer.css";
 @import "./components/checkout-errors.css";
 
 @import "./components/toast.css";
 @import "./components/wishlist-button.css";
 @import "./components/share-button.css";
-@import "./components/recommendation-row.css";
 @import "./components/recently-viewed-row.css";
 @import "./components/affiliate-disclosure.css";
 @import "./components/content-product-card.css";
@@ -47,7 +44,6 @@
 @import "./pages/about.css";
 @import "./pages/auth.css";
 @import "./pages/products.css";
-@import "./pages/search.css";
 @import "./pages/cart.css";
 @import "./pages/checkout.css";
 @import "./pages/confirmation.css";

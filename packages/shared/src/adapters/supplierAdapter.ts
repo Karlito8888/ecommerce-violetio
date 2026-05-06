@@ -14,8 +14,6 @@ import type {
   OrderDetail,
   OrderSubmitResult,
   WebhookEvent,
-  SearchResult,
-  SearchFilters,
   ShippingAddressInput,
   ShippingMethodsAvailable,
   SetShippingMethodInput,
@@ -178,9 +176,6 @@ export interface SupplierAdapter {
    * @see https://docs.violet.io/api-reference/catalog/currencies/currency-exchange-rates
    */
   getExchangeRates(): Promise<ApiResponse<{ rates: Record<string, number>; date: string } | null>>;
-
-  // Search (AI)
-  searchProducts(query: string, filters?: SearchFilters): Promise<ApiResponse<SearchResult>>;
 
   // Cart
   createCart(input: CreateCartInput): Promise<ApiResponse<Cart>>;

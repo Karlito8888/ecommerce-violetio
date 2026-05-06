@@ -71,8 +71,8 @@ import { z } from "zod";
  * All webhook event types our system handles.
  *
  * **Offer events** (Story 3.7): Triggered by Violet when merchant product data changes.
- * - `OFFER_ADDED` / `OFFER_UPDATED` — upsert product embeddings for AI search
- * - `OFFER_REMOVED` / `OFFER_DELETED` — soft-delete (set available=false)
+ * - `OFFER_ADDED` / `OFFER_UPDATED` — audit trail (catalog sync monitoring)
+ * - `OFFER_REMOVED` / `OFFER_DELETED` — audit trail (catalog sync monitoring)
  *
  * **Sync events** (Story 3.7): Triggered during full catalog sync lifecycle.
  * - `PRODUCT_SYNC_STARTED` / `COMPLETED` / `FAILED` — monitoring/audit only

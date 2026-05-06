@@ -253,8 +253,6 @@ export const IMAGE_PRESETS = {
   pdpThumb: { width: 80, height: 80 },
   /** Collection detail hero image (larger, but not full-size). ~80 KB. */
   collectionHero: { width: 800, height: 600 },
-  /** Recommendation row product image. ~20 KB per image. */
-  recommendation: { width: 200, height: 267 },
   /** Recently viewed row product image. ~20 KB per image. */
   recentlyViewed: { width: 200, height: 267 },
 } as const;

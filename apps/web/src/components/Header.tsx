@@ -7,7 +7,6 @@ import { useCartQuery, getCartItemCount } from "@ecommerce/shared";
 import type { CartFetchFn } from "@ecommerce/shared";
 import { getCartFn } from "../server/cartActions";
 import ThemeToggle from "./ThemeToggle";
-import SearchBar from "./search/SearchBar";
 import CountrySelector from "./CountrySelector";
 
 const fetchCart: CartFetchFn = (violetCartId) => getCartFn({ data: violetCartId });
@@ -59,37 +58,7 @@ export default function Header() {
           <span className="site-header__logo display-title">Maison Émile</span>
         </Link>
 
-        <div className="site-header__search">
-          <SearchBar variant="compact" />
-        </div>
-
-        <Link
-          to="/search"
-          search={{
-            q: undefined,
-            category: undefined,
-            minPrice: undefined,
-            maxPrice: undefined,
-            inStock: undefined,
-          }}
-          className="site-header__search-mobile"
-          aria-label="Search"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="24"
-            height="24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-        </Link>
+        <div className="site-header__search" />
 
         <nav className="site-header__actions" aria-label="Account actions">
           <Link

@@ -11,7 +11,7 @@ const fetchProductAdapter: ProductDetailFetchFn = (id) => getProductFn({ data: i
 
 /**
  * Error boundary that silently hides the recently viewed section on crash.
- * Same pattern as RecommendationRow — hooks require QueryClientProvider.
+ * Same pattern as other row components — hooks require QueryClientProvider.
  */
 class RecentlyViewedBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -93,7 +93,7 @@ function RecentlyViewedRowInner() {
           <div key={product.id} className="recently-viewed-row__card" role="listitem">
             {/*
              * [L1 code-review note] Uses `product.seller` for merchantName,
-             * consistent with ProductCard.tsx. RecommendationRow uses
+             * consistent with ProductCard.tsx.
              * `product.vendor` instead — a pre-existing inconsistency in
              * the codebase. Both are valid Product fields; `seller` is the
              * canonical merchant name from the Violet API response.

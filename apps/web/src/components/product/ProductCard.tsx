@@ -15,10 +15,8 @@ import "./ProductCard.css";
  * SearchProductCard. Now both delegate to BaseProductCard, differing only
  * in which field provides the merchant name:
  * - ProductCard: `product.seller` (from Violet Offer.seller)
- * - SearchProductCard: `product.vendor` (from pgvector enrichment)
  *
  * @see BaseProductCard — shared markup and BEM class documentation
- * @see SearchProductCard — search result variant using ProductMatch type
  */
 export default function ProductCard({ product }: { product: Product }) {
   return (

@@ -8,16 +8,16 @@ import WishlistButton from "./WishlistButton";
  *
  * Epic 3 Review — Fix S2: Extracted shared card markup.
  *
- * Both `Product` (catalog API, ~25 fields) and `ProductMatch` (search API, ~11 fields)
+ * Both `Product` (catalog API, ~25 fields) and other card variants
  * share a common subset needed for card rendering. Instead of accepting the full types
  * and lying about field presence, this interface declares only what the card actually uses.
  *
- * This avoids the previous duplication where ProductCard and SearchProductCard had
+ * This avoids the previous duplication where ProductCard had
  * identical JSX but different type constraints. Now both delegate to BaseProductCard
  * with a thin adapter that maps `seller` or `vendor` to `merchantName`.
  *
  * @see ProductCard — catalog listing cards (uses `product.seller`)
- * @see SearchProductCard — search result cards (uses `product.vendor`)
+ * @see ProductCard — catalog listing card
  */
 export interface BaseProductCardProps {
   id: string;
@@ -32,7 +32,7 @@ export interface BaseProductCardProps {
 }
 
 /**
- * Shared product card markup used by both ProductCard and SearchProductCard.
+ * Shared product card markup used by ProductCard.
  *
  * Renders: image (with placeholder fallback), sold-out badge, name, merchant, price.
  * Wrapped in an `<article>` with `<Link>` for accessible, preloadable navigation.
@@ -93,7 +93,7 @@ export default function BaseProductCard({
        * without a parent role="list" (e.g., wishlist page, product detail recommendations).
        * An orphaned role="listitem" is an ARIA violation per WAI-ARIA spec.
        *
-       * NOW: role is omitted — the parent component (RecommendationRow, RecentlyViewedRow)
+       * NOW: role is omitted — the parent component (RecentlyViewedRow)
        * adds role="listitem" on the wrapper div when inside a role="list" container.
        * This is the correct ARIA pattern: the list structure is the parent's responsibility.
        */

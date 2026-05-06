@@ -109,11 +109,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             host: "www.maisonemile.com",
             pathPrefix: "/account",
           },
-          {
-            scheme: "https",
-            host: "www.maisonemile.com",
-            pathPrefix: "/search",
-          },
         ],
         category: ["BROWSABLE", "DEFAULT"],
       },

@@ -4,7 +4,6 @@ export {
   productDetailQueryOptions,
 } from "./useProducts.js";
 export type { ProductsFetchFn, ProductDetailFetchFn } from "./useProducts.js";
-export { searchQueryOptions, useSearch } from "./useSearch.js";
 export {
   cartDetailQueryOptions,
   useCartQuery,
@@ -47,7 +46,6 @@ export {
   useAddToWishlist,
   useRemoveFromWishlist,
 } from "./useWishlist.js";
-export { recommendationQueryOptions, useRecommendations } from "./useRecommendations.js";
 export {
   recentlyViewedQueryOptions,
   useRecentlyViewed,

@@ -164,11 +164,6 @@
   color: var(--color-charcoal);
 }
 
-/* ── Similar products / recommendations ── */
-.product-detail__similar {
-  /* RecommendationRow handles its own border/padding */
-}
-
 /* ── Error state ── */
 .product-detail-error {
   text-align: center;

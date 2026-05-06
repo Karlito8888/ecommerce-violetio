@@ -2,7 +2,7 @@
  * Service role Supabase client for Edge Functions.
  *
  * Uses SUPABASE_SERVICE_ROLE_KEY to bypass RLS for write operations
- * (e.g., upserting embeddings into product_embeddings table).
+ * (e.g., inserting webhook events, updating order status).
  *
  * SECURITY: This client has full database access — only use in
  * server-side Edge Functions, never expose to clients.

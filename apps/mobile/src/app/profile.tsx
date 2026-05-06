@@ -111,6 +111,14 @@ export default function ProfileScreen() {
       <ThemedText type="default" style={styles.sectionHeader}>
         Order Tracking
       </ThemedText>
+      {!isAnonymous && (
+        <Pressable onPress={() => router.push("/orders" as never)} style={styles.trackingLink}>
+          <ThemedText type="default">My Orders</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            View your order history and track deliveries
+          </ThemedText>
+        </Pressable>
+      )}
       <Pressable onPress={() => router.push("/order/lookup" as never)} style={styles.trackingLink}>
         <ThemedText type="default">Track an Order</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">

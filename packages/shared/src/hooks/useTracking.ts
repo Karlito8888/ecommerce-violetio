@@ -39,7 +39,7 @@ const PRUNE_THRESHOLD = 50;
  * ## Dedup strategy
  * Client-side only, using an in-memory Map keyed by `getDedupKey()`.
  * Cross-device dedup is intentionally not handled — viewing a product on
- * web and then mobile counts as 2 views, which is correct for personalization.
+ * web and then mobile counts as 2 views, which is correct for analytics.
  */
 export function useTracking({ userId, sendEvent }: UseTrackingOptions) {
   const recentEvents = useRef<Map<string, number>>(new Map());

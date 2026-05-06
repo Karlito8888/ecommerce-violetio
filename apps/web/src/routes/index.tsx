@@ -8,7 +8,6 @@ import {
 } from "@ecommerce/shared";
 import type { ProductsFetchFn } from "@ecommerce/shared";
 import { getProductsFn, getCategoriesFn } from "../server/getProducts";
-import SearchBar from "../components/search/SearchBar";
 import RecentlyViewedRow from "../components/product/RecentlyViewedRow";
 import ProductGrid from "../components/product/ProductGrid";
 import ProductGridSkeleton from "../components/product/ProductGridSkeleton";
@@ -34,7 +33,7 @@ export const Route = createFileRoute("/")({
     meta: buildPageMeta({
       title: "Maison Émile — Curated Shopping",
       description:
-        "Discover unique products from curated merchants — powered by AI search. Maison Émile brings you a handpicked shopping experience.",
+        "Discover unique products from curated merchants. Maison Émile brings you a handpicked shopping experience.",
       url: "/",
       siteUrl: SITE_URL,
     }),
@@ -60,7 +59,21 @@ function HomePending() {
         <div className="hero__glow hero__glow--bottom" />
         <p className="island-kicker hero__kicker">Curated Shopping, Reimagined</p>
         <h1 className="display-title hero__title">Find exactly what you&apos;re looking for.</h1>
-        <SearchBar variant="hero" />
+        <p className="hero__desc">Discover unique products from curated merchants.</p>
+        <Link
+          to="/products"
+          search={{
+            category: undefined,
+            minPrice: undefined,
+            maxPrice: undefined,
+            inStock: undefined,
+            sortBy: undefined,
+            sortDirection: undefined,
+          }}
+          className="hero__btn hero__btn--primary"
+        >
+          Browse products
+        </Link>
       </section>
       <ProductGridSkeleton />
     </section>
@@ -86,10 +99,21 @@ function App() {
         <div className="hero__glow hero__glow--bottom" />
         <p className="island-kicker hero__kicker">Curated Shopping, Reimagined</p>
         <h1 className="display-title hero__title">Find exactly what you&apos;re looking for.</h1>
-        <p className="hero__desc">
-          Discover unique products from curated merchants — powered by AI search.
-        </p>
-        <SearchBar variant="hero" />
+        <p className="hero__desc">Discover unique products from curated merchants.</p>
+        <Link
+          to="/products"
+          search={{
+            category: undefined,
+            minPrice: undefined,
+            maxPrice: undefined,
+            inStock: undefined,
+            sortBy: undefined,
+            sortDirection: undefined,
+          }}
+          className="hero__btn hero__btn--primary"
+        >
+          Browse products
+        </Link>
       </section>
 
       <RecentlyViewedRow />

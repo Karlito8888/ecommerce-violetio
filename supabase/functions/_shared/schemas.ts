@@ -10,54 +10,12 @@
  * **If you modify ANY schema here, update the canonical source too (and vice versa).**
  *
  * Canonical sources → Edge Function copies:
- * - `packages/shared/src/schemas/search.schema.ts` → search schemas below
  * - `packages/shared/src/schemas/webhook.schema.ts` → webhook schemas below
  *
  * @see M2 code review fix — added sync documentation
  */
 
 import { z } from "npm:zod";
-
-/** Schema for generate-embeddings request body. */
-export const generateEmbeddingsRequestSchema = z.object({
-  productId: z.string().min(1, "productId is required"),
-  productName: z.string().min(1, "productName is required"),
-  description: z.string(),
-  vendor: z.string(),
-  tags: z.array(z.string()),
-  category: z.string(),
-  merchantId: z.string().optional(),
-});
-
-/**
- * Schema for search-products request body.
- *
- * Epic 3 Review — Fix C3: Aligned with canonical source in
- * `packages/shared/src/schemas/search.schema.ts`. Changes:
- * - Added `.int()` to minPrice/maxPrice (prices are integer cents)
- * - Added `merchantId` filter (consistency with canonical source)
- *
- * ⚠️ SYNC: Must match `packages/shared/src/schemas/search.schema.ts`
- */
-export const searchQuerySchema = z.object({
-  query: z
-    .string()
-    .min(2, "Search query must be at least 2 characters")
-    .max(500, "Search query must be at most 500 characters"),
-  filters: z
-    .object({
-      category: z.string().optional(),
-      minPrice: z.number().int().nonnegative().optional(),
-      maxPrice: z.number().int().nonnegative().optional(),
-      inStock: z.boolean().optional(),
-      merchantId: z.string().optional(),
-    })
-    .optional(),
-  limit: z.number().int().min(1).max(50).optional(),
-});
-
-export type GenerateEmbeddingsInput = z.infer<typeof generateEmbeddingsRequestSchema>;
-export type SearchQueryInput = z.infer<typeof searchQuerySchema>;
 
 // ─── Webhook Schemas (Story 3.7 + Story 5.2) ─────────────────────────
 //
@@ -76,7 +34,7 @@ export type SearchQueryInput = z.infer<typeof searchQuerySchema>;
 /**
  * All webhook event types our system handles.
  *
- * **Offer events** (Story 3.7): Product embedding upsert/soft-delete for AI search.
+ * **Offer events** (Story 3.7): Catalog sync monitoring/audit trail.
  * **Sync events** (Story 3.7): Monitoring/audit trail only — no product-level action.
  * **Order events** (Story 5.2): Direct order status update from Violet.
  * **Bag events** (Story 5.2): Per-merchant bag status, tracking, refund processing.
@@ -228,33 +186,11 @@ export const violetOfferWebhookPayloadSchema = z.object({
   min_price: z.number().optional(),
   max_price: z.number().optional(),
   currency: z.string().default("USD"),
-  /**
-   * Offer status from Violet.
-   *
-   * Epic 3 Review — Fix I3: Changed from z.enum([...]) to z.string().
-   *
-   * Violet's API documentation lists known statuses (AVAILABLE, UNAVAILABLE,
-   * DISABLED, DISABLED_AVAILABLE, DISABLED_UNAVAILABLE, FOR_DELETION, ARCHIVED),
-   * but the actual API may return undocumented compound statuses. The catalog
-   * adapter (violetAdapter.ts) already uses z.string() for this field defensively.
-   *
-   * Using z.string() here prevents webhook rejection when Violet sends an
-   * unexpected status value. The webhook handler processes all offer events
-   * regardless of status — the `available` boolean field determines searchability.
-   *
-   * ⚠️ SYNC: Must match the other copy (see SYNC WARNING at top of file)
-   */
   status: z.string(),
   tags: z.array(z.string()).optional(),
   external_url: z.string().optional(),
   skus: z.array(z.unknown()).optional(),
   albums: z.array(z.unknown()).optional(),
-  /**
-   * Offer metadata from merchant's custom product data.
-   * Present when `sync_metadata` flag is enabled for the merchant.
-   *
-   * @see https://docs.violet.io/prism/catalog/metadata-syncing
-   */
   metadata: z.array(violetMetadataSchema).optional(),
   date_last_modified: z.string().optional(),
 });
@@ -316,8 +252,6 @@ export const violetCollectionWebhookPayloadSchema = z.object({
   merchant_id: z.number(),
   external_id: z.string().optional(),
   handle: z.string().optional(),
-  // Violet API uses media.source_url, but webhooks may send image_url as a flat field.
-  // Accept both to be safe. See: GET /catalog/collections response schema.
   image_url: z.string().optional(),
   media: z
     .object({
@@ -338,12 +272,7 @@ export type VioletCollectionPayload = z.infer<typeof violetCollectionWebhookPayl
 /**
  * Validates Violet ORDER_* webhook payload.
  *
- * Handles: ORDER_UPDATED, ORDER_COMPLETED, ORDER_CANCELED, ORDER_REFUNDED, ORDER_RETURNED.
- * Status is `z.string()` (not a strict enum) — Violet may send undocumented values.
- * `app_order_id` correlates Violet orders with our `orders` table.
- *
  * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Event payloads
- * @see processOrderUpdated in handle-webhook/orderProcessors.ts
  *
  * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
  */
@@ -358,13 +287,7 @@ export const violetOrderWebhookPayloadSchema = z.object({
 /**
  * Validates Violet BAG_* webhook payload.
  *
- * Handles: BAG_SUBMITTED, BAG_ACCEPTED, BAG_SHIPPED, BAG_COMPLETED, BAG_CANCELED, BAG_REFUNDED.
- * BAG_SHIPPED populates tracking_number, tracking_url, carrier.
- * BAG_REFUNDED triggers a Violet Refund API fetch (amounts not in webhook payload).
- * `order_id` links to parent Violet order for derived status computation.
- *
  * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Bag event payloads
- * @see processBagShipped, processBagRefunded in handle-webhook/orderProcessors.ts
  *
  * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
  */
@@ -395,8 +318,6 @@ export type VioletBagPayload = z.infer<typeof violetBagWebhookPayloadSchema>;
 /**
  * Validates Violet TRANSFER_* webhook payload.
  *
- * Handles: TRANSFER_SENT, TRANSFER_FAILED, TRANSFER_REVERSED, TRANSFER_PARTIALLY_REVERSED.
- *
  * ⚠️ SYNC: Must match `packages/shared/src/schemas/webhook.schema.ts`
  */
 export const violetTransferWebhookPayloadSchema = z.object({
@@ -413,12 +334,8 @@ export const violetTransferWebhookPayloadSchema = z.object({
     .array(
       z.object({
         payout_transfer_id: z.number().optional(),
-        // Search API format (numeric code)
         error_code: z.number().optional(),
         error_message: z.string().optional(),
-        // Webhook format (string code) — Violet uses different error structures
-        // depending on the source (webhook vs API search).
-        // @see https://docs.violet.io/prism/payments/payments-during-checkout/guides/handling-failed-transfers
         code: z.string().optional(),
         message: z.string().optional(),
         date_created: z.string().optional(),
@@ -435,9 +352,6 @@ export type VioletTransferPayload = z.infer<typeof violetTransferWebhookPayloadS
 
 /**
  * Validates Violet PAYMENT_TRANSACTION_CAPTURE_STATUS_* webhook payload.
- *
- * Handles all 6 payment transaction capture status events.
- * The payload is a PaymentTransaction object with capture_status field.
  *
  * @see https://docs.violet.io/prism/webhooks/events/payment-transaction-webhooks
  */
@@ -463,10 +377,6 @@ export type VioletPaymentTransactionPayload = z.infer<
 
 /**
  * Validates Violet MERCHANT_PAYOUT_ACCOUNT_* webhook payload.
- *
- * Handles: MERCHANT_PAYOUT_ACCOUNT_CREATED, MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED.
- * Fired when a merchant's Prism Pay Account is created or when Stripe updates
- * KYC requirements.
  *
  * @see https://docs.violet.io/prism/payments/payouts/prism-payout-accounts
  *
@@ -514,19 +424,3 @@ export const violetPayoutAccountWebhookPayloadSchema = z.object({
 export type VioletPayoutAccountPayload = z.infer<
   typeof violetPayoutAccountWebhookPayloadSchema
 >;
-
-// ─── Recommendation Schemas (Story 6.5) ────────────────────────────
-//
-// Validates get-recommendations Edge Function input.
-// This is a server-only request schema — no Node-side mirror needed.
-// The Node-side recommendation.schema.ts only contains response schemas
-// (used by the client to validate Edge Function output).
-
-/** Schema for get-recommendations request body (Deno-only, no Node mirror). */
-export const recommendationRequestSchema = z.object({
-  product_id: z.string().min(1, "product_id is required"),
-  user_id: z.string().optional(),
-  limit: z.number().int().min(1).max(20).optional(),
-});
-
-export type RecommendationRequestInput = z.infer<typeof recommendationRequestSchema>;

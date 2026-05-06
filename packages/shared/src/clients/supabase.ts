@@ -38,8 +38,6 @@ function _getViteEnv(name: string): string | undefined {
       return env.VIOLET_API_SECRET ?? env.VITE_VIOLET_API_SECRET;
     case "VIOLET_APP_ID":
       return env.VIOLET_APP_ID ?? env.VITE_VIOLET_APP_ID;
-    case "OPENAI_API_KEY":
-      return env.OPENAI_API_KEY ?? env.VITE_OPENAI_API_KEY;
     case "STRIPE_PUBLISHABLE_KEY":
       return env.STRIPE_PUBLISHABLE_KEY ?? env.VITE_STRIPE_PUBLISHABLE_KEY;
     default:

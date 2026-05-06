@@ -13,8 +13,6 @@ import type {
   OrderDetail,
   OrderSubmitResult,
   WebhookEvent,
-  SearchResult,
-  SearchFilters,
   ShippingAddressInput,
   ShippingMethodsAvailable,
   SetShippingMethodInput,
@@ -77,7 +75,6 @@ import {
   searchDistributions as searchDistributionsFn,
   getOrders as getOrdersFn,
 } from "./violetOrders.js";
-import { searchProducts as searchProductsFn } from "./violetSearch.js";
 import { getExchangeRates as getExchangeRatesFn } from "./violetCurrency.js";
 import {
   getActivePayoutAccount as getActivePayoutAccountFn,
@@ -304,15 +301,6 @@ export class VioletAdapter implements SupplierAdapter {
       return { data: null, error: null };
     }
     return { data: result, error: null };
-  }
-
-  // ─── Not implemented (future stories) ─────────────────────────────
-
-  async searchProducts(
-    query: string,
-    _filters?: SearchFilters,
-  ): Promise<ApiResponse<SearchResult>> {
-    return searchProductsFn(query, _filters);
   }
 
   // ─── Cart ─────────────────────────────────────────────────────────

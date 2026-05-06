@@ -27,10 +27,10 @@
  *
  * | Event Type          | Processor                | Action                                    |
  * |---------------------|--------------------------|-------------------------------------------|
- * | OFFER_ADDED         | processOfferAdded        | Generate product embedding for AI search  |
- * | OFFER_UPDATED       | processOfferUpdated      | Re-generate embedding with new data       |
- * | OFFER_REMOVED       | processOfferRemoved      | Soft-delete (available=false)             |
- * | OFFER_DELETED       | processOfferDeleted      | Soft-delete (available=false)             |
+ * | OFFER_ADDED         | processOfferAdded        | Audit trail only                          |
+ * | OFFER_UPDATED       | processOfferUpdated      | Audit trail only                          |
+ * | OFFER_REMOVED       | processOfferRemoved      | Audit trail only                          |
+ * | OFFER_DELETED       | processOfferDeleted      | Audit trail only                          |
  * | PRODUCT_SYNC_*      | processSyncEvent         | Audit trail only                          |
  * | ORDER_UPDATED       | processOrderUpdated      | Update orders.status                      |
  * | ORDER_COMPLETED     | processOrderUpdated      | Update orders.status                      |
@@ -68,10 +68,9 @@
  * ## ⚠️ KNOWN LIMITATION: Synchronous processing (H1 code review)
  *
  * Supabase Edge Functions (Deno) do NOT support `waitUntil()` or background
- * tasks. The entire flow — including `supabase.functions.invoke("generate-embeddings")`
- * which calls OpenAI — runs synchronously before the 200 response is sent.
+ * tasks. The entire flow runs synchronously before the 200 response is sent.
  *
- * **Risk:** If OpenAI is slow (>5s), total processing may exceed Violet's 10s
+ * **Risk:** Slow external API calls may cause total processing to exceed Violet's 10s
  * expectation, triggering retries. Mitigations:
  * - The event is claimed in DB (step 7) before processing, so retries hit the
  *   idempotency check and return 200 instantly.
@@ -348,6 +347,9 @@ Deno.serve(async (req: Request) => {
   // ─── Route to event-specific processor ──────────────────────────
   try {
     switch (eventType) {
+      // OFFER_CREATED is deprecated — aliased to OFFER_ADDED processor.
+      // @see https://docs.violet.io/prism/webhooks/events/offer-webhooks
+      case "OFFER_CREATED":
       case "OFFER_ADDED": {
         const result = violetOfferWebhookPayloadSchema.safeParse(payload);
         if (!result.success) {
@@ -362,10 +364,6 @@ Deno.serve(async (req: Request) => {
         await processOfferAdded(supabase, eventId, result.data);
         break;
       }
-
-      // OFFER_CREATED is deprecated — aliased to OFFER_ADDED processor.
-      // @see https://docs.violet.io/prism/webhooks/events/offer-webhooks
-      case "OFFER_CREATED": {
 
       case "OFFER_UPDATED": {
         const result = violetOfferWebhookPayloadSchema.safeParse(payload);

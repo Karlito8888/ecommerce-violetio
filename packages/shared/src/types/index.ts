@@ -63,14 +63,6 @@ export type {
   BagWebhookPayload,
   PaymentIntent,
 } from "./order.types.js";
-export type {
-  SearchResult,
-  SearchFilters,
-  SearchQuery,
-  SearchResponse,
-  ProductMatch,
-  MatchExplanations,
-} from "./search.types.js";
 export type { User, AuthState } from "./user.types.js";
 export type { Session, SupabaseUser, AuthSession, AuthError } from "./auth.types.js";
 export type {
@@ -128,11 +120,6 @@ export type {
   CategoryViewPayload,
 } from "./tracking.types.js";
 export type {
-  CategoryAffinity,
-  UserSearchProfile,
-  PersonalizationBoost,
-} from "./personalization.types.js";
-export type {
   WishlistItem,
   Wishlist,
   AddToWishlistInput,
@@ -142,11 +129,6 @@ export type {
   AddToWishlistFn,
   RemoveFromWishlistFn,
 } from "./wishlist.types.js";
-export type {
-  RecommendationItem,
-  RecommendationResponse,
-  RecommendationFetchFn,
-} from "./recommendation.types.js";
 export type { RecentlyViewedEntry, RecentlyViewedItem } from "./recentlyViewed.types.js";
 export type {
   NotificationType,

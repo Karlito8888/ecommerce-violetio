@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountRouteRouteImport } from './routes/account/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
 import { Route as MerchantsIndexRouteImport } from './routes/merchants/index'
 import { Route as HelpIndexRouteImport } from './routes/help/index'
@@ -38,6 +37,7 @@ import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AccountWishlistRouteImport } from './routes/account/wishlist'
 import { Route as AccountProfileRouteImport } from './routes/account/profile'
 import { Route as ApiProductsIndexRouteImport } from './routes/api/products/index'
+import { Route as ApiOrdersIndexRouteImport } from './routes/api/orders/index'
 import { Route as ApiMerchantsIndexRouteImport } from './routes/api/merchants/index'
 import { Route as ApiCollectionsIndexRouteImport } from './routes/api/collections/index'
 import { Route as ApiCategoriesIndexRouteImport } from './routes/api/categories/index'
@@ -85,11 +85,6 @@ const AccountRouteRoute = AccountRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SearchIndexRoute = SearchIndexRouteImport.update({
-  id: '/search/',
-  path: '/search/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductsIndexRoute = ProductsIndexRouteImport.update({
@@ -215,6 +210,11 @@ const AccountProfileRoute = AccountProfileRouteImport.update({
 const ApiProductsIndexRoute = ApiProductsIndexRouteImport.update({
   id: '/api/products/',
   path: '/api/products/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOrdersIndexRoute = ApiOrdersIndexRouteImport.update({
+  id: '/api/orders/',
+  path: '/api/orders/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMerchantsIndexRoute = ApiMerchantsIndexRouteImport.update({
@@ -422,7 +422,6 @@ export interface FileRoutesByFullPath {
   '/help/': typeof HelpIndexRoute
   '/merchants/': typeof MerchantsIndexRoute
   '/products/': typeof ProductsIndexRoute
-  '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
   '/api/cart/claim': typeof ApiCartClaimRoute
@@ -438,6 +437,7 @@ export interface FileRoutesByFullPath {
   '/api/categories/': typeof ApiCategoriesIndexRoute
   '/api/collections/': typeof ApiCollectionsIndexRoute
   '/api/merchants/': typeof ApiMerchantsIndexRoute
+  '/api/orders/': typeof ApiOrdersIndexRoute
   '/api/products/': typeof ApiProductsIndexRoute
   '/api/cart/$cartId/billing_address': typeof ApiCartCartIdBilling_addressRoute
   '/api/cart/$cartId/customer': typeof ApiCartCartIdCustomerRoute
@@ -486,7 +486,6 @@ export interface FileRoutesByTo {
   '/help': typeof HelpIndexRoute
   '/merchants': typeof MerchantsIndexRoute
   '/products': typeof ProductsIndexRoute
-  '/search': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
   '/api/cart/claim': typeof ApiCartClaimRoute
@@ -502,6 +501,7 @@ export interface FileRoutesByTo {
   '/api/categories': typeof ApiCategoriesIndexRoute
   '/api/collections': typeof ApiCollectionsIndexRoute
   '/api/merchants': typeof ApiMerchantsIndexRoute
+  '/api/orders': typeof ApiOrdersIndexRoute
   '/api/products': typeof ApiProductsIndexRoute
   '/api/cart/$cartId/billing_address': typeof ApiCartCartIdBilling_addressRoute
   '/api/cart/$cartId/customer': typeof ApiCartCartIdCustomerRoute
@@ -551,7 +551,6 @@ export interface FileRoutesById {
   '/help/': typeof HelpIndexRoute
   '/merchants/': typeof MerchantsIndexRoute
   '/products/': typeof ProductsIndexRoute
-  '/search/': typeof SearchIndexRoute
   '/account/orders/$orderId': typeof AccountOrdersOrderIdRoute
   '/admin/support/$inquiryId': typeof AdminSupportInquiryIdRoute
   '/api/cart/claim': typeof ApiCartClaimRoute
@@ -567,6 +566,7 @@ export interface FileRoutesById {
   '/api/categories/': typeof ApiCategoriesIndexRoute
   '/api/collections/': typeof ApiCollectionsIndexRoute
   '/api/merchants/': typeof ApiMerchantsIndexRoute
+  '/api/orders/': typeof ApiOrdersIndexRoute
   '/api/products/': typeof ApiProductsIndexRoute
   '/api/cart/$cartId/billing_address': typeof ApiCartCartIdBilling_addressRoute
   '/api/cart/$cartId/customer': typeof ApiCartCartIdCustomerRoute
@@ -617,7 +617,6 @@ export interface FileRouteTypes {
     | '/help/'
     | '/merchants/'
     | '/products/'
-    | '/search/'
     | '/account/orders/$orderId'
     | '/admin/support/$inquiryId'
     | '/api/cart/claim'
@@ -633,6 +632,7 @@ export interface FileRouteTypes {
     | '/api/categories/'
     | '/api/collections/'
     | '/api/merchants/'
+    | '/api/orders/'
     | '/api/products/'
     | '/api/cart/$cartId/billing_address'
     | '/api/cart/$cartId/customer'
@@ -681,7 +681,6 @@ export interface FileRouteTypes {
     | '/help'
     | '/merchants'
     | '/products'
-    | '/search'
     | '/account/orders/$orderId'
     | '/admin/support/$inquiryId'
     | '/api/cart/claim'
@@ -697,6 +696,7 @@ export interface FileRouteTypes {
     | '/api/categories'
     | '/api/collections'
     | '/api/merchants'
+    | '/api/orders'
     | '/api/products'
     | '/api/cart/$cartId/billing_address'
     | '/api/cart/$cartId/customer'
@@ -745,7 +745,6 @@ export interface FileRouteTypes {
     | '/help/'
     | '/merchants/'
     | '/products/'
-    | '/search/'
     | '/account/orders/$orderId'
     | '/admin/support/$inquiryId'
     | '/api/cart/claim'
@@ -761,6 +760,7 @@ export interface FileRouteTypes {
     | '/api/categories/'
     | '/api/collections/'
     | '/api/merchants/'
+    | '/api/orders/'
     | '/api/products/'
     | '/api/cart/$cartId/billing_address'
     | '/api/cart/$cartId/customer'
@@ -808,7 +808,6 @@ export interface RootRouteChildren {
   HelpIndexRoute: typeof HelpIndexRoute
   MerchantsIndexRoute: typeof MerchantsIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
-  SearchIndexRoute: typeof SearchIndexRoute
   AdminSupportInquiryIdRoute: typeof AdminSupportInquiryIdRoute
   ApiCartClaimRoute: typeof ApiCartClaimRoute
   ApiCartMergeRoute: typeof ApiCartMergeRoute
@@ -822,6 +821,7 @@ export interface RootRouteChildren {
   ApiCategoriesIndexRoute: typeof ApiCategoriesIndexRoute
   ApiCollectionsIndexRoute: typeof ApiCollectionsIndexRoute
   ApiMerchantsIndexRoute: typeof ApiMerchantsIndexRoute
+  ApiOrdersIndexRoute: typeof ApiOrdersIndexRoute
   ApiProductsIndexRoute: typeof ApiProductsIndexRoute
   ApiCartCartIdBilling_addressRoute: typeof ApiCartCartIdBilling_addressRoute
   ApiCartCartIdCustomerRoute: typeof ApiCartCartIdCustomerRoute
@@ -862,13 +862,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/search/': {
-      id: '/search/'
-      path: '/search'
-      fullPath: '/search/'
-      preLoaderRoute: typeof SearchIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/products/': {
@@ -1044,6 +1037,13 @@ declare module '@tanstack/react-router' {
       path: '/api/products'
       fullPath: '/api/products/'
       preLoaderRoute: typeof ApiProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/orders/': {
+      id: '/api/orders/'
+      path: '/api/orders'
+      fullPath: '/api/orders/'
+      preLoaderRoute: typeof ApiOrdersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/merchants/': {
@@ -1351,7 +1351,6 @@ const rootRouteChildren: RootRouteChildren = {
   HelpIndexRoute: HelpIndexRoute,
   MerchantsIndexRoute: MerchantsIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,
-  SearchIndexRoute: SearchIndexRoute,
   AdminSupportInquiryIdRoute: AdminSupportInquiryIdRoute,
   ApiCartClaimRoute: ApiCartClaimRoute,
   ApiCartMergeRoute: ApiCartMergeRoute,
@@ -1365,6 +1364,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCategoriesIndexRoute: ApiCategoriesIndexRoute,
   ApiCollectionsIndexRoute: ApiCollectionsIndexRoute,
   ApiMerchantsIndexRoute: ApiMerchantsIndexRoute,
+  ApiOrdersIndexRoute: ApiOrdersIndexRoute,
   ApiProductsIndexRoute: ApiProductsIndexRoute,
   ApiCartCartIdBilling_addressRoute: ApiCartCartIdBilling_addressRoute,
   ApiCartCartIdCustomerRoute: ApiCartCartIdCustomerRoute,

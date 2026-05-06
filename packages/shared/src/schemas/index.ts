@@ -9,8 +9,6 @@ export {
   violetPaginatedResponseSchema,
   violetPaginatedOffersSchema,
 } from "./product.schema.js";
-export { searchQuerySchema, searchResponseSchema, productMatchSchema } from "./search.schema.js";
-export type { SearchQueryInput, SearchResponseOutput } from "./search.schema.js";
 export {
   violetBagErrorSchema,
   violetCartSkuSchema,
@@ -54,8 +52,3 @@ export {
   updateProfileSchema,
 } from "./profile.schema.js";
 export { wishlistItemSchema, wishlistSchema, addToWishlistInputSchema } from "./wishlist.schema.js";
-export { recommendationItemSchema, recommendationResponseSchema } from "./recommendation.schema.js";
-export type {
-  RecommendationItemOutput,
-  RecommendationResponseOutput,
-} from "./recommendation.schema.js";

@@ -47,12 +47,10 @@
   }
 }
 
-/* ── Search bar (desktop — uses SearchBar component) ── */
+/* ── Search bar placeholder (desktop) ── */
 
 .site-header__search {
   display: none;
-  flex: 1;
-  min-width: 0;
 }
 
 @media (min-width: 640px) {
@@ -66,34 +64,6 @@
   .site-header__search {
     max-width: 400px;
     margin: 0 auto;
-  }
-}
-
-/* ── Search icon (mobile only — navigates to /search) ── */
-
-.site-header__search-mobile {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  color: var(--color-charcoal);
-  text-decoration: none;
-  transition:
-    color var(--transition-fast),
-    background-color var(--transition-fast);
-}
-
-.site-header__search-mobile:hover {
-  color: var(--color-ink);
-  background-color: var(--surface-muted);
-}
-
-@media (min-width: 640px) {
-  .site-header__search-mobile {
-    display: none;
   }
 }
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-E-commerce monorepo for a curated shopping platform powered by Violet.io (multi-merchant affiliate commerce API). Dual-platform: web (TanStack Start) + mobile (Expo Router), sharing a **single backend** (TanStack Start API Routes). Supabase provides auth + database + webhook processing. AI-powered product search via OpenAI embeddings.
+E-commerce monorepo for a curated shopping platform powered by Violet.io (multi-merchant affiliate commerce API). Dual-platform: web (TanStack Start) + mobile (Expo Router), sharing a **single backend** (TanStack Start API Routes). Supabase provides auth + database + webhook processing.
 
 ## Commands
 
@@ -89,14 +89,26 @@ Both web and mobile share the **same TanStack Start backend** — no separate mo
 
 Mobile API client (`apps/mobile/src/server/apiClient.ts`) auto-injects `Authorization: Bearer <JWT Supabase>` via `getAuthHeaders()` for protected routes (cart, checkout, orders). Public routes (products, merchants, collections) require no auth.
 
+### Realtime & Webhook Data Flow
+
+All Violet webhook events are processed server-side by the `handle-webhook` Supabase Edge Function (Deno), which persists results in Supabase tables (orders, order_bags, order_items, order_refunds, merchants, collections, order_distributions, order_transfers, merchant_payout_accounts). Both platforms read from the **same Supabase tables**.
+
+**Web**: Authenticated order pages (`/account/orders`, `/account/orders/$orderId`) use `useOrderRealtime` shared hook — subscribes to Supabase Realtime WebSocket channel `orders:user_{userId}` → invalidates TanStack Query cache on any UPDATE to `orders` or `order_bags` tables. Status changes (BAG_SHIPPED, ORDER_COMPLETED, BAG_REFUNDED, etc.) appear live without manual refresh.
+
+**Mobile**: Same pattern using the **same shared hooks** (`ordersQueryOptions`, `orderDetailQueryOptions`, `useOrderRealtime` from `@ecommerce/shared`). Mobile fetches via web backend API Routes:
+- `GET /api/orders` → order list (delegates to `ordersHandler()` — same Supabase query as web)
+- `GET /api/orders/:orderId?source=supabase` → order detail with bags/items/refunds (delegates to `orderDetailHandler()`)
+- Pages: `/orders` (list), `/orders/[orderId]` (detail), linked from profile "My Orders"
+
+Guest/anonymous order tracking (`/order/lookup` on mobile, `/order/lookup` on web) remains one-shot fetch (no Realtime — transient lookup by token/email).
+
 Migration status: Phase 3 complete. See `audit-dual-backend.md` for details.
 
 ### External Services
 
 - **Violet.io**: Multi-merchant commerce API (products, cart, checkout, orders) — called exclusively from web backend via `VioletTokenManager` + `violetAdapter`
-- **Supabase**: PostgreSQL + Auth (anonymous + OTP) + Edge Functions (webhook processing only) + Realtime + Storage
+- **Supabase**: PostgreSQL + Auth (anonymous + OTP) + Edge Functions (webhook processing only) + Realtime (order/cart live updates) + Storage
 - **Stripe**: Payment processing via Violet-provided payment intents
-- **OpenAI**: Embeddings for semantic product search (pgvector)
 
 ## Documentation Access
 

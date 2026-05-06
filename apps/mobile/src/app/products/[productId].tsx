@@ -1,11 +1,10 @@
-import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useFocusEffect } from "expo-router";
 import React, { useState, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  FlatList,
   PixelRatio,
   Pressable,
   ScrollView,
@@ -22,12 +21,10 @@ import {
   formatPrice,
   optimizeImageUrl,
   stripHtml,
-  useRecommendations,
-  useUser,
   useProductVariants,
   getDefaultSelectedValues,
 } from "@ecommerce/shared";
-import type { Product, RecommendationItem } from "@ecommerce/shared";
+import type { Product } from "@ecommerce/shared";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -42,7 +39,6 @@ import { CART_STORAGE_KEY } from "../../constants/cart";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const HERO_PX = Math.min(Math.round(SCREEN_WIDTH * PixelRatio.get()), 2160);
-const REC_PX = Math.min(Math.round(180 * PixelRatio.get()), 800);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -321,8 +317,6 @@ export default function ProductDetailScreen() {
             We may earn a commission from this purchase.
           </ThemedText>
         </View>
-
-        <RecommendationsSection productId={product.id} />
       </ScrollView>
     </>
   );
@@ -363,78 +357,6 @@ const emptyProduct: Product = {
 };
 
 // ─── Recommendations ─────────────────────────────────────────────────────────
-
-const CARD_WIDTH = 180;
-
-function RecommendationsSection({ productId }: { productId: string }) {
-  const router = useRouter();
-  const supabase = createSupabaseClient();
-  const { data: user } = useUser();
-  const userId = user && !user.is_anonymous ? user.id : undefined;
-
-  const { data, isLoading, isError } = useRecommendations(productId, supabase, userId);
-
-  if (isError) return null;
-
-  if (isLoading) {
-    return (
-      <View style={styles.recSection}>
-        <ThemedText type="subtitle" style={styles.recHeading}>
-          You might also like
-        </ThemedText>
-        <ActivityIndicator size="small" style={styles.recLoader} />
-      </View>
-    );
-  }
-
-  if (!data || data.products.length === 0) return null;
-
-  const renderItem = ({ item }: { item: RecommendationItem }) => (
-    <Pressable
-      style={styles.recCard}
-      onPress={() => router.push(`/products/${item.id}` as never)}
-      accessibilityLabel={`${item.name}, ${formatPrice(item.minPrice, item.currency)}`}
-    >
-      {item.thumbnailUrl ? (
-        <Image
-          source={{
-            uri:
-              optimizeImageUrl(item.thumbnailUrl, {
-                width: REC_PX,
-                height: Math.round(REC_PX * 1.33),
-              }) ?? item.thumbnailUrl,
-          }}
-          contentFit="cover"
-          style={styles.recImage}
-        />
-      ) : (
-        <ThemedView type="backgroundElement" style={styles.recImagePlaceholder}>
-          <ThemedText themeColor="textSecondary">No image</ThemedText>
-        </ThemedView>
-      )}
-      <ThemedText numberOfLines={2} style={styles.recName}>
-        {item.name}
-      </ThemedText>
-      <ThemedText type="smallBold">{formatPrice(item.minPrice, item.currency)}</ThemedText>
-    </Pressable>
-  );
-
-  return (
-    <View style={styles.recSection}>
-      <ThemedText type="subtitle" style={styles.recHeading}>
-        You might also like
-      </ThemedText>
-      <FlatList
-        horizontal
-        data={data.products}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.recList}
-      />
-    </View>
-  );
-}
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
@@ -488,24 +410,4 @@ const styles = StyleSheet.create({
   ctaLoading: { opacity: 0.7 },
   ctaText: { fontWeight: "600", fontSize: 16, letterSpacing: 0.02 },
   disclosure: { textAlign: "center", fontStyle: "italic" },
-  recSection: {
-    paddingTop: Spacing.five,
-    borderTopWidth: 1,
-    borderTopColor: "#e8e4df",
-    marginTop: Spacing.four,
-    marginHorizontal: Spacing.four,
-  },
-  recHeading: { fontFamily: "serif", marginBottom: Spacing.three },
-  recLoader: { paddingVertical: Spacing.six },
-  recList: { gap: Spacing.three },
-  recCard: { width: CARD_WIDTH, gap: Spacing.one },
-  recImage: { width: CARD_WIDTH, height: CARD_WIDTH * 1.33, borderRadius: 8 },
-  recImagePlaceholder: {
-    width: CARD_WIDTH,
-    height: CARD_WIDTH * 1.33,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  recName: { fontSize: 13, marginTop: Spacing.one },
 });

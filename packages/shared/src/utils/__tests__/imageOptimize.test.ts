@@ -149,7 +149,6 @@ describe("IMAGE_PRESETS", () => {
       "collectionCard",
       "pdpThumb",
       "collectionHero",
-      "recommendation",
       "recentlyViewed",
     ]);
   });
