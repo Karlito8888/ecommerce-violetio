@@ -1,7 +1,10 @@
 name: Mobile Build
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
 
@@ -15,8 +18,7 @@ concurrency:
 jobs:
   build:
     name: EAS Build
-    needs: ci
-    if: github.ref == 'refs/heads/main' && ${{ secrets.EXPO_TOKEN != '' }}
+    if: github.event.workflow_run.conclusion == 'success' && secrets.EXPO_TOKEN != ''
     runs-on: ubuntu-latest
 
     steps:
