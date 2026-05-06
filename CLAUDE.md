@@ -15,15 +15,18 @@ bun run dev:mobile       # Start Expo mobile app
 bun run build            # Build web app
 
 # Quality checks
-bun run fix-all          # Prettier format + ESLint fix + TypeScript check (run before committing)
+bun run check           # Full gate: format + lint + typecheck + test (run before committing)
+bun run fix-all          # Prettier format + ESLint fix + TypeScript check (auto-fix + verify)
 bun run lint             # ESLint only (--max-warnings 0)
 bun run lint:fix         # ESLint with auto-fix
 bun run format           # Prettier check only
 bun run format:fix       # Prettier write
 bun run typecheck        # TypeScript check (web + mobile)
 
-# Tests (web only for now)
-bun --cwd=apps/web run test   # Run vitest
+# Tests (web + shared)
+bun run test             # Run all vitest suites
+bun --cwd=apps/web run test    # Web tests only
+bun --cwd=packages/shared run test  # Shared tests only
 ```
 
 ## Architecture
