@@ -140,6 +140,11 @@ function CollectionCard({ collection, onPress, theme }: CollectionCardProps) {
             {collection.description}
           </ThemedText>
         ) : null}
+        {collection.productCount > 0 ? (
+          <ThemedText style={styles.productCount} themeColor="textSecondary">
+            {collection.productCount} product{collection.productCount !== 1 ? "s" : ""}
+          </ThemedText>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -193,4 +198,5 @@ const styles = StyleSheet.create({
   body: { padding: Spacing.three },
   name: { fontSize: 14, fontWeight: "600", marginBottom: 2, lineHeight: 18 },
   description: { fontSize: 12, lineHeight: 16 },
+  productCount: { fontSize: 11, marginTop: 2 },
 });
