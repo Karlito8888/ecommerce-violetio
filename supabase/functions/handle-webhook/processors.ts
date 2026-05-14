@@ -124,20 +124,41 @@ export async function processOfferRemoved(
 export const processOfferDeleted = processOfferRemoved;
 
 /**
- * Processes sync lifecycle events (PRODUCT_SYNC_STARTED/COMPLETED/FAILED).
+ * Processes sync lifecycle events (PRODUCT_SYNC_STARTED/COMPLETED/FAILED,
+ * COLLECTION_SYNC_STARTED/COMPLETED/FAILED).
  *
- * These are monitoring-only — no product-level action is taken.
+ * These are monitoring/audit events — no product-level action is taken.
  * The event is already stored in webhook_events (by the main handler),
  * so we just mark it as processed for the audit trail.
  *
+ * On COLLECTION_SYNC_COMPLETED, we also invalidate the web backend
+ * collections cache so the updated collections appear on the next page load.
+ *
  * A future monitoring dashboard can query webhook_events filtered by
- * event_type LIKE 'PRODUCT_SYNC_%' to show sync history.
+ * event_type LIKE '%_SYNC_%' to show sync history.
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/sync-webhooks.md
  */
 export async function processSyncEvent(
   supabase: SupabaseClient,
   eventId: string,
-  _payload: VioletSyncPayload,
+  payload: VioletSyncPayload,
+  eventType: string,
 ): Promise<void> {
+  const merchantId = String(payload.merchant_id);
+  const status = payload.status;
+  const totalProducts = payload.total_products;
+  const synced = payload.total_products_synced;
+
+  console.log(
+    `[sync] ${eventType}: merchant=${merchantId} status=${status} total=${totalProducts}${synced != null ? ` synced=${synced}` : ""}`,
+  );
+
+  // Invalidate collections cache on collection sync completion
+  if (eventType === "COLLECTION_SYNC_COMPLETED") {
+    await invalidateCollectionsCache();
+  }
+
   await updateEventStatus(supabase, eventId, "processed");
 }
 

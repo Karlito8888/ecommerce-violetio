@@ -31,7 +31,8 @@
  * | OFFER_UPDATED       | processOfferUpdated      | Audit trail only                          |
  * | OFFER_REMOVED       | processOfferRemoved      | Audit trail only                          |
  * | OFFER_DELETED       | processOfferDeleted      | Audit trail only                          |
- * | PRODUCT_SYNC_*      | processSyncEvent         | Audit trail only                          |
+ * | PRODUCT_SYNC_*      | processSyncEvent         | Log sync status + audit trail              |
+ * | COLLECTION_SYNC_*   | processSyncEvent         | Log sync status + invalidate cache (COMPLETED) |
  * | ORDER_UPDATED       | processOrderUpdated      | Update orders.status                      |
  * | ORDER_COMPLETED     | processOrderUpdated      | Update orders.status                      |
  * | ORDER_CANCELED      | processOrderUpdated      | Update orders.status                      |
@@ -427,7 +428,7 @@ Deno.serve(async (req: Request) => {
           );
           break;
         }
-        await processSyncEvent(supabase, eventId, result.data);
+        await processSyncEvent(supabase, eventId, result.data, eventType);
         break;
       }
 

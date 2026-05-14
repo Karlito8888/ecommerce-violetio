@@ -48,8 +48,18 @@ describe("webhookEventTypeSchema", () => {
     }
   });
 
-  it("accepts all valid sync event types", () => {
+  it("accepts all valid product sync event types", () => {
     for (const type of ["PRODUCT_SYNC_STARTED", "PRODUCT_SYNC_COMPLETED", "PRODUCT_SYNC_FAILED"]) {
+      expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
+    }
+  });
+
+  it("accepts all valid collection sync event types", () => {
+    for (const type of [
+      "COLLECTION_SYNC_STARTED",
+      "COLLECTION_SYNC_COMPLETED",
+      "COLLECTION_SYNC_FAILED",
+    ]) {
       expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
     }
   });
