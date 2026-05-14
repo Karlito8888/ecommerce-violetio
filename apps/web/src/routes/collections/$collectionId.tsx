@@ -21,16 +21,7 @@ const PAGE_SIZE = 12;
 function collectionQueryOptions(collectionId: string) {
   return queryOptions({
     queryKey: ["collection", collectionId],
-    queryFn: async () => {
-      const result = await getAdapter().getCollections();
-      const collection = (result.data ?? []).find((c) => c.id === collectionId);
-      return collection
-        ? { data: collection, error: null }
-        : {
-            data: null,
-            error: { code: "NOT_FOUND", message: `Collection ${collectionId} not found` },
-          };
-    },
+    queryFn: () => getAdapter().getCollectionById(collectionId),
     staleTime: 5 * 60 * 1000,
   });
 }

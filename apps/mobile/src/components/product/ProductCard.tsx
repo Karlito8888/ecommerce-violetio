@@ -8,6 +8,7 @@ import { formatPrice, optimizeImageUrl } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { Fonts, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import WishlistButton from "./WishlistButton";
 
 /**
  * Product card image dimensions adjusted for device pixel ratio.
@@ -89,6 +90,11 @@ function ProductCard({ product }: { product: Product }) {
           </View>
         )}
 
+        {/* Wishlist button — top right overlay */}
+        <View style={styles.wishlistBtn}>
+          <WishlistButton productId={product.id} productName={product.name} size="sm" />
+        </View>
+
         {/* Sold Out badge */}
         {isOutOfStock && (
           <View style={[styles.badge, { backgroundColor: theme.text }]}>
@@ -140,6 +146,12 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 3 / 4,
     overflow: "hidden",
+  },
+  wishlistBtn: {
+    position: "absolute",
+    top: Spacing.one,
+    right: Spacing.one,
+    zIndex: 2,
   },
   image: {
     width: "100%",

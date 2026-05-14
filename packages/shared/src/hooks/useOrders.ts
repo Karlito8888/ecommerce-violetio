@@ -23,12 +23,11 @@
  * keep the UI fresh.
  *
  * ## Mobile integration status
- * - The `OrderConfirmationScreen` (mobile) does NOT use these hooks — it performs
- *   a one-shot fetch because confirmation is transient.
- * - The `GuestLookupScreen` (mobile) does NOT use these hooks — guest data comes
- *   from a different Edge Function with snake_case types.
- * - Future mobile order list/detail screens SHOULD use `ordersQueryOptions()` and
- *   `orderDetailQueryOptions()` with a mobile-specific fetch function.
+ * - Mobile `/orders` list and `/orders/[orderId]` detail pages use `ordersQueryOptions`
+ *   and `orderDetailQueryOptions` with mobile-specific fetch functions via web backend API Routes.
+ * - Both pages subscribe to `useOrderRealtime` for live status updates (same as web).
+ * - The `OrderConfirmationScreen` (mobile) does NOT use these hooks — one-shot post-checkout.
+ * - The `GuestLookupScreen` (mobile) does NOT use these hooks — guest lookup by token.
  *
  * @module useOrders
  * @see {@link file://apps/web/src/routes/account/orders/index.tsx} — web consumer

@@ -61,6 +61,7 @@ import {
 } from "./violetCheckout.js";
 import {
   getCollections as getCollectionsFn,
+  getCollectionById as getCollectionByIdFn,
   getCollectionOffers as getCollectionOffersFn,
   getCollectionOfferIds as getCollectionOfferIdsFn,
   enableCollectionSync as enableCollectionSyncFn,
@@ -251,6 +252,14 @@ export class VioletAdapter implements SupplierAdapter {
     return getCollectionsFn(this.getCtx(), merchantId, this._collectionsCache, (c) =>
       this.setCollectionsCache(c),
     );
+  }
+
+  async getCollectionById(collectionId: string): Promise<ApiResponse<CollectionItem>> {
+    return getCollectionByIdFn(this.getCtx(), collectionId);
+  }
+
+  invalidateCollectionsCache(): void {
+    this._collectionsCache = null;
   }
 
   async getCollectionOffers(

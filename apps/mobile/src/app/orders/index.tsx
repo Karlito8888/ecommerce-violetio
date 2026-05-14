@@ -39,7 +39,14 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createSupabaseClient, useOrderRealtime, ordersQueryOptions } from "@ecommerce/shared";
+import {
+  createSupabaseClient,
+  useOrderRealtime,
+  ordersQueryOptions,
+  ORDER_STATUS_LABELS,
+  formatPrice,
+  formatDate,
+} from "@ecommerce/shared";
 import type { OrderWithBagCount } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -58,11 +65,7 @@ const supabase = createSupabaseClient();
  * Taps navigate to the order detail screen.
  */
 function OrderCard({ order }: { order: OrderWithBagCount }) {
-  const dateStr = new Date(order.created_at).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const dateStr = formatDate(order.created_at, "short");
 
   const merchantText = order.bag_count === 1 ? "1 merchant" : `${order.bag_count} merchants`;
   const shortId = order.id.slice(0, 8).toUpperCase();
@@ -77,12 +80,14 @@ function OrderCard({ order }: { order: OrderWithBagCount }) {
           ? colors.info
           : colors.gold;
 
+  const statusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
+
   return (
     <Pressable
       style={styles.card}
       onPress={() => router.push(`/orders/${order.id}` as never)}
       accessibilityRole="button"
-      accessibilityLabel={`Order ${shortId}, ${order.status}, ${merchantText}`}
+      accessibilityLabel={`Order ${shortId}, ${statusLabel}, ${merchantText}`}
     >
       <View style={styles.cardHeader}>
         <ThemedText type="small" themeColor="textSecondary">
@@ -90,7 +95,7 @@ function OrderCard({ order }: { order: OrderWithBagCount }) {
         </ThemedText>
         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
           <ThemedText type="small" style={styles.statusText}>
-            {order.status}
+            {statusLabel}
           </ThemedText>
         </View>
       </View>
@@ -101,10 +106,7 @@ function OrderCard({ order }: { order: OrderWithBagCount }) {
         </ThemedText>
       </View>
       <ThemedText type="subtitle" style={styles.cardTotal}>
-        {(order.total / 100).toLocaleString("en-US", {
-          style: "currency",
-          currency: order.currency || "USD",
-        })}
+        {formatPrice(order.total, order.currency)}
       </ThemedText>
     </Pressable>
   );

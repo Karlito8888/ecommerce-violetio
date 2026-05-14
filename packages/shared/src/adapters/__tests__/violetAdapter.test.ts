@@ -890,7 +890,23 @@ describe("VioletAdapter — Collections", () => {
         number: 0,
         size: 50,
       };
-      vi.stubGlobal("fetch", mockFetchResponse(page1));
+      // Mock: first call = collections list, second call = offer IDs (for productCount)
+      const offerIdsPage = {
+        content: [100, 200, 300],
+        last: true,
+        total_elements: 3,
+        number: 0,
+        size: 1,
+      };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(page1) })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(offerIdsPage),
+        });
+      vi.stubGlobal("fetch", fetchMock);
 
       const result = await collAdapter.getCollections();
       expect(result.error).toBeNull();
@@ -907,7 +923,7 @@ describe("VioletAdapter — Collections", () => {
         imageUrl: "https://cdn.example.com/summer.jpg",
         imageAlt: "Summer",
         sortOrder: 1,
-        productCount: 0,
+        productCount: 3,
         dateCreated: "2026-01-01T00:00:00Z",
         dateLastModified: "2026-03-01T00:00:00Z",
       });
@@ -928,15 +944,26 @@ describe("VioletAdapter — Collections", () => {
         number: 2,
         size: 1,
       };
+      // Offer IDs responses for productCount enrichment (one per collection)
+      const offerIds = {
+        content: [],
+        last: true,
+        total_elements: 5,
+        number: 0,
+        size: 1,
+      };
       const fetchMock = vi
         .fn()
         .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(p1) })
-        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(p2) });
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(p2) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(offerIds) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(offerIds) });
       vi.stubGlobal("fetch", fetchMock);
 
       const result = await collAdapter.getCollections();
       expect(result.data).toHaveLength(2);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // 2 collection pages + 2 offer ID calls for productCount
+      expect(fetchMock).toHaveBeenCalledTimes(4);
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
         expect.stringContaining("?page=1&size=50&exclude_hidden=true"),
@@ -963,7 +990,12 @@ describe("VioletAdapter — Collections", () => {
         number: 0,
         size: 50,
       };
-      vi.stubGlobal("fetch", mockFetchResponse(page));
+      const offerIds = { content: [], last: true, total_elements: 0, number: 0, size: 1 };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(page) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(offerIds) });
+      vi.stubGlobal("fetch", fetchMock);
 
       const result = await collAdapter.getCollections();
       expect(result.data![0].imageUrl).toBe("https://img.example.com/collection.jpg");
@@ -976,7 +1008,12 @@ describe("VioletAdapter — Collections", () => {
         number: 0,
         size: 50,
       };
-      vi.stubGlobal("fetch", mockFetchResponse(page));
+      const offerIds = { content: [], last: true, total_elements: 0, number: 0, size: 1 };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(page) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(offerIds) });
+      vi.stubGlobal("fetch", fetchMock);
 
       const result = await collAdapter.getCollections();
       expect(result.data![0].imageUrl).toBeNull();
@@ -1005,16 +1042,18 @@ describe("VioletAdapter — Collections", () => {
         number: 0,
         size: 50,
       };
-      const fetchMock = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(page),
-      });
+      const offerIds = { content: [], last: true, total_elements: 0, number: 0, size: 1 };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(page) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(offerIds) });
       vi.stubGlobal("fetch", fetchMock);
 
       const r1 = await collAdapter.getCollections();
       const r2 = await collAdapter.getCollections();
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // First call: 1 collections page + 1 offer IDs call = 2 fetches
+      // Second call: served from cache = 0 additional fetches
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(r1.data).toEqual(r2.data);
     });
 
@@ -1032,6 +1071,148 @@ describe("VioletAdapter — Collections", () => {
         expect.stringContaining("/catalog/collections/merchants/123"),
         expect.anything(),
       );
+    });
+  });
+
+  describe("getCollectionById()", () => {
+    it("fetches a single collection by ID with productCount", async () => {
+      const collection = {
+        id: 42,
+        name: "Winter Collection",
+        description: "Cold weather essentials",
+        type: "AUTOMATED",
+        merchant_id: 7,
+        external_id: "shopify-42",
+        handle: "winter-collection",
+        status: "ACTIVE",
+        media: { source_url: "https://cdn.example.com/winter.jpg", alt: "Winter" },
+        sort_order: 2,
+        date_created: "2026-02-01T00:00:00Z",
+        date_last_modified: "2026-04-01T00:00:00Z",
+      };
+      const offerIds = {
+        content: [100, 200],
+        last: true,
+        total_elements: 2,
+        number: 0,
+        size: 1,
+      };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(collection),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(offerIds),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await collAdapter.getCollectionById("42");
+      expect(result.error).toBeNull();
+      expect(result.data).toEqual({
+        id: "42",
+        merchantId: "7",
+        name: "Winter Collection",
+        handle: "winter-collection",
+        description: "Cold weather essentials",
+        type: "AUTOMATED",
+        status: "ACTIVE",
+        externalId: "shopify-42",
+        imageUrl: "https://cdn.example.com/winter.jpg",
+        imageAlt: "Winter",
+        sortOrder: 2,
+        productCount: 2,
+        dateCreated: "2026-02-01T00:00:00Z",
+        dateLastModified: "2026-04-01T00:00:00Z",
+      });
+      // First call: GET /catalog/collections/42
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining("/catalog/collections/42"),
+        expect.anything(),
+      );
+      // Second call: GET /catalog/collections/42/offers/ids (for productCount)
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("/catalog/collections/42/offers/ids"),
+        expect.anything(),
+      );
+    });
+
+    it("returns NOT_FOUND on API error", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("Not Found"),
+        }),
+      );
+
+      const result = await collAdapter.getCollectionById("999");
+      expect(result.data).toBeNull();
+      expect(result.error?.code).toBe("NOT_FOUND");
+    });
+
+    it("defaults productCount to 0 when offer IDs call fails", async () => {
+      const collection = {
+        id: 5,
+        name: "Test",
+        merchant_id: 1,
+        type: "CUSTOM",
+      };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(collection),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("Error"),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await collAdapter.getCollectionById("5");
+      expect(result.data?.productCount).toBe(0);
+    });
+  });
+
+  describe("invalidateCollectionsCache()", () => {
+    it("clears the cache so next getCollections fetches fresh data", async () => {
+      const page = {
+        content: [{ id: 1, name: "A", merchant_id: 1 }],
+        last: true,
+        number: 0,
+        size: 50,
+      };
+      const offerIds = { content: [], last: true, total_elements: 0, number: 0, size: 1 };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(page) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(offerIds) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(page) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(offerIds) });
+      vi.stubGlobal("fetch", fetchMock);
+
+      // First call populates cache
+      await collAdapter.getCollections();
+      expect(fetchMock).toHaveBeenCalledTimes(2); // 1 collection page + 1 offer IDs
+
+      // Invalidate cache
+      collAdapter.invalidateCollectionsCache();
+
+      // Next call should fetch again
+      await collAdapter.getCollections();
+      expect(fetchMock).toHaveBeenCalledTimes(4); // 2 more calls after invalidation
     });
   });
 

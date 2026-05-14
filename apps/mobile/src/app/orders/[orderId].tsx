@@ -37,7 +37,9 @@ import {
   View,
   StyleSheet,
   RefreshControl,
+  Linking,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -79,12 +81,7 @@ function TrackingInfo({ bag }: { bag: OrderBagWithItems }) {
         </ThemedText>
       )}
       {bag.tracking_url ? (
-        <Pressable
-          onPress={() => {
-            // On mobile, we can't open external URLs directly without Linking
-            // For now, show the tracking number. Future: use expo-linking.
-          }}
-        >
+        <Pressable onPress={() => void Linking.openURL(bag.tracking_url!).catch(() => {})}>
           <ThemedText type="small" style={styles.trackingLink}>
             Track →
           </ThemedText>
@@ -141,6 +138,16 @@ function BagCard({ bag, currency }: { bag: OrderBagWithItems; currency: string }
       {/* Items */}
       {bag.order_items.map((item) => (
         <View key={item.id} style={styles.itemRow}>
+          {item.thumbnail ? (
+            <Image
+              source={{ uri: item.thumbnail }}
+              style={styles.itemImage}
+              contentFit="cover"
+              recyclingKey={item.thumbnail}
+            />
+          ) : (
+            <View style={styles.itemImagePlaceholder} />
+          )}
           <View style={styles.itemInfo}>
             <ThemedText type="default">{item.name}</ThemedText>
             {item.quantity > 1 && (
@@ -164,9 +171,19 @@ function BagCard({ bag, currency }: { bag: OrderBagWithItems; currency: string }
         <ThemedText type="small" themeColor="textSecondary">
           {bag.shipping_method ? `Via ${bag.shipping_method}` : ""}
         </ThemedText>
-        <ThemedText type="default" style={styles.bagTotal}>
-          {formatPrice(bag.total, currency)}
-        </ThemedText>
+        <View style={styles.bagTotalContainer}>
+          <ThemedText type="default" style={styles.bagTotal}>
+            {formatPrice(bag.total, currency)}
+          </ThemedText>
+          {bag.order_refunds.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {` — Refund: ${formatPrice(
+                bag.order_refunds.reduce((s, r) => s + r.amount, 0),
+                currency,
+              )}`}
+            </ThemedText>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -391,6 +408,21 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     borderTopWidth: 1,
     borderTopColor: colors.stone,
+  },
+  itemImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    backgroundColor: colors.stone,
+  },
+  itemImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    backgroundColor: colors.stone,
+  },
+  bagTotalContainer: {
+    alignItems: "flex-end",
   },
   bagTotal: {
     fontWeight: "600",

@@ -21,6 +21,10 @@ export const REQUEST_TIMEOUT_MS = 30_000;
 /** Default Violet API base URL (sandbox). Sync with packages/shared/src/utils/constants.ts. */
 export const DEFAULT_VIOLET_API_BASE = "https://sandbox-api.violet.io/v1";
 
+/** Web backend URL for cache invalidation calls from Edge Functions. */
+export const WEB_BACKEND_URL =
+  Deno.env.get("WEB_BACKEND_URL") ?? "http://localhost:3000";
+
 /**
  * Sleep for `ms` milliseconds.
  * SYNC: Same as packages/shared/src/adapters/violetConstants.ts delay().

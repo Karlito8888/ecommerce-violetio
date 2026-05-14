@@ -300,12 +300,17 @@ export async function processMerchantStatusChange(
 
 // ─── Collection Processors ──────────────────────────────────────────────
 
+import { invalidateCollectionsCache } from "../_shared/cacheInvalidation.ts";
+
 /**
  * Processes COLLECTION_CREATED webhook event.
  *
  * Fired when a new collection is created by a merchant.
  * Note: The collection may have 0 offers initially — use COLLECTION_OFFERS_UPDATED
  * to track when offers are added.
+ *
+ * Invalidates the web backend collections cache so the new collection
+ * appears on the next page load.
  *
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  */
@@ -315,13 +320,17 @@ export async function processCollectionCreated(
   payload: VioletCollectionPayload,
 ): Promise<void> {
   console.log(
-    `[collection] Collection created (no-op): id=${payload.id} name="${payload.name ?? "Unknown"}" — fetched directly from Violet API`,
+    `[collection] Collection created: id=${payload.id} name="${payload.name ?? "Unknown"}" — invalidating cache`,
   );
+  await invalidateCollectionsCache();
   await updateEventStatus(_supabase, eventId, "processed");
 }
 
 /**
  * Processes COLLECTION_UPDATED webhook event.
+ *
+ * Invalidates the web backend collections cache so updated metadata
+ * (name, description, image) appears on the next page load.
  *
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  */
@@ -331,13 +340,17 @@ export async function processCollectionUpdated(
   payload: VioletCollectionPayload,
 ): Promise<void> {
   console.log(
-    `[collection] Collection updated (no-op): id=${payload.id} name="${payload.name ?? "Unknown"}" — fetched directly from Violet API`,
+    `[collection] Collection updated: id=${payload.id} name="${payload.name ?? "Unknown"}" — invalidating cache`,
   );
+  await invalidateCollectionsCache();
   await updateEventStatus(_supabase, eventId, "processed");
 }
 
 /**
  * Processes COLLECTION_REMOVED webhook event.
+ *
+ * Invalidates the web backend collections cache so the removed collection
+ * disappears on the next page load.
  *
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  */
@@ -347,13 +360,18 @@ export async function processCollectionRemoved(
   payload: VioletCollectionPayload,
 ): Promise<void> {
   console.log(
-    `[collection] Collection removed (no-op): id=${payload.id} — fetched directly from Violet API`,
+    `[collection] Collection removed: id=${payload.id} — invalidating cache`,
   );
+  await invalidateCollectionsCache();
   await updateEventStatus(_supabase, eventId, "processed");
 }
 
 /**
  * Processes COLLECTION_OFFERS_UPDATED webhook event.
+ *
+ * Fired when products are added to or removed from a collection.
+ * Invalidates the web backend collections cache so the product count
+ * is recalculated on the next page load.
  *
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  */
@@ -363,8 +381,9 @@ export async function processCollectionOffersUpdated(
   payload: VioletCollectionPayload,
 ): Promise<void> {
   console.log(
-    `[collection] Collection offers updated (no-op): id=${payload.id} merchant=${payload.merchant_id} — fetched directly from Violet API`,
+    `[collection] Collection offers updated: id=${payload.id} merchant=${payload.merchant_id} — invalidating cache`,
   );
+  await invalidateCollectionsCache();
   await updateEventStatus(_supabase, eventId, "processed");
 }
 

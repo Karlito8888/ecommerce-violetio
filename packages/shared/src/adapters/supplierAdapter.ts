@@ -106,6 +106,26 @@ export interface SupplierAdapter {
   getCollections(merchantId?: string): Promise<ApiResponse<CollectionItem[]>>;
 
   /**
+   * Fetches a single collection by its ID directly from Violet.
+   *
+   * Uses `GET /catalog/collections/{id}` — avoids fetching all collections
+   * and filtering client-side.
+   *
+   * Also populates `productCount` via a parallel `getCollectionOfferIds` call.
+   *
+   * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-by-id
+   */
+  getCollectionById(collectionId: string): Promise<ApiResponse<CollectionItem>>;
+
+  /**
+   * Invalidates the in-memory collections cache.
+   *
+   * Call this when a collection webhook event is received to ensure
+   * the next getCollections() call fetches fresh data from Violet.
+   */
+  invalidateCollectionsCache(): void;
+
+  /**
    * Fetches offers (products) belonging to a specific collection.
    *
    * @see https://docs.violet.io/api-reference/catalog/collections/get-collection-offers

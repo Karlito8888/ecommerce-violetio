@@ -29,6 +29,7 @@ import type { Product } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import VariantSelector from "@/components/product/VariantSelector";
+import WishlistButton from "@/components/product/WishlistButton";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useTrackProductView } from "@/hooks/useMobileTracking";
@@ -273,6 +274,7 @@ export default function ProductDetailScreen() {
             >
               <ThemedText style={styles.shareBtnText}>↗</ThemedText>
             </Pressable>
+            <WishlistButton productId={product.id} productName={product.name} size="md" />
           </View>
         </View>
 

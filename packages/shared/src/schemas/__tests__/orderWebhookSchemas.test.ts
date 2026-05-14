@@ -7,11 +7,16 @@ import {
 
 describe("webhookEventTypeSchema — order/bag events", () => {
   const orderEvents = [
+    "ORDER_ACCEPTED",
     "ORDER_UPDATED",
     "ORDER_COMPLETED",
     "ORDER_CANCELED",
+    "ORDER_CANCELLED",
     "ORDER_REFUNDED",
     "ORDER_RETURNED",
+    "ORDER_SHIPPED",
+    "ORDER_DELIVERED",
+    "ORDER_FAILED",
   ];
 
   const bagEvents = [

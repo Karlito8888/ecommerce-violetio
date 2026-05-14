@@ -48,6 +48,7 @@ import { Route as OrderOrderIdConfirmationRouteImport } from './routes/order/$or
 import { Route as ApiProductsProductIdRouteImport } from './routes/api/products/$productId'
 import { Route as ApiOrdersOrderIdRouteImport } from './routes/api/orders/$orderId'
 import { Route as ApiMerchantsMerchantIdRouteImport } from './routes/api/merchants/$merchantId'
+import { Route as ApiCollectionsInvalidateCacheRouteImport } from './routes/api/collections/invalidate-cache'
 import { Route as ApiCartUserRouteImport } from './routes/api/cart/user'
 import { Route as ApiCartMergeRouteImport } from './routes/api/cart/merge'
 import { Route as ApiCartClaimRouteImport } from './routes/api/cart/claim'
@@ -268,6 +269,12 @@ const ApiMerchantsMerchantIdRoute = ApiMerchantsMerchantIdRouteImport.update({
   path: '/api/merchants/$merchantId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCollectionsInvalidateCacheRoute =
+  ApiCollectionsInvalidateCacheRouteImport.update({
+    id: '/api/collections/invalidate-cache',
+    path: '/api/collections/invalidate-cache',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCartUserRoute = ApiCartUserRouteImport.update({
   id: '/api/cart/user',
   path: '/api/cart/user',
@@ -427,6 +434,7 @@ export interface FileRoutesByFullPath {
   '/api/cart/claim': typeof ApiCartClaimRoute
   '/api/cart/merge': typeof ApiCartMergeRoute
   '/api/cart/user': typeof ApiCartUserRoute
+  '/api/collections/invalidate-cache': typeof ApiCollectionsInvalidateCacheRoute
   '/api/merchants/$merchantId': typeof ApiMerchantsMerchantIdRouteWithChildren
   '/api/orders/$orderId': typeof ApiOrdersOrderIdRoute
   '/api/products/$productId': typeof ApiProductsProductIdRoute
@@ -491,6 +499,7 @@ export interface FileRoutesByTo {
   '/api/cart/claim': typeof ApiCartClaimRoute
   '/api/cart/merge': typeof ApiCartMergeRoute
   '/api/cart/user': typeof ApiCartUserRoute
+  '/api/collections/invalidate-cache': typeof ApiCollectionsInvalidateCacheRoute
   '/api/merchants/$merchantId': typeof ApiMerchantsMerchantIdRouteWithChildren
   '/api/orders/$orderId': typeof ApiOrdersOrderIdRoute
   '/api/products/$productId': typeof ApiProductsProductIdRoute
@@ -556,6 +565,7 @@ export interface FileRoutesById {
   '/api/cart/claim': typeof ApiCartClaimRoute
   '/api/cart/merge': typeof ApiCartMergeRoute
   '/api/cart/user': typeof ApiCartUserRoute
+  '/api/collections/invalidate-cache': typeof ApiCollectionsInvalidateCacheRoute
   '/api/merchants/$merchantId': typeof ApiMerchantsMerchantIdRouteWithChildren
   '/api/orders/$orderId': typeof ApiOrdersOrderIdRoute
   '/api/products/$productId': typeof ApiProductsProductIdRoute
@@ -622,6 +632,7 @@ export interface FileRouteTypes {
     | '/api/cart/claim'
     | '/api/cart/merge'
     | '/api/cart/user'
+    | '/api/collections/invalidate-cache'
     | '/api/merchants/$merchantId'
     | '/api/orders/$orderId'
     | '/api/products/$productId'
@@ -686,6 +697,7 @@ export interface FileRouteTypes {
     | '/api/cart/claim'
     | '/api/cart/merge'
     | '/api/cart/user'
+    | '/api/collections/invalidate-cache'
     | '/api/merchants/$merchantId'
     | '/api/orders/$orderId'
     | '/api/products/$productId'
@@ -750,6 +762,7 @@ export interface FileRouteTypes {
     | '/api/cart/claim'
     | '/api/cart/merge'
     | '/api/cart/user'
+    | '/api/collections/invalidate-cache'
     | '/api/merchants/$merchantId'
     | '/api/orders/$orderId'
     | '/api/products/$productId'
@@ -812,6 +825,7 @@ export interface RootRouteChildren {
   ApiCartClaimRoute: typeof ApiCartClaimRoute
   ApiCartMergeRoute: typeof ApiCartMergeRoute
   ApiCartUserRoute: typeof ApiCartUserRoute
+  ApiCollectionsInvalidateCacheRoute: typeof ApiCollectionsInvalidateCacheRoute
   ApiMerchantsMerchantIdRoute: typeof ApiMerchantsMerchantIdRouteWithChildren
   ApiOrdersOrderIdRoute: typeof ApiOrdersOrderIdRoute
   ApiProductsProductIdRoute: typeof ApiProductsProductIdRoute
@@ -1116,6 +1130,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMerchantsMerchantIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/collections/invalidate-cache': {
+      id: '/api/collections/invalidate-cache'
+      path: '/api/collections/invalidate-cache'
+      fullPath: '/api/collections/invalidate-cache'
+      preLoaderRoute: typeof ApiCollectionsInvalidateCacheRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cart/user': {
       id: '/api/cart/user'
       path: '/api/cart/user'
@@ -1355,6 +1376,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCartClaimRoute: ApiCartClaimRoute,
   ApiCartMergeRoute: ApiCartMergeRoute,
   ApiCartUserRoute: ApiCartUserRoute,
+  ApiCollectionsInvalidateCacheRoute: ApiCollectionsInvalidateCacheRoute,
   ApiMerchantsMerchantIdRoute: ApiMerchantsMerchantIdRouteWithChildren,
   ApiOrdersOrderIdRoute: ApiOrdersOrderIdRoute,
   ApiProductsProductIdRoute: ApiProductsProductIdRoute,

@@ -47,10 +47,10 @@
  * | MERCHANT_DISCONNECTED | processMerchantDisconnected | Log disconnection                       |
  * | MERCHANT_ENABLED    | processMerchantStatusChange | Log enable/disable + audit trail        |
  * | MERCHANT_DISABLED   | processMerchantStatusChange | Log enable/disable + audit trail        |
- * | COLLECTION_CREATED  | processCollectionCreated   | Insert collection into DB                |
- * | COLLECTION_UPDATED  | processCollectionUpdated   | Update collection metadata in DB         |
- * | COLLECTION_REMOVED  | processCollectionRemoved   | Soft-delete collection + clear junction   |
- * | COLLECTION_OFFERS_UPDATED | processCollectionOffersUpdated | Log offer composition change       |
+ * | COLLECTION_CREATED  | processCollectionCreated   | Acknowledge (fetched on-demand from API) |
+ * | COLLECTION_UPDATED  | processCollectionUpdated   | Acknowledge (fetched on-demand from API) |
+ * | COLLECTION_REMOVED  | processCollectionRemoved   | Acknowledge (fetched on-demand from API) |
+ * | COLLECTION_OFFERS_UPDATED | processCollectionOffersUpdated | Acknowledge (fetched on-demand)  |
  * | TRANSFER_SENT            | processTransferSent                | Persist transfer success               |
  * | TRANSFER_PARTIALLY_SENT  | processTransferSent                | Persist partial transfer               |
  * | TRANSFER_FAILED          | processTransferFailed              | Log failure + error details            |
