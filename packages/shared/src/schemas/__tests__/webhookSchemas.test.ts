@@ -6,6 +6,7 @@ import {
   violetOfferWebhookPayloadSchema,
   violetSyncWebhookPayloadSchema,
   violetMerchantWebhookPayloadSchema,
+  violetPayoutAccountWebhookPayloadSchema,
 } from "../webhook.schema.js";
 
 // ─── Test fixtures ──────────────────────────────────────────────────
@@ -59,6 +60,18 @@ describe("webhookEventTypeSchema", () => {
       "COLLECTION_SYNC_STARTED",
       "COLLECTION_SYNC_COMPLETED",
       "COLLECTION_SYNC_FAILED",
+    ]) {
+      expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
+    }
+  });
+
+  it("accepts all valid payout account event types", () => {
+    for (const type of [
+      "MERCHANT_PAYOUT_ACCOUNT_CREATED",
+      "MERCHANT_PAYOUT_ACCOUNT_REQUIREMENTS_UPDATED",
+      "MERCHANT_PAYOUT_ACCOUNT_ACTIVATED",
+      "MERCHANT_PAYOUT_ACCOUNT_DEACTIVATED",
+      "MERCHANT_PAYOUT_ACCOUNT_DELETED",
     ]) {
       expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
     }
@@ -405,5 +418,64 @@ describe("violetMerchantWebhookPayloadSchema", () => {
       status: "UNKNOWN_STATUS",
     });
     expect(result.success).toBe(true);
+  });
+});
+
+// ─── violetPayoutAccountWebhookPayloadSchema ───────────────────────────
+
+describe("violetPayoutAccountWebhookPayloadSchema", () => {
+  const validPpaPayload = {
+    id: 123,
+    account_type: "MERCHANT",
+    merchant_id: 456,
+    app_id: 1,
+    is_active: true,
+    country_code: "FR",
+    payment_provider: "STRIPE",
+    payment_provider_account_id: "acct_test123",
+    payment_provider_account: {
+      charges_enabled: true,
+      payouts_enabled: true,
+      requirements: {
+        currently_due: [],
+        past_due: [],
+        pending_verification: [],
+      },
+    },
+    errors: [],
+  };
+
+  it("validates a complete PPA payload", () => {
+    const result = violetPayoutAccountWebhookPayloadSchema.safeParse(validPpaPayload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.id).toBe(123);
+      expect(result.data.is_active).toBe(true);
+      expect(result.data.payment_provider_account?.charges_enabled).toBe(true);
+    }
+  });
+
+  it("validates minimal PPA payload (only id required)", () => {
+    const result = violetPayoutAccountWebhookPayloadSchema.safeParse({ id: 99 });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing id", () => {
+    const result = violetPayoutAccountWebhookPayloadSchema.safeParse({
+      payment_provider: "STRIPE",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("validates EXTERNAL provider with no account details", () => {
+    const result = violetPayoutAccountWebhookPayloadSchema.safeParse({
+      id: 50,
+      payment_provider: "EXTERNAL",
+      is_active: false,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.payment_provider).toBe("EXTERNAL");
+    }
   });
 });
