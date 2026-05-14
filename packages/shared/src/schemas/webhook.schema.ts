@@ -536,3 +536,31 @@ export const violetPayoutAccountWebhookPayloadSchema = z.object({
 });
 
 export type VioletPayoutAccountPayload = z.infer<typeof violetPayoutAccountWebhookPayloadSchema>;
+
+/**
+ * Validates Violet PAYMENT_TRANSACTION_CAPTURE_STATUS_* webhook payload.
+ *
+ * Handles: PAYMENT_TRANSACTION_CAPTURE_STATUS_UPDATED, AUTHORIZED, CAPTURED,
+ * REFUNDED, PARTIALLY_REFUNDED, FAILED.
+ *
+ * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ *
+ * @see https://docs.violet.io/prism/webhooks/events/payment-transaction-webhooks.md
+ */
+export const violetPaymentTransactionWebhookPayloadSchema = z.object({
+  id: z.number(),
+  order_id: z.number().optional(),
+  bag_id: z.number().optional(),
+  merchant_id: z.number().optional(),
+  capture_status: z.string().optional(),
+  amount: z.number().optional(),
+  currency: z.string().optional(),
+  payment_provider: z.string().optional(),
+  payment_provider_transaction_id: z.string().optional().nullable(),
+  date_created: z.string().optional(),
+  date_last_modified: z.string().optional(),
+});
+
+export type VioletPaymentTransactionPayload = z.infer<
+  typeof violetPaymentTransactionWebhookPayloadSchema
+>;

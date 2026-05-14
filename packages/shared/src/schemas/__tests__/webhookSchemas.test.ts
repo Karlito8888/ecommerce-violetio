@@ -7,6 +7,7 @@ import {
   violetSyncWebhookPayloadSchema,
   violetMerchantWebhookPayloadSchema,
   violetPayoutAccountWebhookPayloadSchema,
+  violetPaymentTransactionWebhookPayloadSchema,
 } from "../webhook.schema.js";
 
 // ─── Test fixtures ──────────────────────────────────────────────────
@@ -72,6 +73,19 @@ describe("webhookEventTypeSchema", () => {
       "MERCHANT_PAYOUT_ACCOUNT_ACTIVATED",
       "MERCHANT_PAYOUT_ACCOUNT_DEACTIVATED",
       "MERCHANT_PAYOUT_ACCOUNT_DELETED",
+    ]) {
+      expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
+    }
+  });
+
+  it("accepts all valid payment transaction event types", () => {
+    for (const type of [
+      "PAYMENT_TRANSACTION_CAPTURE_STATUS_UPDATED",
+      "PAYMENT_TRANSACTION_CAPTURE_STATUS_AUTHORIZED",
+      "PAYMENT_TRANSACTION_CAPTURE_STATUS_CAPTURED",
+      "PAYMENT_TRANSACTION_CAPTURE_STATUS_REFUNDED",
+      "PAYMENT_TRANSACTION_CAPTURE_STATUS_PARTIALLY_REFUNDED",
+      "PAYMENT_TRANSACTION_CAPTURE_STATUS_FAILED",
     ]) {
       expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
     }
@@ -477,5 +491,70 @@ describe("violetPayoutAccountWebhookPayloadSchema", () => {
     if (result.success) {
       expect(result.data.payment_provider).toBe("EXTERNAL");
     }
+  });
+});
+
+// ─── violetPaymentTransactionWebhookPayloadSchema ───────────────────────
+
+describe("violetPaymentTransactionWebhookPayloadSchema", () => {
+  const validPtPayload = {
+    id: 789,
+    order_id: 42,
+    bag_id: 7,
+    merchant_id: 100,
+    capture_status: "CAPTURED",
+    amount: 4999,
+    currency: "USD",
+    payment_provider: "STRIPE",
+    payment_provider_transaction_id: "py_1234567890",
+    date_created: "2026-04-16T10:00:00Z",
+    date_last_modified: "2026-04-16T12:00:00Z",
+  };
+
+  it("validates a complete payment transaction payload", () => {
+    const result = violetPaymentTransactionWebhookPayloadSchema.safeParse(validPtPayload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.id).toBe(789);
+      expect(result.data.capture_status).toBe("CAPTURED");
+      expect(result.data.amount).toBe(4999);
+    }
+  });
+
+  it("validates minimal payload (only id required)", () => {
+    const result = violetPaymentTransactionWebhookPayloadSchema.safeParse({ id: 1 });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing id", () => {
+    const result = violetPaymentTransactionWebhookPayloadSchema.safeParse({
+      capture_status: "CAPTURED",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("validates all 6 capture status values", () => {
+    for (const status of [
+      "UPDATED",
+      "AUTHORIZED",
+      "CAPTURED",
+      "REFUNDED",
+      "PARTIALLY_REFUNDED",
+      "FAILED",
+    ]) {
+      const result = violetPaymentTransactionWebhookPayloadSchema.safeParse({
+        ...validPtPayload,
+        capture_status: status,
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("accepts nullable payment_provider_transaction_id", () => {
+    const result = violetPaymentTransactionWebhookPayloadSchema.safeParse({
+      ...validPtPayload,
+      payment_provider_transaction_id: null,
+    });
+    expect(result.success).toBe(true);
   });
 });
