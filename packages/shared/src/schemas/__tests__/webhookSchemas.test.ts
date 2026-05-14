@@ -91,6 +91,20 @@ describe("webhookEventTypeSchema", () => {
     }
   });
 
+  it("accepts all valid transfer event types", () => {
+    for (const type of [
+      "TRANSFER_SENT",
+      "TRANSFER_PARTIALLY_SENT",
+      "TRANSFER_FAILED",
+      "TRANSFER_UPDATED",
+      "TRANSFER_REVERSED",
+      "TRANSFER_PARTIALLY_REVERSED",
+      "TRANSFER_REVERSAL_FAILED",
+    ]) {
+      expect(webhookEventTypeSchema.safeParse(type).success).toBe(true);
+    }
+  });
+
   it("accepts ORDER_* event types (Story 5.2)", () => {
     for (const type of [
       "ORDER_UPDATED",
