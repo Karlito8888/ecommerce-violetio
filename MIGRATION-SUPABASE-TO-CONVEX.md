@@ -838,6 +838,7 @@ export default defineSchema({
     entityId: v.string(),
     status: v.union(
       v.literal("received"),
+      v.literal("processing"),
       v.literal("processed"),
       v.literal("failed"),
     ),
@@ -2014,7 +2015,7 @@ http.route({
     const rawBody = await request.text();
 
     // 1. Valider HMAC
-    const hmac = request.headers.get("X-Violet-Signature");
+    const hmac = request.headers.get("X-Violet-Hmac");
     const isValid = await validateHmac(rawBody, hmac);
     if (!isValid) {
       return new Response("Invalid signature", { status: 401 });
@@ -2022,7 +2023,7 @@ http.route({
 
     // 2. Extraire les headers
     const eventId = request.headers.get("X-Violet-Event-Id")!;
-    const eventType = request.headers.get("X-Violet-Event-Type")!;
+    const eventType = request.headers.get("X-Violet-Topic")!;
 
     // 3. Idempotence — vérifier si l'événement existe déjà
     const existing = await ctx.runQuery(internal.webhooks.violet.checkEvent, { eventId });

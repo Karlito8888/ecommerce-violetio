@@ -177,7 +177,7 @@ export default defineSchema({
   orderTransfers: defineTable({
     violetTransferId: v.optional(v.string()), // UNIQUE
     violetOrderId: v.string(),
-    violetBagId: v.optional(v.number()), // Optionnel — transfer au niveau order
+    violetBagId: v.optional(v.string()), // Integer Violet stocké en string (cohérent avec orderBags)
     type: v.string(), // commission, shipping, etc.
     status: v.string(), // pending, paid, failed, canceled
     amount: v.optional(v.number()), // Cents
