@@ -68,7 +68,7 @@ export const cleanupAbandonedCarts = internalMutation({
       // Delete cart items first
       const items = await ctx.db
         .query("cartItems")
-        .withIndex("by_cartId", (q) => q.eq("cartId", cart._id))
+        .withIndex("by_cart_sku", (q) => q.eq("cartId", cart._id))
         .collect();
 
       for (const item of items) {

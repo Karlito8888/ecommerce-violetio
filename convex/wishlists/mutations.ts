@@ -36,8 +36,9 @@ export const addToWishlist = mutation({
     // Check if already wishlisted (idempotent)
     const existing = await ctx.db
       .query("wishlistItems")
-      .withIndex("by_wishlistId", (q) => q.eq("wishlistId", wishlist._id))
-      .filter((q) => q.eq(q.field("productId"), productId))
+      .withIndex("by_wishlistId_productId", (q) =>
+        q.eq("wishlistId", wishlist._id).eq("productId", productId),
+      )
       .first();
 
     if (!existing) {
@@ -65,8 +66,9 @@ export const removeFromWishlist = mutation({
 
     const item = await ctx.db
       .query("wishlistItems")
-      .withIndex("by_wishlistId", (q) => q.eq("wishlistId", wishlist._id))
-      .filter((q) => q.eq(q.field("productId"), productId))
+      .withIndex("by_wishlistId_productId", (q) =>
+        q.eq("wishlistId", wishlist._id).eq("productId", productId),
+      )
       .first();
 
     if (item) {

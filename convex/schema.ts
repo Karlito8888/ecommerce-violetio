@@ -84,9 +84,7 @@ export default defineSchema({
     unitPrice: v.number(), // Cents (integer)
     productName: v.optional(v.string()),
     thumbnailUrl: v.optional(v.string()),
-  })
-    .index("by_cartId", ["cartId"])
-    .index("by_cart_sku", ["cartId", "skuId"]), // Upsert check
+  }).index("by_cart_sku", ["cartId", "skuId"]), // Lookup by cart + upsert check (prefix covers by_cartId queries)
 
   // ═══════════════════════════════════════════════════════════════
   // COMMANDES VIOLET (miroir de l'API Violet)
@@ -99,7 +97,7 @@ export default defineSchema({
     userId: v.optional(v.string()), // Convex userId (optionnel — commandes guest)
     sessionId: v.optional(v.string()), // Pour associer guest → user à l'inscription
     email: v.string(),
-    status: v.string(), // PROCESSING, COMPLETED, CANCELED, REFUNDED, etc.
+    status: v.string(), // Violet Order States: IN_PROGRESS | PROCESSING | ACCEPTED | REJECTED | COMPLETED | CANCELED | REQUIRES_ACTION
     subtotal: v.number(), // Cents
     shippingTotal: v.number(),
     taxTotal: v.number(),
@@ -120,7 +118,7 @@ export default defineSchema({
     violetBagId: v.string(), // UNIQUE — integer Violet en string
     merchantName: v.string(),
     merchantId: v.optional(v.id("merchants")), // FK vers merchants (optionnel)
-    status: v.string(), // IN_PROGRESS, SHIPPED, DELIVERED, CANCELED, REFUNDED
+    status: v.string(), // Violet Bag States: IN_PROGRESS | SUBMITTED | ACCEPTED | COMPLETED | REFUNDED | PARTIALLY_REFUNDED | CANCELED | REJECTED
     financialStatus: v.string(), // UNPAID, PAID, REFUNDED, PARTIALLY_REFUNDED
     fulfillmentStatus: v.optional(v.string()), // PROCESSING, FULFILLED, DELIVERED, etc.
     subtotal: v.number(),
@@ -225,6 +223,7 @@ export default defineSchema({
     productId: v.string(), // Violet product ID
   })
     .index("by_wishlistId", ["wishlistId"])
+    .index("by_wishlistId_productId", ["wishlistId", "productId"]) // Dedup lookup (replaces .filter())
     .index("by_productId", ["productId"]),
 
   // ═══════════════════════════════════════════════════════════════
@@ -303,9 +302,7 @@ export default defineSchema({
     userId: v.string(), // Convex userId
     notificationType: v.string(), // order_status, shipping, promotion, etc.
     enabled: v.boolean(),
-  })
-    .index("by_userId", ["userId"])
-    .index("by_userId_type", ["userId", "notificationType"]),
+  }).index("by_userId_type", ["userId", "notificationType"]), // Prefix covers by_userId queries
 
   notificationLogs: defineTable({
     orderId: v.optional(v.id("orders")),

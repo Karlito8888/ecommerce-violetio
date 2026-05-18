@@ -29,7 +29,7 @@ export const getNotificationPreferences = query({
   handler: async (ctx, { userId }) => {
     return await ctx.db
       .query("notificationPreferences")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .withIndex("by_userId_type", (q) => q.eq("userId", userId))
       .collect();
   },
 });

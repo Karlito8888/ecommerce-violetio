@@ -86,7 +86,7 @@ export const migrateAnonymousData = mutation({
     // 3. Migrer les notification_preferences
     const prefs = await ctx.db
       .query("notificationPreferences")
-      .withIndex("by_userId", (q) => q.eq("userId", localId))
+      .withIndex("by_userId_type", (q) => q.eq("userId", localId))
       .collect();
     for (const pref of prefs) {
       await ctx.db.patch(pref._id, { userId });
