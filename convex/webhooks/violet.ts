@@ -1524,6 +1524,20 @@ export const sendPushForOrder = internalAction({
 
     if (!order?.userId) return;
 
+    // ─── Check user notification preferences ────────────────────
+    // Transactional notifications (order_updates) default to ON.
+    // Marketing/engagement notifications default to OFF.
+    const preferences = await ctx.runQuery(
+      internal.webhooks.violet.getNotificationPreferenceForUser,
+      {
+        userId: order.userId,
+        notificationType,
+      },
+    );
+
+    if (preferences === false) return; // Explicitly opted out
+
+    // ─── Fetch push tokens ─────────────────────────────────────
     const tokens = await ctx.runQuery(internal.webhooks.violet.getPushTokensForUser, {
       userId: order.userId,
     });
@@ -1541,14 +1555,18 @@ export const sendPushForOrder = internalAction({
       data: { order_id: violetOrderId, type: notificationType },
     }));
 
+    // ─── Send via shared push utility (DRY) ────────────────────
+    // sendPushBatch handles: batching, Expo API errors, DeviceNotRegistered cleanup
     try {
-      await fetch("https://exp.host/--/api/v2/push/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(messages),
-      });
+      const { sendPushBatch } = await import("../lib/push");
+      const result = await sendPushBatch(ctx, messages);
+      if (result.failed > 0) {
+        console.warn(
+          `[push] ${result.failed}/${messages.length} tokens failed for order ${violetOrderId}`,
+        );
+      }
     } catch {
-      // Non-critical
+      // Non-critical — push failures should not block webhook processing
     }
   },
 });
@@ -1611,7 +1629,54 @@ export const getPushTokensForUser = internalQuery({
   },
 });
 
-// ─── Internal Mutations for Notification Logging ─────────────────────────────
+// ─── Internal Query — Notification preference for user ────────────────────
+
+/**
+ * Checks if a user has opted into a specific notification type.
+ * Returns:
+ *   - true  if opted in (or no preference row exists for transactional types)
+ *   - false if explicitly opted out
+ *   - undefined if no preference row (caller should use defaults)
+ *
+ * Maps push notification types (bag_shipped, refund_processed) to preference
+ * categories (order_updates, price_drops, back_in_stock, marketing).
+ */
+export const getNotificationPreferenceForUser = internalQuery({
+  args: {
+    userId: v.string(),
+    notificationType: v.string(),
+  },
+  handler: async (ctx, { userId, notificationType }) => {
+    // Map push type → preference category
+    const categoryMap: Record<string, string> = {
+      order_confirmed: "order_updates",
+      bag_shipped: "order_updates",
+      order_shipped: "order_updates",
+      bag_delivered: "order_updates",
+      order_delivered: "order_updates",
+      refund_processed: "order_updates",
+      price_drop: "price_drops",
+      back_in_stock: "back_in_stock",
+    };
+    const category = categoryMap[notificationType];
+    if (!category) return undefined; // Unknown type — allow by default
+
+    const pref = await ctx.db
+      .query("notificationPreferences")
+      .withIndex("by_userId_type", (q) => q.eq("userId", userId).eq("notificationType", category))
+      .first();
+
+    if (!pref) {
+      // Default: transactional ON, marketing/engagement OFF
+      const transactionalCategories = ["order_updates"];
+      return transactionalCategories.includes(category);
+    }
+
+    return pref.enabled;
+  },
+});
+
+// ─── Internal Mutations for Notification Logging ────────────────────────────
 
 export const logNotificationSend = internalMutation({
   args: {

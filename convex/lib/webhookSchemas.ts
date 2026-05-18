@@ -9,8 +9,15 @@
 // Doc: https://docs.convex.dev/functions/validation — Convex validation best practices
 // Doc: https://docs.violet.io/prism/webhooks/events — Violet event reference
 //
-// ⚠️ SYNC: If you modify schemas here, consider updating canonical sources in
-// packages/shared/src/schemas/webhook.schema.ts as well.
+// ⚠️ SYNC: This file is the Convex-native copy of webhook validation schemas.
+// The canonical source is packages/shared/src/schemas/webhook.schema.ts (more comprehensive).
+// The Convex schemas are intentionally simpler (fewer fields, more permissive) for
+// webhook ingestion performance. If you modify schemas here, update the canonical copy too.
+//
+// Files in sync:
+//   - convex/lib/webhookSchemas.ts          ← YOU ARE HERE (Convex, permissive)
+//   - packages/shared/src/schemas/webhook.schema.ts (canonical, comprehensive)
+//   - packages/shared/src/types/order.types.ts (TypeScript type definitions)
 
 import { z } from "zod";
 

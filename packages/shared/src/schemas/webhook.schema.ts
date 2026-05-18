@@ -8,8 +8,10 @@
  * (product changes, order lifecycle, fulfillment updates). The pipeline is:
  *
  * ```
- * Violet.io → POST /handle-webhook → HMAC verify → Header validation (2-phase)
- *   → Idempotency check (webhook_events.event_id UNIQUE) → Payload validation (here)
+ * Violet.io → POST /api/webhooks/violet (Convex HTTP Action)
+ *   → HMAC verify → Header validation (two-phase)
+ *   → Idempotency check (webhookEvents table, by_eventId index)
+ *   → Payload validation (here, via Zod)
  *   → Processor routing → DB updates → 200 response
  * ```
  *
@@ -34,7 +36,7 @@
  * HMAC-SHA256 signature of the raw request body, keyed with VIOLET_APP_SECRET.
  * Validation uses Web Crypto `crypto.subtle.verify()` for constant-time comparison.
  *
- * @see {@link ../../../supabase/functions/_shared/webhookAuth.ts} — HMAC implementation
+ * @see convex/webhooks/violet.ts — Convex HMAC validation (validateHmac function)
  * @see https://docs.violet.io/prism/webhooks/handling-webhooks — Violet webhook docs
  * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Order event types
  *
@@ -47,22 +49,22 @@
  *
  * ## ⚠️ SYNC WARNING — Dual-copy architecture
  *
- * This file is the **canonical source of truth** for webhook validation schemas.
- * An identical copy exists at `supabase/functions/_shared/schemas.ts` because
- * Deno Edge Functions cannot import from Node/Bun workspace packages.
+ * This file is the **canonical source of truth** for webhook validation schemas
+ * used by web/mobile (type inference, tests, form validation).
  *
- * **If you modify ANY schema here, you MUST update the Edge Function copy too.**
- * There is no automated sync — the Deno/Node boundary forces manual duplication.
- * A drift between the two copies means the shared package tests pass but the
- * Edge Function silently validates against different rules.
+ * A Convex-native copy exists at `convex/lib/webhookSchemas.ts` because Convex
+ * functions cannot import from workspace packages. The Convex schemas are
+ * intentionally simpler (fewer fields, more permissive) for webhook ingestion
+ * performance, while these schemas are more comprehensive for client-side use.
+ *
+ * **If you modify ANY schema here, you MUST update the Convex copy too.**
  *
  * Files to keep in sync:
- * - `packages/shared/src/schemas/webhook.schema.ts` ← YOU ARE HERE (canonical)
- * - `supabase/functions/_shared/schemas.ts` (Edge Function copy, webhook section)
+ * - `packages/shared/src/schemas/webhook.schema.ts` ← YOU ARE HERE (canonical, comprehensive)
+ * - `convex/lib/webhookSchemas.ts` (Convex copy, permissive for webhook ingestion)
  * - `packages/shared/src/types/order.types.ts` (TypeScript type definitions)
  *
  * @module webhook.schema
- * @see M2 code review fix — added sync documentation
  */
 
 import { z } from "zod";
@@ -96,9 +98,9 @@ import { z } from "zod";
  *   Violet from disabling our webhook endpoint
  *
  * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Violet event reference
- * @see handle-webhook/index.ts — Event routing switch statement
+ * @see convex/webhooks/violet.ts — Event routing switch statement
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  */
 export const webhookEventTypeSchema = z.enum([
   // ─── Offer events ───────────────────────────────────────────────
@@ -192,16 +194,16 @@ export const violetWebhookHeadersSchema = z.object({
 /**
  * H2 code review fix — Required transport headers WITHOUT eventType enum validation.
  *
- * Used in Phase 1 of two-phase header validation in handle-webhook/index.ts.
+ * Used in Phase 1 of two-phase header validation in convex/webhooks/violet.ts.
  * Validates that hmac, eventId, and eventType are present as non-empty strings,
  * but does NOT validate eventType against the known enum. This allows the handler
  * to accept unknown event types gracefully (200) instead of rejecting them (400),
  * preventing Violet from disabling the webhook endpoint when it sends event types
  * we haven't implemented yet (e.g., ORDER_* before Story 5.2).
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  *
- * @see handle-webhook/index.ts — Two-phase validation implementation
+ * @see convex/webhooks/violet.ts — Two-phase validation implementation
  */
 export const violetRequiredHeadersSchema = z.object({
   hmac: z.string().min(1, "X-Violet-Hmac header is required"),
@@ -259,7 +261,7 @@ export const violetOfferWebhookPayloadSchema = z.object({
    * unexpected status value. The webhook handler processes all offer events
    * regardless of status — the `available` boolean field determines searchability.
    *
-   * ⚠️ SYNC: Must match the other copy (see SYNC WARNING at top of file)
+   * ⚠️ SYNC: Must match convex/lib/webhookSchemas.ts
    */
   status: z.string(),
   tags: z.array(z.string()).optional(),
@@ -290,7 +292,7 @@ export const violetSyncWebhookPayloadSchema = z.object({
  *
  * @see https://docs.violet.io/prism/webhooks/events/merchant-webhooks
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  */
 export const violetMerchantWebhookPayloadSchema = z.object({
   id: z.number(),
@@ -321,7 +323,7 @@ export type VioletMerchantPayload = z.infer<typeof violetMerchantWebhookPayloadS
  *
  * @see https://docs.violet.io/prism/webhooks/events/collection-webhooks
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  */
 export const violetCollectionWebhookPayloadSchema = z.object({
   id: z.number(),
@@ -365,7 +367,7 @@ export type VioletCollectionPayload = z.infer<typeof violetCollectionWebhookPayl
  * @see https://docs.violet.io/prism/webhooks/events/order-webhooks — Event payloads
  * @see processOrderUpdated in orderProcessors.ts — Processing logic
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  */
 export const violetOrderWebhookPayloadSchema = z.object({
   id: z.number(),
@@ -398,7 +400,7 @@ export const violetOrderWebhookPayloadSchema = z.object({
  * @see processBagShipped in orderProcessors.ts — Tracking data persistence
  * @see processBagRefunded in orderProcessors.ts — Refund detail fetching
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  */
 export const violetBagWebhookPayloadSchema = z.object({
   id: z.number(),
@@ -434,7 +436,7 @@ export type VioletBagPayload = z.infer<typeof violetBagWebhookPayloadSchema>;
  * @see https://docs.violet.io/prism/payments/payments-during-checkout/guides/handling-failed-transfers
  * @see https://docs.violet.io/prism/payments/payments-during-checkout/transfer-reversals
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  */
 export const violetTransferWebhookPayloadSchema = z.object({
   id: z.number(),
@@ -483,7 +485,7 @@ export type VioletTransferPayload = z.infer<typeof violetTransferWebhookPayloadS
  * Model matches the PPA JSON from Violet docs:
  * @see https://docs.violet.io/prism/payments/payouts/prism-payout-accounts
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  */
 export const violetPayoutAccountWebhookPayloadSchema = z.object({
   /** Violet Payout Account ID */
@@ -543,7 +545,7 @@ export type VioletPayoutAccountPayload = z.infer<typeof violetPayoutAccountWebho
  * Handles: PAYMENT_TRANSACTION_CAPTURE_STATUS_UPDATED, AUTHORIZED, CAPTURED,
  * REFUNDED, PARTIALLY_REFUNDED, FAILED.
  *
- * ⚠️ SYNC: Must match `supabase/functions/_shared/schemas.ts`
+ * ⚠️ SYNC: Must match `convex/lib/webhookSchemas.ts`
  *
  * @see https://docs.violet.io/prism/webhooks/events/payment-transaction-webhooks.md
  */

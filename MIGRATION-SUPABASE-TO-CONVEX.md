@@ -2238,13 +2238,14 @@ Leçons apprises :
 
 ## 12. Phase 7 — Webhooks Violet.io (remplacement des Edge Functions)
 >
-> ✅ **Phase 7 TERMINÉE** (2026-05-16).
+> ✅ **Phase 7 TERMINÉE** (2026-05-16). Ré-audité (2026-05-18).
 >
 > Ce qui est fait :
 > - `convex/webhooks/violet.ts` — **Nouveau fichier** (~1870 lignes) : HTTP Action `handleVioletWebhook` + 15+ internal mutations/actions pour le traitement complet de tous les événements webhook Violet.io. Remplace les 7 fichiers Deno Edge Function (`supabase/functions/handle-webhook/`, `send-notification/`, `send-push/`, etc.).
 > - `convex/http.ts` — **Mis à jour** : Route `POST /api/webhooks/violet` ajoutée au routeur HTTP Convex.
 > - `convex/lib/violetApi.ts` — **Nouveau fichier** : Client API Violet avec gestion de token (login + refresh + retry 429 + 401 auto-invalidation). Remplace `supabase/functions/_shared/violetAuth.ts` + `fetchWithRetry.ts`.
 > - `convex/lib/webhookSchemas.ts` — **Nouveau fichier** : 10 schemas Zod pour la validation des payloads webhook (order, bag, merchant, transfer, payout account, offer, sync, collection, payment transaction).
+> - `convex/lib/push.ts` — **Réécrit** : Utilitaire push centralisé (`sendPushBatch`) avec batching (max 100), gestion `DeviceNotRegistered` (suppression tokens invalides), préférences utilisateur. Remplace la logique dupliquée.
 > - `convex/crons.ts` — **Nouveau fichier** : 3 cron jobs (nettoyage webhooks > 90j, nettoyage paniers abandonnés > 30j, détection webhooks bloqués > 1h).
 >
 > Événements Violet gérés (55+ event types) :
@@ -2265,12 +2266,20 @@ Leçons apprises :
 > - **Désactivation silencieuse des PPAs** : `processPayoutAccountActivated` logue maintenant le nombre de PPAs désactivées dans `errorLogs` avec le type `MERCHANT_PAYOUT_ACCOUNT_ACTIVATED`.
 > - **Templates email enrichis** : Remplacé le HTML minimaliste par un layout branded (header + footer + CTA button), avec `escapeHtml()` anti-XSS et `formatCents()` pour les montants.
 >
+> Corrections post-ré-audit (2026-05-18) :
+> - **🔴 Push : vérification des préférences utilisateur** : `sendPushForOrder` appelait l'Expo Push API sans vérifier les `notificationPreferences`. Ajout de `getNotificationPreferenceForUser` (internalQuery) qui mappe les types push → catégories de préférences (`bag_shipped` → `order_updates`, etc.). Les types transactionnels sont ON par défaut, les types marketing/engagement OFF par défaut. L'Edge Function Supabase `send-push` le faisait déjà — c'était un gap de la migration.
+> - **🔴 Push : gestion `DeviceNotRegistered`** : L'Expo Push API retourne `DeviceNotRegistered` quand un token n'est plus valide. L'Edge Function Supabase supprimait ces tokens automatiquement. Le code Convex les ignorait silencieusement, laissant les tokens orphelins s'accumuler. Ajout de `deleteInvalidToken` (internalMutation dans `convex/lib/push.ts`) appelé automatiquement par `sendPushBatch` quand Expo signale un token invalide.
+> - **🟠 DRY : logique push dupliquée** : L'appel Expo Push API était codé deux fois — dans `convex/lib/push.ts` (`sendPushNotification`) et dans `convex/webhooks/violet.ts` (`sendPushForOrder`). Refactor : `sendPushBatch()` dans `convex/lib/push.ts` est maintenant l'unique point d'envoi (batching max 100, error handling, token cleanup). `sendPushForOrder` importe et délègue à cet utilitaire.
+> - **🟡 Doc : références Supabase obsolètes dans `webhook.schema.ts`** : Le canonical source `packages/shared/src/schemas/webhook.schema.ts` pointait vers `supabase/functions/_shared/schemas.ts`, `supabase/functions/_shared/webhookAuth.ts`, et `handle-webhook/index.ts` dans ses `@see`, SYNC WARNING, et commentaires. Toutes les références remplacées par les équivalents Convex (`convex/lib/webhookSchemas.ts`, `convex/webhooks/violet.ts`). Pipeline description mise à jour (`webhookEvents` table + `by_eventId` index au lieu de `webhook_events.event_id UNIQUE`).
+> - **🟡 Doc : sync warning bidirectionnel dans `webhookSchemas.ts`** : Le fichier `convex/lib/webhookSchemas.ts` avait un sync warning minimaliste d'une ligne. Remplacé par un warning complet et bidirectionnel listant les 3 fichiers en sync, le rôle de chaque copie (Convex permissive vs shared comprehensive), et la procédure de mise à jour.
+> - **🟢 Minor : batch size Expo Push** : `sendPushBatch` envoie par batches de 100 max (`EXPO_BATCH_LIMIT = 100`), conformément aux recommandations Expo.
+>
 > Pipeline de traitement :
 > 1. HTTP Action reçoit le POST → valide HMAC → idempotence → insère webhookEvents
 > 2. Internal Mutation route vers le processeur spécifique → écritures DB (ACID)
 > 3. ctx.scheduler.runAfter(0, ...) pour les tâches asynchrones non-bloquantes :
 >    - Envoi email (Resend API) avec idempotency key
->    - Envoi push notification (Expo Push API)
+>    - Envoi push notification (Expo Push API) via `sendPushBatch` avec vérification préférences
 >    - Sync distributions depuis Violet API
 >    - Fetch refund details depuis Violet API
 >    - Auto-enable feature flags marchands
@@ -2286,6 +2295,9 @@ Leçons apprises :
 > - **Zod validation des payloads** : Violet peut changer la structure de ses payloads sans préavis. Sans validation Zod, un `String(undefined)` produit `"undefined"` silencieusement. La validation par event type (critical vs audit-only) équilibre sécurité et pragmatisme.
 > - **Upsert pattern Convex** : Il n'y a pas de `ON CONFLICT` en Convex. Le pattern `first() → patch/insert` via un index unique est l'équivalent. Ne JAMAIS faire un `insert` sans vérification préalable sur les tables alimentées par des webhooks (déduplication essentielle).
 > - **Templates email** : Le CSS doit être inline pour la compatibilité email clients. `<style>` est stripé par Gmail/Outlook. Utiliser des `<table>` pour le layout, pas des `<div>` flexbox.
+> - **Push notifications** : Toujours vérifier les préférences utilisateur avant envoi (`notificationPreferences` table). Les types transactionnels (`order_updates`) sont ON par défaut, les types marketing/engagement sont OFF par défaut. Les tokens invalides (`DeviceNotRegistered`) doivent être supprimés automatiquement pour éviter l'accumulation.
+> - **DRY helpers** : Les appels API externes (Expo Push, Resend) doivent être centralisés dans des utilitaires (`convex/lib/push.ts`, `convex/lib/email.ts`) et consommés par import direct (pas `ctx.runAction`) depuis les actions. Per doc Convex : "Use helper functions to write shared code".
+> - **Dual-copy schema sync** : Les schemas Zod existent en deux copies (Convex `webhookSchemas.ts` + shared `webhook.schema.ts`). La copie Convex est intentionnellement plus permissive (performances webhook), la copie shared est plus complète (validation client). Les sync warnings doivent être bidirectionnels et lister les 3 fichiers en sync.
 
 ### 12.3 Créer l'HTTP Action pour les webhooks
 
@@ -2771,7 +2783,7 @@ Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE
 - [x] **Phase 4 — Clients partagés** : Pattern Convex direct adopté (pages appellent `useQuery`/`useMutation` directement). Hooks proxy `packages/shared/src/hooks/convex/` supprimés (code mort). 4 hooks Supabase orphelins supprimés (`useWishlist`, `useAuth`, `useProfile`, `useNotificationPreferences`). Mobile notifications migré vers Convex. `mergeWithDefaults` relogé dans `types/` *(2026-05-18)*
 - [x] **Phase 5 — Intégration Web** : Auth pages réécrites Convex Auth, account guard client-side, account pages migrées, CartContext sans Realtime, tracking migré, path alias `#convex/*`, types partagés, ownership check, password change complet *(2026-05-16)*. Post-revue : `flow: "reset-verification"` corrigé, `mapAuthError` DRY (6 copies → 1 partagée), `ConvexQueryClient` bridge inutilisé retiré, `getAllOrders` borné. Audit 2026-05-18 : 5 corrections (`__root.tsx` → `useAuthSession()`, WishlistBoundary log, `getIdentity` JSDoc, `useConvexAuth` import standardisé, password validation frontend synchronisé avec backend 8+chars+upper+lower+digit).
 - [x] **Phase 6 — Intégration Mobile** : `_layout.tsx` nettoyé, AuthContext réécrit, auth pages réécrites, orders/wishlist/profile/content/FAQ/support/tracking migrés Convex, biometric adapté *(2026-05-16)*. Post-revue : double migration anonymous supprimée (centralisée AuthContext), `mobileLocalId` utilise `crypto.randomUUID()`, `getBiometricPreference` Supabase remplacé, `flow: "reset-verification"` corrigé, fallback erreur `_layout.tsx` si URL manquante, `mapAuthError` DRY. Audit 2026-05-18 : `pendingSignup.ts` SecureStore (password chiffré), `content/index.tsx` `usePaginatedQuery` natif, `lookup.tsx` DESIGN NOTE (guest OTP flow documenté), `_layout.tsx` ConvexReactClient pattern documenté.
-- [x] **Phase 7** : Webhooks Violet migrés vers HTTP Actions Convex — 55+ event types, cron jobs, notification emails + push, Violet API client *(2026-05-16)*
+- [x] **Phase 7** : Webhooks Violet migrés vers HTTP Actions Convex — 55+ event types, cron jobs, notification emails + push, Violet API client *(2026-05-16)*. Ré-audit 2026-05-18 : 6 corrections (push preferences check, DeviceNotRegistered cleanup, sendPushBatch DRY, références Supabase obsolètes supprimées, sync warnings bidirectionnels, Expo batch limit 100).
 - [x] **Phase 8** : Realtime Supabase supprimé — `useCartSync`, `useOrderRealtime`, `createOrdersRealtimeChannel` retirés. Convex queries réactives par défaut *(2026-05-16)*. Post-revue : JSDoc `cartSync.ts` corrigé, commentaire `CartContext.tsx` clarifié, `CartSyncEvent` type mort documenté pour Phase 11.
 - [x] **Phase 9** : Admin dashboard/health/support migré vers Convex queries/mutations/actions. Pages web réécrites. Cron evaluate-alerts ajouté. Post-revue : 12 corrections (cron crash, admin check actions, ErrorBoundary, index ranges, N+1→Promise.all, useNavigate, health check Convex, sampling bias, args inutilisés, assertAdmin signature, state sync, cleanup borné) *(2026-05-16)*
 - [ ] **Phase 10** : Réécrire tous les tests
