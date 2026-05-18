@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   quality:
-    name: Format · Lint · Typecheck · Build
+    name: Format · Lint · Typecheck · Test · Build
     runs-on: ubuntu-latest
 
     steps:
@@ -40,6 +40,9 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+      - name: Test
+        run: bun run test
 
       - name: Build web app
         run: bun run build

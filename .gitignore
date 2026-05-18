@@ -39,3 +39,4 @@ supabase/.branches/
 supabase/.temp/
 claude-memory-compiler/
 docs/violet-stripe-credentials-encrypted.json
+convex/_generated/

@@ -12,6 +12,7 @@ export default tseslint.config(
       "**/.expo/",
       "**/.vinxi/",
       "**/routeTree.gen.ts",
+      "convex/_generated/",
       "_bmad/",
       "_bmad-output/",
       "**/scripts/",
@@ -29,6 +30,17 @@ export default tseslint.config(
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+    },
+  },
+  {
+    files: ["convex/**/*.{js,ts}"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+      },
+    },
+    rules: {
+      "no-console": "off",
     },
   },
   {

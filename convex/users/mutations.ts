@@ -1,0 +1,174 @@
+// convex/users/mutations.ts
+//
+// Mutations pour la gestion des utilisateurs et la migration anonymous → authenticated.
+// Le modèle localId (voir packages/shared/src/utils/localId.ts) associe les données
+// pré-inscription à un UUID local. À l'inscription, ces données sont migrées vers
+// le userId Convex Auth via migrateAnonymousData().
+
+import { mutation } from "../_generated/server";
+import { v } from "convex/values";
+
+/**
+ * Migre les données associées à un localId vers un userId Convex Auth.
+ * Appelé une seule fois après une inscription réussie.
+ *
+ * Données migrées :
+ *   - wishlists + wishlist_items (userId: localId → userId)
+ *   - user_events (userId: localId → userId)
+ *   - notification_preferences (userId: localId → userId)
+ *   - user_push_tokens (userId: localId → userId)
+ *   - carts actifs (userId: localId → userId)
+ */
+export const migrateAnonymousData = mutation({
+  args: {
+    localId: v.string(),
+  },
+  handler: async (ctx, { localId }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated — cannot migrate anonymous data");
+    }
+    const userId = identity.subject;
+
+    // 1. Migrate the wishlist
+    const anonWishlist = await ctx.db
+      .query("wishlists")
+      .withIndex("by_userId", (q) => q.eq("userId", localId))
+      .first();
+
+    if (anonWishlist) {
+      // Check if the user already has a wishlist (created by afterUserCreatedOrUpdated)
+      const existingWishlist = await ctx.db
+        .query("wishlists")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .first();
+
+      if (existingWishlist) {
+        // Merge: move anonymous items into the existing wishlist, then delete the anon wishlist
+        const anonItems = await ctx.db
+          .query("wishlistItems")
+          .withIndex("by_wishlistId", (q) => q.eq("wishlistId", anonWishlist._id))
+          .collect();
+
+        for (const item of anonItems) {
+          // Skip duplicates (product already in user's wishlist)
+          const existingItem = await ctx.db
+            .query("wishlistItems")
+            .withIndex("by_wishlistId", (q) => q.eq("wishlistId", existingWishlist._id))
+            .filter((q) => q.eq(q.field("productId"), item.productId))
+            .first();
+
+          if (!existingItem) {
+            await ctx.db.insert("wishlistItems", {
+              wishlistId: existingWishlist._id,
+              productId: item.productId,
+            });
+          }
+          await ctx.db.delete(item._id);
+        }
+        // Remove the empty anonymous wishlist
+        await ctx.db.delete(anonWishlist._id);
+      } else {
+        // No existing wishlist — simply reassign ownership
+        await ctx.db.patch(anonWishlist._id, { userId });
+      }
+    }
+
+    // 2. Migrer les user_events
+    const events = await ctx.db
+      .query("userEvents")
+      .withIndex("by_user_type", (q) => q.eq("userId", localId))
+      .collect();
+    for (const event of events) {
+      await ctx.db.patch(event._id, { userId });
+    }
+
+    // 3. Migrer les notification_preferences
+    const prefs = await ctx.db
+      .query("notificationPreferences")
+      .withIndex("by_userId", (q) => q.eq("userId", localId))
+      .collect();
+    for (const pref of prefs) {
+      await ctx.db.patch(pref._id, { userId });
+    }
+
+    // 4. Migrer les user_push_tokens
+    const tokens = await ctx.db
+      .query("userPushTokens")
+      .withIndex("by_userId", (q) => q.eq("userId", localId))
+      .collect();
+    for (const token of tokens) {
+      await ctx.db.patch(token._id, { userId });
+    }
+
+    // 5. Migrer les carts actifs
+    const carts = await ctx.db
+      .query("carts")
+      .withIndex("by_userId", (q) => q.eq("userId", localId))
+      .collect();
+    for (const cart of carts) {
+      if (cart.status === "active") {
+        await ctx.db.patch(cart._id, { userId });
+      }
+    }
+
+    return {
+      migrated: {
+        wishlists: anonWishlist ? 1 : 0,
+        events: events.length,
+        preferences: prefs.length,
+        pushTokens: tokens.length,
+        carts: carts.filter((c) => c.status === "active").length,
+      },
+    };
+  },
+});
+
+/**
+ * Met à jour le profil utilisateur.
+ */
+export const updateProfile = mutation({
+  args: {
+    displayName: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    preferences: v.optional(v.record(v.string(), v.any())),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .first();
+
+    if (!profile) throw new Error("Profile not found");
+
+    await ctx.db.patch(profile._id, {
+      ...(args.displayName !== undefined && { displayName: args.displayName }),
+      ...(args.avatarUrl !== undefined && { avatarUrl: args.avatarUrl }),
+      ...(args.preferences !== undefined && { preferences: args.preferences }),
+    });
+  },
+});
+
+/**
+ * Active ou désactive le flag biometricEnabled sur le profil utilisateur.
+ * Remplace setBiometricPreference() de @ecommerce/shared (Supabase).
+ */
+export const setBiometricPreference = mutation({
+  args: { enabled: v.boolean() },
+  handler: async (ctx, { enabled }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .first();
+
+    if (profile) {
+      await ctx.db.patch(profile._id, { biometricEnabled: enabled });
+    }
+  },
+});

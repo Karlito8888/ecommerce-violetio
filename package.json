@@ -11,27 +11,21 @@
     "dev": "bun --env-file=.env.local --cwd=apps/web run dev",
     "dev:mobile": "bun --cwd=apps/mobile run start",
     "dev:android": "bun --cwd=apps/mobile run android",
-    "dev:functions": "supabase functions serve --env-file supabase/.env",
-    "dev:all": "supabase start 2>&1 && echo '\\n✅ Supabase is running!\\n' && concurrently --kill-others --names supabase,web,mobile --prefix-colors cyan,green,magenta 'supabase functions serve --env-file supabase/.env' 'bun --env-file=.env.local --cwd=apps/web run dev' 'cd apps/mobile && npx expo prebuild --clean && npx expo run:android'",
-    "dev:web": "supabase start 2>&1 && echo '\\n✅ Supabase is running!\\n' && concurrently --kill-others --names supabase,web --prefix-colors cyan,green 'supabase functions serve --env-file supabase/.env' 'bun --env-file=.env.local --cwd=apps/web run dev'",
-    "dev:mobile:android": "cd apps/mobile && npx expo prebuild --clean && npx expo run:android",
     "build": "bun --env-file=.env.local --cwd=apps/web run build",
     "typecheck": "bun --cwd=apps/web run typecheck && bun --cwd=apps/mobile run typecheck",
-    "lint": "eslint apps/ packages/ --max-warnings 0",
-    "lint:fix": "eslint apps/ packages/ --fix",
-    "format": "prettier --check \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\"",
-    "format:fix": "prettier --write \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\"",
-    "test": "bun --cwd=apps/web run test && bun --cwd=packages/shared run test",
-    "check": "bun run format && bun run lint && bun run typecheck && bun run test",
+    "lint": "eslint apps/ packages/ convex/ --max-warnings 0",
+    "lint:fix": "eslint apps/ packages/ convex/ --fix",
+    "format": "prettier --check \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\" \"convex/**/*.ts\"",
+    "format:fix": "prettier --write \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\" \"convex/**/*.ts\"",
+    "test": "bun --cwd=apps/web run test && bun --cwd=packages/shared run test && bun --cwd=apps/mobile run test",
+    "check": "bun run format && bun run lint && bun run typecheck && bun run test && bun run build",
     "fix-all": "bun run format:fix && bun run lint:fix && bun run typecheck",
     "generate:sitemap": "bun run scripts/generate-sitemap.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@supabase/supabase-js": "^2.100.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "concurrently": "^9.2.1",
     "eslint": "^10.2.1",
     "prettier": "^3.8.1",
     "react": "19.2.0",
@@ -42,5 +36,13 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "@types/react": "^19.2.14"
+  },
+  "dependencies": {
+    "@auth/core": "^0.37.0",
+    "@convex-dev/auth": "^0.0.92",
+    "@oslojs/crypto": "^1.0.1",
+    "convex": "^1.39.1",
+    "resend": "^6.12.3",
+    "zod": "^4.4.3"
   }
 }

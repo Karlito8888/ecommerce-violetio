@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy to Cloudflare Workers
+    name: Deploy Web App
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
@@ -36,11 +36,7 @@ jobs:
       - name: Build web app
         run: bun run build
 
-      # Placeholder: Cloudflare Workers deployment
-      # Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in GitHub Secrets
-      # then replace this step with cloudflare/wrangler-action@v3
-      - name: Deploy to Cloudflare Workers (placeholder)
-        run: echo "Cloudflare Workers deployment placeholder — configure secrets to enable"
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # TODO: Configure deployment target (Cloudflare Workers, VPS, etc.)
+      # Update this step once the hosting strategy is finalized post-migration.
+      - name: Deploy (placeholder)
+        run: echo "Web deployment placeholder — configure hosting secrets to enable"

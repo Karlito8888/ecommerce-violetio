@@ -7,3 +7,4 @@ bun.lock
 _bmad/
 _bmad-output/
 *.gen.ts
+convex/_generated/
