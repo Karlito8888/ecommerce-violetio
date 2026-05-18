@@ -59,6 +59,20 @@ export const PUSH_TYPE_TO_PREFERENCE: Record<PushNotificationType, NotificationT
   back_in_stock: "back_in_stock",
 };
 
+/**
+ * Merges sparse DB preference rows with defaults.
+ * Moved from useNotificationPreferences.ts (deleted Phase 4 audit).
+ */
+export function mergeWithDefaults(
+  dbPreferences: Array<{ notification_type: NotificationType; enabled: boolean }>,
+): NotificationPreferencesMap {
+  const merged = { ...DEFAULT_NOTIFICATION_PREFERENCES };
+  for (const pref of dbPreferences) {
+    merged[pref.notification_type] = pref.enabled;
+  }
+  return merged;
+}
+
 /** Payload for invoking the send-push Edge Function. */
 export interface SendPushPayload {
   user_id: string;

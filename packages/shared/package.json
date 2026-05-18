@@ -7,8 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/clients/supabase.server.ts",
-    "./server/utils": "./src/utils/server.ts",
-    "./hooks/convex": "./src/hooks/convex/index.ts"
+    "./server/utils": "./src/utils/server.ts"
   },
   "scripts": {
     "test": "vitest run"

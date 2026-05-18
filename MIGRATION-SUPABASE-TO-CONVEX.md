@@ -1813,35 +1813,90 @@ convex/
 
 ## 9. Phase 4 — Remplacement des clients partagés (`packages/shared`)
 
+> ✅ **Phase 4 TERMINÉE** (2026-05-18).
+>
+> Ce qui est fait :
+> - **Pattern retenu** : Les pages web et mobile consomment `convex/react` directement (`useQuery`, `useMutation` + `#convex/_generated/api`). Pas de hook intermédiaire dans `packages/shared`.
+> - **Justification** : La doc officielle Convex (React Quickstart) montre `useQuery(api.xxx)` directement dans les composants — c'est le pattern idiomatique. Ajouter une couche de hooks dans `packages/shared` créerait une indirection inutile (DRY/KISS).
+> - `packages/shared/src/hooks/convex/` — **Supprimé** (audit Phase 4) : 7 fichiers + barrel export étaient du code mort (0 import depuis web, 0 depuis mobile). Les pages consomment déjà Convex directement.
+> - `packages/shared/src/hooks/useWishlist.ts` — **Supprimé** (audit Phase 4) : hook Supabase orphelin (0 consommateur web/mobile depuis Phase 5/6).
+> - `packages/shared/src/hooks/useAuth.ts` — **Supprimé** (audit Phase 4) : hook Supabase orphelin (0 consommateur).
+> - `packages/shared/src/hooks/useProfile.ts` — **Supprimé** (audit Phase 4) : hook Supabase orphelin (0 consommateur).
+> - `packages/shared/src/hooks/useNotificationPreferences.ts` — **Supprimé** (audit Phase 4) : hook Supabase orphelin (0 consommateur après migration mobile).
+> - `packages/shared/src/hooks/index.ts` — **Nettoyé** : retraits des exports orphelins (4 hooks Supabase + 7 hooks Convex morts).
+> - `packages/shared/package.json` — Export `"./hooks/convex"` retiré.
+> - `packages/shared/src/types/notification.types.ts` — `mergeWithDefaults()` relogée ici (était dans le hook Supabase supprimé).
+> - `packages/shared/src/types/index.ts` — Export `mergeWithDefaults` ajouté.
+> - `apps/mobile/src/app/settings/notifications.tsx` — **Migré vers Convex** : remplacé les hooks Supabase `useNotificationPreferences`/`useUpdateNotificationPreference` (`@ecommerce/shared`) par `useQuery`/`useMutation` Convex directs. Dernier fichier mobile qui appelait encore Supabase.
+>
+> Audit Phase 4 (2026-05-18) — 6 findings, 6 résolus :
+>
+> | # | Sévérité | Problème | Résolution |
+> |---|----------|----------|------------|
+> | F1 | 🔴 Critique | Hooks convex morts (7 fichiers, 0 consommateur) | Supprimé dossier `hooks/convex/` + export `package.json` |
+> | F2 | 🔴 Critique | Mobile notifications appelait encore Supabase | Réécrit `notifications.tsx` avec Convex direct |
+> | F3 | 🟡 Moyen | Imports relatifs `../../../../convex/_generated/api` fragiles | Résolu par suppression (F1) |
+> | F4 | 🟡 Moyen | Triple redondance DRY (Supabase + Convex mort + inline) | Supprimé couche Convex morte (F1) + 4 hooks Supabase orphelins. `mergeWithDefaults` relogé dans `types/` |
+> | F5 | 🟡 Moyen | `useIsInWishlistConvex` fragilité Rules of Hooks | Résolu par suppression (F1) |
+> | F6 | 🟢 Mineur | `Id` import relatif `../../../../convex/_generated/dataModel` | Résolu par suppression (F1) |
+>
+> Leçons apprises :
+> - **Ne pas créer de hooks shared juste pour wrapper Convex** — `convex/react` est déjà le hook. Un hook `useWishlistConvex` qui appelle `useQuery(api.wishlists.queries.getWishlist)` n'ajoute aucune valeur — c'est juste un proxy. Les pages doivent appeler Convex directement.
+> - **Vérifier les consommateurs avant de créer des hooks** — Si web et mobile utilisent déjà `useQuery(api.xxx)` inline, un hook shared est du code mort par construction.
+> - **Supprimer les hooks orphelins immédiatement** — Attendre la Phase 11 pour nettoyer les hooks Supabase orphelins n'ajoute que de la confusion. Si un hook n'a plus de consommateur, le supprimer tout de suite (principe YAGNI).
+> - **`packages/shared` reste utile pour** : types partagés (`OrderDetail`, `NotificationType`, `TrackingEvent`), utilitaires (`formatPrice`, `buildPageMeta`, `getOrCreateLocalId`), et le hook `useTracking` (logique de déduplication pure, pas de dépendance Convex/Supabase).
+> - **Le path alias `#convex/*`** est configuré dans `apps/web/tsconfig.json` et `apps/mobile/tsconfig.json` mais PAS dans `packages/shared/tsconfig.json` — c'est voulu : le package shared ne doit pas dépendre du backend Convex (il est frontend-agnostic).
+
 ### 9.1 Stratégie
 
-Le package `@ecommerce/shared` doit être refactoré pour remplacer tous les appels `@supabase/supabase-js` par des appels Convex.
+Le package `@ecommerce/shared` est refactoré selon le principe suivant :
 
-**Avant** : Les fonctions dans `clients/*.ts` prenaient un `SupabaseClient` en paramètre et appelaient directement la DB.
+- **Ce qui reste dans shared** : types, utilitaires, hooks agnostiques du backend (`useTracking` avec déduplication, query options factories pour Violet API)
+- **Ce qui sort de shared** : les appels backend directs. Chaque plateforme (web/mobile) appelle Convex directement depuis ses pages/composants.
+- **Ce qui est supprimé en Phase 11** : les clients Supabase restants (`clients/*.ts`)
 
-**Après** : Les hooks React consomment directement les queries/mutations Convex via `convex/react`. Les fichiers `clients/*.ts` sont supprimés au profit des fonctions Convex dans `convex/`.
+### 9.2 Pattern retenu — Convex direct dans les pages
 
-### 9.2 Remplacement des hooks
-
-Les hooks dans `packages/shared/src/hooks/` utilisent actuellement TanStack Query avec des fonctions fetch custom. L'approche retenue après la migration est **direct Convex** — les hooks utilisent `convex/react` directement, sans bridge `@convex-dev/react-query`.
-
-Le package `@convex-dev/react-query` a été retiré car aucun hook n'appelait `convexQuery()`. Les hooks Convex utilisent `convex/react` (`useQuery`, `useMutation`), les hooks Violet API utilisent `@tanstack/react-query` directement. Les deux systèmes sont indépendants.
+Les pages web et mobile consomment `convex/react` directement :
 
 ```typescript
-// Pattern retenu (convex/react direct)
+// ✅ Pattern retenu — chaque page appelle Convex directement
 import { useQuery, useMutation } from "convex/react";
 import { api } from "#convex/_generated/api";
 
-export function useWishlist(userId: string | undefined) {
-  return useQuery(
-    api.wishlists.queries.getWishlist,
-    { userId: userId ?? "" }
-    // Convex skippe automatiquement si les args sont falsy
-  );
+function WishlistPage() {
+  const wishlist = useQuery(api.wishlists.queries.getWishlist, userId ? { userId } : "skip");
+  const removeMutation = useMutation(api.wishlists.mutations.removeFromWishlist);
+  // ...
 }
 ```
 
-### 9.3 Fichiers à supprimer dans `packages/shared/src/clients/`
+```typescript
+// ❌ Anti-pattern — hook proxy dans shared (code mort)
+// packages/shared/src/hooks/convex/useWishlist.ts
+export function useWishlistConvex(userId: string | undefined) {
+  return useQuery(api.wishlists.queries.getWishlist, userId ? { userId } : "skip");
+}
+// → Supprimé : n'ajoute aucune valeur par rapport à l'appel direct
+```
+
+### 9.3 Hooks actifs restants dans `packages/shared/src/hooks/`
+
+| Hook | Raison de conservation | Backend |
+|------|----------------------|---------|
+| `useTracking.ts` | Logique de déduplication pure (60s window, prune stale keys) | Agnostique — `sendEvent` injecté par chaque plateforme |
+| `useCart.ts` | TanStack Query + optimistic updates pour Violet API | Violet API (Server Functions) |
+| `useProducts.ts` | Query options factories pour catalogue Violet | Violet API |
+| `useProductVariants.ts` | Logique de sélection de variants (pure) | Agnostique |
+| `useOrders.ts` | Query options factories pour checkout/confirmation | Violet API (TanStack Query) |
+| `useContent.ts` | Query options factories pour listing Violet | Violet API |
+| `useRecentlyViewed.ts` | localStorage + TanStack Query | Agnostique (localStorage) |
+| `useBrowsingHistory.ts` | TanStack Query pour historique navigation | Violet API |
+| `useShare.ts` | Abstraction plateforme-agnostique | Agnostique |
+
+### 9.4 Clients Supabase restants dans `packages/shared/src/clients/` (Phase 11)
+
+Ces fichiers restent en cohabitation jusqu'à la Phase 11 (nettoyage final) :
 
 - `supabase.ts` → Remplacé par `convex/react` + `ConvexProvider`
 - `supabase.server.ts` → Remplacé par fonctions Convex (pas besoin de client serveur)
@@ -1858,20 +1913,6 @@ export function useWishlist(userId: string | undefined) {
 - `admin-support.ts` → Remplacé par `convex/support/queries.ts` + `mutations.ts`
 - `health.ts` → Remplacé par `convex/health/queries.ts`
 
-### 9.4 Fichiers à adapter dans `packages/shared/src/hooks/`
-
-| Hook | Changement |
-|------|-----------|
-| `useOrders.ts` | Remplacer Supabase Realtime par réactivité Convex native. Supprimer `createOrdersRealtimeChannel()`. Les queries Convex sont auto-réactives. |
-| `useCart.ts` | Remplacer les fetchFn par des appels Convex. Garder la structure d'optimistic updates TanStack Query si utilisation de l'Option A. |
-| `useWishlist.ts` | Remplacer les appels directs Supabase par `useQuery(api.wishlists...)` (convex/react direct). |
-| `useAuth.ts` | Remplacer par les hooks `@convex-dev/auth/react`. |
-| `useCartSync.ts` | **Supprimer entièrement** — Convex est réactif par défaut, pas besoin de subscription Realtime séparée. |
-| `useRecentlyViewed.ts` | Partiellement adapté : chemin anonyme (localStorage) inchangé, chemin authentifié utilise Convex query. |
-| `useProducts.ts` | **Inchangé** — Les produits viennent de Violet API, pas de Supabase. |
-| `useContent.ts` | Adapter pour appeler Convex queries. |
-| `useNotificationPreferences.ts` | Adapter pour Convex. |
-
 ### 9.5 `packages/shared/package.json` — mises à jour
 
 ```diff
@@ -1884,8 +1925,6 @@ export function useWishlist(userId: string | undefined) {
   }
 }
 ```
-
----
 
 ## 10. Phase 5 — Intégration Web (TanStack Start)
 
@@ -1911,7 +1950,7 @@ export function useWishlist(userId: string | undefined) {
 > - `apps/web/src/components/product/RecentlyViewedRow.tsx` — Idem.
 > - `apps/web/src/hooks/useTrackingListener.ts` — **Migré vers Convex** : utilise `useMutation(api.tracking.mutations.recordEvent)` au lieu du server function Supabase `trackEventFn`. Supporte userId Convex (authentifié) et localId (anonyme).
 > - `packages/shared/src/utils/index.ts` — Ajout export `getOrCreateLocalId`, `getLocalId`, `clearLocalId`.
-> - `packages/shared/package.json` — Ajout export `"./hooks/convex": "./src/hooks/convex/index.ts"`.
+> - `packages/shared/package.json` — Export `"./hooks/convex"` retiré (code mort, audit Phase 4).
 > - `apps/web/tsconfig.json` — Ajout path alias `"#convex/*": ["../../convex/*"]` pour remplacer les imports relatifs profonds.
 > - `apps/web/src/types/convexOrders.ts` — Types partagés `ConvexOrder`, `ConvexOrderBag`, `ConvexOrderItem`, `ConvexOrderRefund` extraits des pages orders.
 >
@@ -2687,10 +2726,9 @@ Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE
 - [x] **Phase 1 — Schema** : `convex/schema.ts` complet — 23 tables, 44 indexes (2 redondants supprimés + 1 composé ajouté), déployé *(2026-05-15)*. Post-revue : `getUserById` sécurisé avec `assertAdmin()`. Audit 2026-05-18 : `violetBagId` uniformisé en string, index redondants supprimés, index wishlist composé ajouté, statuts Violet documentés.
 - [x] **Phase 2 — Auth** : Password + Resend OTP (verify + reset) + authTables + http.ts + ConvexAuthProvider web+mobile + localId + queries/mutations profils + admin utils *(2026-05-15)*. Post-revue : `getBiometricPreference` déplacé dans queries.ts, leçon `flow: "reset-verification"` documentée. OAuth Apple/Google en attente de credentials.
 - [x] **Phase 3 — Fonctions Convex** : 43+ fonctions créées (queries, mutations, actions) dans `convex/` *(2026-05-15)*. Post-revue : `getAllOrders` borné avec `.take(100)`. Audit 2026-05-18 : 9 corrections (Date.now→now arg, ctx.db table names, .filter→.withIndex, escapeHtml/sendRawEmail centralisés, VioletTokenManager singleton, cleanupAbandonedCarts borné, processOrderUpdated sans errorLogs bruit).
-- [x] **Phase 4 — Hooks shared** : Hooks Convex créés dans `packages/shared/src/hooks/convex/` (cohabitation avec hooks Supabase existants) *(2026-05-15)*
+- [x] **Phase 4 — Clients partagés** : Pattern Convex direct adopté (pages appellent `useQuery`/`useMutation` directement). Hooks proxy `packages/shared/src/hooks/convex/` supprimés (code mort). 4 hooks Supabase orphelins supprimés (`useWishlist`, `useAuth`, `useProfile`, `useNotificationPreferences`). Mobile notifications migré vers Convex. `mergeWithDefaults` relogé dans `types/` *(2026-05-18)*
 - [x] **Phase 5 — Intégration Web** : Auth pages réécrites Convex Auth, account guard client-side, account pages migrées, CartContext sans Realtime, tracking migré, path alias `#convex/*`, types partagés, ownership check, password change complet *(2026-05-16)*. Post-revue : `flow: "reset-verification"` corrigé, `mapAuthError` DRY (6 copies → 1 partagée), `ConvexQueryClient` bridge inutilisé retiré, `getAllOrders` borné.
 - [x] **Phase 6 — Intégration Mobile** : `_layout.tsx` nettoyé, AuthContext réécrit, auth pages réécrites, orders/wishlist/profile/content/FAQ/support/tracking migrés Convex, biometric adapté *(2026-05-16)*. Post-revue : double migration anonymous supprimée (centralisée AuthContext), `mobileLocalId` utilise `crypto.randomUUID()`, `getBiometricPreference` Supabase remplacé, `flow: "reset-verification"` corrigé, fallback erreur `_layout.tsx` si URL manquante, `mapAuthError` DRY.
-- [ ] **Phase 4 restant** : Remplacer les clients Supabase dans `packages/shared/src/clients/` (cohabitation Phase 4)
 - [x] **Phase 7** : Webhooks Violet migrés vers HTTP Actions Convex — 55+ event types, cron jobs, notification emails + push, Violet API client *(2026-05-16)*
 - [x] **Phase 8** : Realtime Supabase supprimé — `useCartSync`, `useOrderRealtime`, `createOrdersRealtimeChannel` retirés. Convex queries réactives par défaut *(2026-05-16)*. Post-revue : JSDoc `cartSync.ts` corrigé, commentaire `CartContext.tsx` clarifié, `CartSyncEvent` type mort documenté pour Phase 11.
 - [x] **Phase 9** : Admin dashboard/health/support migré vers Convex queries/mutations/actions. Pages web réécrites. Cron evaluate-alerts ajouté. Post-revue : 12 corrections (cron crash, admin check actions, ErrorBoundary, index ranges, N+1→Promise.all, useNavigate, health check Convex, sampling bias, args inutilisés, assertAdmin signature, state sync, cleanup borné) *(2026-05-16)*

@@ -1,20 +1,22 @@
 /**
  * Notification preferences screen (Story 6.7).
  *
- * Displays toggles for each notification type and the current
- * push permission status. Uses optimistic updates for instant
- * toggle feedback.
+ * Migrated from Supabase (TanStack Query + @ecommerce/shared hooks) to
+ * Convex queries/mutations (Phase 4 audit fix).
+ *
+ * Uses Convex useQuery/useMutation directly — reactive by default.
+ * No more Supabase client dependency.
  */
 
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Switch, View, Pressable, Linking, Platform } from "react-native";
 import Constants from "expo-constants";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { ThemedText } from "@/components/themed-text";
 import { Spacing } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { colors } from "@ecommerce/ui";
-import { useNotificationPreferences, useUpdateNotificationPreference } from "@ecommerce/shared";
-import type { NotificationType } from "@ecommerce/shared";
 
 // expo-notifications Android push support was removed from Expo Go in SDK 53.
 const IS_EXPO_GO = Constants.appOwnership === "expo";
@@ -56,39 +58,74 @@ function PreferenceRow({ label, description, value, onToggle, disabled }: Prefer
   );
 }
 
+type NotificationType = "order_updates" | "price_drops" | "back_in_stock" | "marketing";
+
 const PREFERENCE_CONFIG: Array<{
   type: NotificationType;
   label: string;
   description: string;
+  defaultEnabled: boolean;
 }> = [
   {
     type: "order_updates",
     label: "Order Updates",
     description: "Shipping, delivery, and refund notifications",
+    defaultEnabled: true,
   },
   {
     type: "price_drops",
     label: "Price Drops",
     description: "When a wishlisted item goes on sale",
+    defaultEnabled: true,
   },
   {
     type: "back_in_stock",
     label: "Back in Stock",
     description: "When a wishlisted item becomes available",
+    defaultEnabled: true,
   },
   {
     type: "marketing",
     label: "Marketing",
     description: "Promotions and special offers",
+    defaultEnabled: false,
   },
 ];
+
+/** Default preferences — matches the Supabase defaults model. */
+const DEFAULT_PREFERENCES: Record<NotificationType, boolean> = {
+  order_updates: true,
+  price_drops: true,
+  back_in_stock: true,
+  marketing: false,
+};
 
 export default function NotificationPreferencesScreen() {
   const { userId: authUserId } = useAuth();
   const userId = authUserId ?? undefined;
 
-  const { data: preferences, isLoading, isError, refetch } = useNotificationPreferences(userId);
-  const updatePreference = useUpdateNotificationPreference(userId);
+  // Convex query — reactive preferences (sparse DB rows)
+  const preferencesRows = useQuery(
+    api.notifications.queries.getNotificationPreferences,
+    userId ? { userId } : "skip",
+  );
+
+  // Convex mutation — upsert preference
+  const upsertPreference = useMutation(api.notifications.mutations.upsertNotificationPreference);
+
+  // Merge sparse DB rows with defaults
+  const preferences: Record<NotificationType, boolean> = preferencesRows
+    ? (() => {
+        const merged = { ...DEFAULT_PREFERENCES };
+        for (const row of preferencesRows) {
+          merged[row.notificationType as NotificationType] = row.enabled;
+        }
+        return merged;
+      })()
+    : DEFAULT_PREFERENCES;
+
+  const isLoading = preferencesRows === undefined;
+  const isError = preferencesRows === null;
 
   const [permissionStatus, setPermissionStatus] = useState<string>("undetermined");
 
@@ -100,7 +137,8 @@ export default function NotificationPreferencesScreen() {
   }, []);
 
   function handleToggle(type: NotificationType, enabled: boolean) {
-    updatePreference.mutate({ type, enabled });
+    if (!userId) return;
+    upsertPreference({ userId, notificationType: type, enabled });
   }
 
   function openSystemSettings() {
@@ -158,13 +196,8 @@ export default function NotificationPreferencesScreen() {
       ) : isError ? (
         <View>
           <ThemedText themeColor="textSecondary">Failed to load preferences.</ThemedText>
-          <Pressable style={styles.retryButton} onPress={() => refetch()}>
-            <ThemedText type="small" style={styles.retryButtonText}>
-              Retry
-            </ThemedText>
-          </Pressable>
         </View>
-      ) : preferences ? (
+      ) : (
         PREFERENCE_CONFIG.map((config) => (
           <PreferenceRow
             key={config.type}
@@ -175,7 +208,7 @@ export default function NotificationPreferencesScreen() {
             disabled={permissionStatus !== "granted"}
           />
         ))
-      ) : null}
+      )}
 
       {permissionStatus !== "granted" && (
         <ThemedText type="small" themeColor="textSecondary" style={styles.disabledHint}>
@@ -237,17 +270,5 @@ const styles = StyleSheet.create({
   disabledHint: {
     marginTop: Spacing.three,
     fontStyle: "italic",
-  },
-  retryButton: {
-    marginTop: Spacing.two,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: 8,
-    backgroundColor: colors.gold,
-    alignSelf: "flex-start",
-  },
-  retryButtonText: {
-    color: colors.ivory,
-    fontWeight: "600",
   },
 });
