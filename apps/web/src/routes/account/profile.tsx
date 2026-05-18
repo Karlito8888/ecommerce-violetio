@@ -112,8 +112,14 @@ function ProfilePage() {
       setPasswordError("Please enter the 6-digit code from your email.");
       return;
     }
-    if (newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters.");
+    if (newPassword.length < 8) {
+      setPasswordError(
+        "Password must be at least 8 characters with uppercase, lowercase, and a digit.",
+      );
+      return;
+    }
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      setPasswordError("Password must include uppercase, lowercase, and a digit.");
       return;
     }
     if (newPassword !== confirmPassword) {

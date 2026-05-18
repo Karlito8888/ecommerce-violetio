@@ -9,7 +9,8 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useConvexAuth } from "convex/react";
+import { useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "#convex/_generated/api";
 import { buildPageMeta, formatPrice, formatDate, ORDER_STATUS_LABELS } from "@ecommerce/shared";
 import type { ConvexOrder } from "#/types/convexOrders";

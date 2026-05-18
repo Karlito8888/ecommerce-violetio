@@ -44,46 +44,41 @@
 
 ### 0.1 Contract & Account
 
-- ❓ **Contrat signé avec Violet** — Accord formal entre votre business et Violet
-- ❓ **Compte Channel Dashboard créé** — `https://channel.violet.io` avec Org slug configuré
-- ✅ **Application Violet créée** — App ID + App Secret présents dans `.env.example` (`VIOLET_APP_ID`, `VIOLET_APP_SECRET`, `VIOLET_USERNAME`, `VIOLET_PASSWORD`)
-- ❌ **Mode Live activé** — Actuellement en `sandbox-api.violet.io` (Test Mode). Live activé uniquement après le demo réussi
-- ❓ **Team configurée** — Owner identifié dans le Channel Dashboard (seul son username/password génère un token)
+- ✅ **Contrat signé avec Violet** — Ticket TKT-2473 ouvert, Go-Live Demo booké avec Brenna Wagner + Ishan Guru
+- ✅ **Compte Channel Dashboard créé** — `https://channel.violet.io` avec App ID `11371` configuré
+- ✅ **Application Violet créée** — App ID + App Secret présents dans `.env.local` (`VIOLET_APP_ID=11371`, credentials complets)
+- 🔶 **Mode Live activé** — Actuellement en Test Mode (`sandbox-api.violet.io`). Live activé par Violet **après** le demo réussi
+- ✅ **Team configurée** — Owner identifié (login `cb.webd.ph@gmail.com`)
 
 ### 0.2 Stripe Platform Account
 
-> ⚠️ **BLOCKER #1** — C'est le prérequis le plus critique. Sans Stripe Platform configuré, pas de Test Mode, pas de Live Mode.
-
-- ❓ **Compte Stripe Platform créé** — `https://stripe.com`
-- ❓ **Stripe Connect activé** sur le compte Platform
-  - "Buyers will purchase from you" sélectionné
-  - "Payouts will be split between sellers" sélectionné
-  - Industry "E-commerce Products" sélectionné
-  - "Onboarding hosted by Stripe" (Stripe Express)
-  - "Express Dashboards" pour le merchant management
-  - Onboarding interface personnalisé avec votre branding
-- ❓ **Stripe Account ID** (`acct_...`) noté et stocké
-- ❓ **Stripe Publishable Key** (Test + Live) — Variables `VITE_STRIPE_PUBLISHABLE_KEY` et `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` présentes dans `.env.example` mais valeurs à vérifier
-- ❓ **Restricted Keys** générés :
-  - Clé `violet-test` avec les scopes requis (Test Mode)
-  - Clé `violet-live` avec les scopes requis (Live Mode)
-  - Scopes critiques : `PaymentIntents: Write`, `PaymentMethods: Write`, `Charges: Write`, `Customers: Write`, `Tokens: Write`, `Connect: All Write`, `Webhook Endpoints: Write`, `Payouts: Read`, `Balance transaction sources: Read`, `Subscriptions: Write`
-- ❓ **OAuth Stripe configuré** (si Stripe Standard accounts pour merchants) :
-  - Redirect URIs ajoutés : `https://connect.violet.io/payments/oauth/complete`, `https://merchant.violet.io/settings/payouts`, `https://channel.violet.io/settings/payouts`
-- ❓ **Credentials chiffrés et partagés avec Violet** via `https://violetio.github.io/credentials-encryptor/encrypt-stripe-creds.html`
+- ✅ **Compte Stripe Platform créé** — `acct_1TRsMHFrhqgD6M70`, FR, KYC vérifié
+- ✅ **Stripe Connect activé et approuvé** (email Stripe du 30 avril)
+  - Connect Express configuré
+  - `charges_enabled: true`, `payouts_enabled: true`, `transfers: active`
+- ✅ **Stripe Account ID** — `acct_1TRsMHFrhqgD6M70` stocké dans `docs/violet-stripe-credentials-encrypted.json`
+- ✅ **Stripe Publishable Keys** (Test + Live) — Dans `.env.local` (corrigé le 18 mai vers le bon compte)
+  - Test: `pk_test_51TRsMHFrhqgD6M70...`
+  - Live: `pk_live_51TRsMHFrhqgD6M70...`
+- ✅ **Restricted Keys** générés :
+  - Clé `violet-test` avec les scopes requis (Test Mode) — Email Stripe confirmant la création
+  - Clé `violet-live` (`rk_live_...0mFz`) avec les scopes requis (Live Mode) — Confirmé par Stripe CLI + email
+  - Scopes critiques configurés : `PaymentIntents: Write`, `PaymentMethods: Write`, `Charges: Write`, `Customers: Write`, `Tokens: Write`, `Connect: All Write`, `Webhook Endpoints: Write`, `Payouts: Read`, `Balance transaction sources: Read`, `Subscriptions: Write`
+- ✅ **OAuth Stripe configuré** — Client ID `ca_UEm0xAdznqYjzTFRGqvRWFj99mbOiuZD` (dans `docs/stripe-encrypted-credentials-test.json`)
+- ✅ **Credentials chiffrés et partagés avec Violet** — `docs/violet-stripe-credentials-encrypted.json` (Live + Test) envoyé à `support@violet.io` le 30 avril (TKT-2473)
 
 ### 0.3 Environments
 
 - ✅ **Comprendre les 3 environnements** — Architecture documentée dans le projet
-- ✅ **Endpoints corrects par environnement** — `VIOLET_API_BASE` configuré à `https://sandbox-api.violet.io/v1` dans `.env.example`
-- ❓ **App Secret différent par mode** — À vérifier dans le Channel Dashboard (toggle Test/Live)
+- ✅ **Endpoints corrects par environnement** — `VIOLET_API_BASE=https://sandbox-api.violet.io/v1` (Test Mode actif)
+- ✅ **App Secret différent par mode** — Le secret dans `.env.local` correspond au Test Mode (`cc7746b249524ed2b6705a2f950fe3fa`). Le Live secret sera visible dans le Dashboard après activation Live
 
 ### 0.4 Violet Connect Setup
 
-- ❓ **Violet Connect configuré** — URL personnalisée, nom de l'app, description, logo
-- ❓ **Redirect URL configurée** — Où rediriger les merchants après onboarding
-- ❓ **Plateformes supportées définies** — Liste des e-com platforms à afficher dans Violet Connect
-- ❓ **Shopify Pre-Registration** (si applicable) — Single-merchant custom apps configurés dans le Channel Dashboard
+- ✅ **Violet Connect configuré** — URL personnalisée, nom de l'app, description, logo configurés dans le Channel Dashboard
+- ✅ **Redirect URL configurée** — Redirection après onboarding merchant
+- ✅ **Plateformes supportées définies** — E-com platforms configurées dans Violet Connect
+- 🔶 **Shopify Pre-Registration** (si applicable) — À configurer si onboarding de merchants Shopify
 
 ---
 
@@ -280,10 +275,10 @@
 
 #### 6.4 Stripe Connect Verification
 
-- ❓ **Merchant Connect Account visible** — Dans Stripe Dashboard `/connect/accounts`
-- ❓ **KYC du merchant complété** — Via Stripe Express onboarding dans Violet Connect
-- ❓ **`payouts_enabled: true`** sur le compte Connect
-- ❓ **`charges_enabled: true`** sur le compte Connect
+- ✅ **Stripe Connect approuvé** — Email Stripe du 30 avril : "CHARLES BOURAGULT is approved to create live accounts and charges"
+- 🔶 **Merchant Connect Account** — 1 compte Connect existe (`acct_1TRt0bCJxKJ14Os5`) mais KYC incomplet (12 champs manquants : nom, adresse, dob, email, téléphone)
+- 🔶 **`payouts_enabled: true`** — Sera activé une fois le KYC merchant complété via Violet Connect
+- 🔶 **`charges_enabled: true`** — Sera activé une fois le KYC merchant complété via Violet Connect
 
 ---
 
@@ -530,12 +525,12 @@
 
 ### 🔴 Blockers — À résoudre AVANT le demo
 
-| # | Gap | Impact | Effort estimé | Action |
-|---|-----|--------|---------------|--------|
-| 1 | **Stripe Platform Account non vérifié** | Sans ça, pas de paiement réel, pas de Test Mode | ~2h setup | Créer/compléter le compte Stripe, activer Connect, générer restricted keys, partager credentials chiffrés avec Violet |
-| 2 | **Webhooks non créés dans le Channel Dashboard** | Violet ne peut pas envoyer d'événements → pas de sync orders/merchants | ~30 min | Créer les webhooks via API ou dashboard vers votre endpoint Convex |
-| 3 | **Endpoint webhook pas accessible publiquement** | Violet ne peut pas deliver les webhooks | ~1h | Configurer tunnel (dev) ou Caddy (prod) |
-| 4 | **Violet Connect pas configuré** | Pas d'onboarding merchant possible | ~1h | Configurer dans le Channel Dashboard |
+| # | Gap | Impact | Action |
+|---|-----|--------|--------|
+| 1 | **Stripe webhook endpoint à créer** | Pas de webhook Stripe → notifications manquantes | Créer un webhook endpoint Stripe et mettre à jour `STRIPE_WEBHOOK_SECRET` dans `.env.local` |
+| 2 | **Webhooks Violet à créer dans le Channel Dashboard** | Violet ne peut pas envoyer d'événements → pas de sync orders/merchants | Créer les webhooks via API ou Dashboard vers l'endpoint Convex |
+| 3 | **Endpoint Convex pas accessible publiquement** | Violet ne peut pas livrer les webhooks | Configurer tunnel (dev) ou Caddy (prod) |
+| 4 | **KYC merchant Connect incomplet** | Le merchant de test ne peut pas recevoir de payouts | Compléter le KYC via Violet Connect onboarding |
 
 ### 🟡 Important — À vérifier/tester
 
@@ -560,18 +555,18 @@
 
 | # | Étape | Statut code | Ce qu'ils vont vous demander de montrer |
 |---|-------|-------------|----------------------------------------|
-| 1 | **Violet Connect** | ❓ Config | Onboard un merchant via Violet Connect — le merchant apparaît connecté |
+| 1 | **Violet Connect** | ✅ Config | Onboard un merchant via Violet Connect — le merchant apparaît connecté |
 | 2 | **Catalog Sync** | ✅ Code prêt | Les produits du merchant sont synchronisés et visibles dans votre app |
 | 3 | **Checkout complet** | ✅ Code prêt | Cart → items → customer → shipping → payment → submit → order complétée |
-| 4 | **Paiement Stripe** | ✅ Code prêt | Payment Intent visible dans Stripe Dashboard, funds capturés |
+| 4 | **Paiement Stripe** | ✅ Code + Config | Payment Intent visible dans Stripe Dashboard, funds capturés |
 | 5 | **Multi-merchant** | ✅ Code prêt | Cart avec items de plusieurs merchants, checkout en 1 transaction |
-| 6 | **Webhooks** | ✅ Code prêt | Endpoint reçoit ORDER_COMPLETED, TRANSFER_SENT, etc. |
+| 6 | **Webhooks** | ✅ Code prêt / 🔴 Config | Endpoint reçoit ORDER_COMPLETED, TRANSFER_SENT, etc. — webhooks à créer dans le Dashboard |
 | 7 | **Distribution/Transfer** | ✅ Code prêt | Funds correctement distribués : commission + payout merchant |
-| 8 | **Merchant Payout** | ❓ Config | Merchant a un Stripe Connect account actif |
+| 8 | **Merchant Payout** | 🔶 Config | Merchant Connect account existe mais KYC à compléter |
 | 9 | **Order Management** | ✅ Code prêt | Orders, statuts bags, fulfillments |
 | 10 | **Error Handling** | ✅ Code prêt | 3DS, partial failures, rate limits |
-| 11 | **Payment Settings** | ❓ Config | Confirmer capture/transfer/tax settings |
-| 12 | **Dashboard** | ❓ Config | Channel Dashboard + Merchant Dashboard |
+| 11 | **Payment Settings** | ✅ Config | Automatic Capture + Automatic Transfer + Merchant as Tax Remitter (configuré) |
+| 12 | **Dashboard** | ✅ Config | Channel Dashboard + Merchant Dashboard configurés |
 
 ---
 
@@ -594,11 +589,11 @@ Si le demo est réussi :
 |-----------|-------|--------|
 | **Code & Architecture** | 🟢 90% | Checkout, webhooks, Stripe Elements, 3DS, wallet payments — tout implémenté |
 | **Convex Backend** | 🟢 95% | 24 tables, toutes les queries, mutations, webhook handler complet |
-| **Configuration Stripe** | 🔴 0% | Stripe Platform, Connect, restricted keys — à faire entièrement |
-| **Configuration Violet** | 🔴 10% | Webhooks, Violet Connect, payment settings — à configurer |
-| **Test end-to-end** | 🔴 0% | Jamais testé en conditions réelles Test Mode |
+| **Configuration Stripe** | 🟢 90% | Platform account, Connect, restricted keys Test+Live, credentials partagés — ✅ fait. Webhook endpoint Stripe à créer |
+| **Configuration Violet** | 🟡 70% | Dashboard, Violet Connect, credentials envoyés — ✅ fait. Webhooks à créer dans le Dashboard |
+| **Test end-to-end** | 🔴 0% | `.env.local` corrigé le 18 mai. Jamais testé en conditions réelles Test Mode |
 
-**Verdict** : Le code est **très solide** et largement prêt. Le travail restant est **100% configuration et validation** — pas de dev supplémentaire nécessaire pour le live demo.
+**Verdict** : Le code et la configuration sont **solides**. Il reste principalement : (1) créer les webhooks Violet + Stripe, (2) exposer l'endpoint Convex publiquement, (3) faire un test end-to-end complet.
 
 ---
 

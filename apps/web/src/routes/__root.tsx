@@ -6,11 +6,9 @@ import AppBanner from "../components/AppBanner";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 import { AppBannerContext, useAppBannerProvider } from "../hooks/useAppBanner";
-import { useConvexAuth } from "@convex-dev/auth/react";
-import { useQuery } from "convex/react";
-import { api } from "#convex/_generated/api";
 import { CartProvider } from "../contexts/CartContext";
 import { ToastProvider } from "../components/ui/Toast";
+import { useAuthSession } from "../hooks/useAuthSession";
 import { useTrackingListener } from "../hooks/useTrackingListener";
 import CartDrawer from "../features/cart/CartDrawer";
 import CookieConsentBanner from "../components/legal/CookieConsentBanner";
@@ -105,12 +103,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   }
 
   // Convex Auth — userId for cart merge + tracking
-  const { isAuthenticated } = useConvexAuth();
-  const identity = useQuery(api.users.queries.getIdentity, isAuthenticated ? {} : "skip");
-  const userId = isAuthenticated && identity ? identity.subject : null;
+  // Uses useAuthSession() for consistency with other auth consumers.
+  // Convex deduplicates identical queries (same fn + same args),
+  // so calling useAuthSession here and useUser in Header is zero-cost.
+  const { userId, localId } = useAuthSession();
 
-  // Browsing history tracking — only for authenticated users
-  useTrackingListener(userId ?? undefined);
+  // Browsing history tracking — authenticated userId or anonymous localId
+  useTrackingListener(userId ?? localId);
 
   return (
     <html lang="en" suppressHydrationWarning>

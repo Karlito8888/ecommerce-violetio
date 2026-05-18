@@ -1933,7 +1933,7 @@ Ces fichiers restent en cohabitation jusqu'à la Phase 11 (nettoyage final) :
 > Ce qui est fait :
 > - `apps/web/src/hooks/useAuthSession.ts` — Réécrit : `useConvexAuth()` + `useQuery(api.users.queries.getIdentity)` + modèle localId. Plus de Supabase session, plus de anonymous session. Interface `WebAuthSession { userId, email, localId, isAuthenticated, isLoading }`.
 > - `apps/web/src/hooks/useUser.ts` — Réécrit : `useConvexAuth()` + `useQuery(api.users.queries.getIdentity)`. Interface `ConvexUser { id, email, name, emailVerified }`.
-> - `apps/web/src/routes/__root.tsx` — Supprimé `getSupabaseBrowserClient()`, `_setSupabaseClient()`, `supabase` prop sur `CartProvider`. Utilise `useConvexAuth()` + `useQuery(api.users.queries.getIdentity)` pour le userId.
+> - `apps/web/src/routes/__root.tsx` — Supprimé `getSupabaseBrowserClient()`, `_setSupabaseClient()`, `supabase` prop sur `CartProvider`. Utilise `useAuthSession()` pour le userId + localId (audit Phase 5 : pattern cohérent, tracking anonymous corrigé).
 > - `apps/web/src/contexts/CartContext.tsx` — Supprimé `SupabaseClient` prop, `useCartSync` Realtime, `useQueryClient`. La réactivité vient nativement de Convex.
 > - `apps/web/src/routes/auth/login.tsx` — Réécrit : `signIn("password", { email, password, flow: "signIn" })` via `useAuthActions()` de Convex Auth. Plus de `getSupabaseBrowserClient()`.
 > - `apps/web/src/routes/auth/signup.tsx` — Réécrit : `signIn("password", { email, password, flow: "signUp" })` → navigate to `/auth/verify` avec password en router state.
@@ -1993,6 +1993,22 @@ Ces fichiers restent en cohabitation jusqu'à la Phase 11 (nettoyage final) :
 > - **`mapAuthError` DRY** : 6 copies identiques de la fonction étaient dupliquées entre web (3) et mobile (3). Remplacées par une seule fonction partagée `packages/shared/src/utils/authErrors.ts` avec un paramètre `context` (`"signIn"` | `"signUp"` | `"verify"` | `"reset"`).
 > - **`ConvexQueryClient` bridge** : Retiré de `router.tsx` — importé mais jamais utilisé par aucun hook. Le bridge interceptait toutes les queries TanStack Query (y compris Violet API) sans bénéfice.
 > - **`getAllOrders`** : Ajout paramètre `limit` (défaut 100) + `.take(limit)` au lieu de `.collect()` sans borne.
+>
+> Audit Phase 5 (2026-05-18) — 5 corrections appliquées :
+>
+> | # | Sévérité | Fichier | Problème | Correction |
+> |---|----------|---------|----------|------------|
+> | F3 | 🟡 Moyen | `apps/web/src/routes/__root.tsx` | Pattern identity query dupliqué (3e endroit après `useAuthSession` et `useUser`). Tracking passait `undefined` pour les anonymous au lieu du `localId`. | Remplacé par `useAuthSession()` — 1 seul hook cohérent. Tracking utilise `userId ?? localId`. |
+> | F4 | 🟡 Moyen | `apps/web/src/components/product/WishlistButton.tsx` | Error boundary silencieux — masquait les erreurs ConvexProvider manquant en production. | Ajout `console.warn` dans `getDerivedStateFromError` pour visibilité en dev. |
+> | F6 | 🟢 Mineur | `convex/users/queries.ts` | JSDoc `getIdentity` disait "Debug" — query de production utilisée par `useAuthSession`, `useUser`, `AuthContext`, `__root.tsx`. | Mis à jour : "Returns the Convex Auth identity of the caller." |
+> | F7 | 🟢 Mineur | `apps/web/src/routes/account/orders/index.tsx` | `useConvexAuth` importé de `convex/react` au lieu de `@convex-dev/auth/react` (source canonique selon doc officielle). | Import standardisé vers `@convex-dev/auth/react`. |
+> | F8 | 🟡 Moyen | `apps/web/src/routes/auth/signup.tsx` + `profile.tsx` + `apps/mobile/src/app/auth/signup.tsx` + `profile.tsx` | Validation frontend password = 6 chars vs backend `validatePasswordRequirements` = 8+ chars + majuscule + minuscule + chiffre. Mauvaise UX : l'utilisateur voyait "Creating Account..." puis une erreur backend. | Synchronisé : frontend et mobile valident 8 chars + uppercase + lowercase + digit (identique au backend). |
+>
+> Fichiers modifiés : `apps/web/src/routes/__root.tsx`, `apps/web/src/components/product/WishlistButton.tsx`, `convex/users/queries.ts`, `apps/web/src/routes/account/orders/index.tsx`, `apps/web/src/routes/auth/signup.tsx`, `apps/web/src/routes/account/profile.tsx`, `apps/mobile/src/app/auth/signup.tsx`, `apps/mobile/src/app/profile.tsx`
+>
+> Parité Web ↔ Mobile vérifiée : Convex hooks, auth flows, password validation, tracking, wishlist, orders — identiques sur les deux plateformes.
+> Docs officielles consultées : `docs.convex.dev` (TanStack Start, React, React Native, Auth, Best Practices), `tanstack.com`, `docs.expo.dev`, `reactnative.dev`, `docs.violet.io`.
+> Gate : typecheck ✅ | lint ✅ | 958 tests verts (514 web + 376 shared + 68 mobile).
 
 ### 10.1 Router — ConvexProvider + ConvexAuthProvider (✅ En place Phase 2, nettoyé Phase 5)
 
@@ -2727,7 +2743,7 @@ Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE
 - [x] **Phase 2 — Auth** : Password + Resend OTP (verify + reset) + authTables + http.ts + ConvexAuthProvider web+mobile + localId + queries/mutations profils + admin utils *(2026-05-15)*. Post-revue : `getBiometricPreference` déplacé dans queries.ts, leçon `flow: "reset-verification"` documentée. OAuth Apple/Google en attente de credentials.
 - [x] **Phase 3 — Fonctions Convex** : 43+ fonctions créées (queries, mutations, actions) dans `convex/` *(2026-05-15)*. Post-revue : `getAllOrders` borné avec `.take(100)`. Audit 2026-05-18 : 9 corrections (Date.now→now arg, ctx.db table names, .filter→.withIndex, escapeHtml/sendRawEmail centralisés, VioletTokenManager singleton, cleanupAbandonedCarts borné, processOrderUpdated sans errorLogs bruit).
 - [x] **Phase 4 — Clients partagés** : Pattern Convex direct adopté (pages appellent `useQuery`/`useMutation` directement). Hooks proxy `packages/shared/src/hooks/convex/` supprimés (code mort). 4 hooks Supabase orphelins supprimés (`useWishlist`, `useAuth`, `useProfile`, `useNotificationPreferences`). Mobile notifications migré vers Convex. `mergeWithDefaults` relogé dans `types/` *(2026-05-18)*
-- [x] **Phase 5 — Intégration Web** : Auth pages réécrites Convex Auth, account guard client-side, account pages migrées, CartContext sans Realtime, tracking migré, path alias `#convex/*`, types partagés, ownership check, password change complet *(2026-05-16)*. Post-revue : `flow: "reset-verification"` corrigé, `mapAuthError` DRY (6 copies → 1 partagée), `ConvexQueryClient` bridge inutilisé retiré, `getAllOrders` borné.
+- [x] **Phase 5 — Intégration Web** : Auth pages réécrites Convex Auth, account guard client-side, account pages migrées, CartContext sans Realtime, tracking migré, path alias `#convex/*`, types partagés, ownership check, password change complet *(2026-05-16)*. Post-revue : `flow: "reset-verification"` corrigé, `mapAuthError` DRY (6 copies → 1 partagée), `ConvexQueryClient` bridge inutilisé retiré, `getAllOrders` borné. Audit 2026-05-18 : 5 corrections (`__root.tsx` → `useAuthSession()`, WishlistBoundary log, `getIdentity` JSDoc, `useConvexAuth` import standardisé, password validation frontend synchronisé avec backend 8+chars+upper+lower+digit).
 - [x] **Phase 6 — Intégration Mobile** : `_layout.tsx` nettoyé, AuthContext réécrit, auth pages réécrites, orders/wishlist/profile/content/FAQ/support/tracking migrés Convex, biometric adapté *(2026-05-16)*. Post-revue : double migration anonymous supprimée (centralisée AuthContext), `mobileLocalId` utilise `crypto.randomUUID()`, `getBiometricPreference` Supabase remplacé, `flow: "reset-verification"` corrigé, fallback erreur `_layout.tsx` si URL manquante, `mapAuthError` DRY.
 - [x] **Phase 7** : Webhooks Violet migrés vers HTTP Actions Convex — 55+ event types, cron jobs, notification emails + push, Violet API client *(2026-05-16)*
 - [x] **Phase 8** : Realtime Supabase supprimé — `useCartSync`, `useOrderRealtime`, `createOrdersRealtimeChannel` retirés. Convex queries réactives par défaut *(2026-05-16)*. Post-revue : JSDoc `cartSync.ts` corrigé, commentaire `CartContext.tsx` clarifié, `CartSyncEvent` type mort documenté pour Phase 11.

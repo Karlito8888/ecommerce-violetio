@@ -33,7 +33,10 @@ interface WishlistButtonProps {
  */
 class WishlistBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
-  static getDerivedStateFromError() {
+  static getDerivedStateFromError(error: unknown) {
+    // Log in dev to surface missing ConvexAuthProvider issues
+    // eslint-disable-next-line no-console
+    console.warn("[WishlistButton] Render error (hidden gracefully):", error);
     return { hasError: true };
   }
   render() {

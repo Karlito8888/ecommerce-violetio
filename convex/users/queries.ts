@@ -38,7 +38,8 @@ export const getUserById = query({
 });
 
 /**
- * Debug — retourne l'identité Convex Auth du caller.
+ * Returns the Convex Auth identity of the caller.
+ * Used by useAuthSession(), useUser(), AuthContext (mobile), and __root.tsx.
  * This query intentionally uses ctx.auth.getUserIdentity() instead of
  * getAuthUserId() because it returns raw identity fields (email, name, etc.)
  * that the client needs for display purposes.
