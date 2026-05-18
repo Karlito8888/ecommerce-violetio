@@ -177,6 +177,13 @@ function LayoutInner() {
   const stripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
   // ── Convex client (self-hosted) ───────────────────────────────
+  // NOTE: Using useState(() => ...) instead of module-level instantiation
+  // (as shown in the Convex React Native Quickstart) because:
+  //   1. We check EXPO_PUBLIC_CONVEX_URL availability at render time
+  //   2. If missing, we render a fallback error screen instead of crashing
+  //   3. The useState initializer runs only once (React guarantee)
+  // This matches the self-hosted pattern where the URL may not be
+  // configured yet (first dev setup, CI, etc.).
   const [convexClient] = useState(() => {
     const url = process.env.EXPO_PUBLIC_CONVEX_URL;
     if (!url) {

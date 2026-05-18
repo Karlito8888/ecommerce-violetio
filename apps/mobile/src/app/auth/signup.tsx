@@ -59,8 +59,8 @@ export default function SignupScreen() {
         flow: "signUp",
       });
 
-      // Store pending signup data for verify screen
-      setPendingSignup(email, password);
+      // Store pending signup data in SecureStore (encrypted, not plain memory)
+      await setPendingSignup(email, password);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       router.push("/auth/verify" as any);

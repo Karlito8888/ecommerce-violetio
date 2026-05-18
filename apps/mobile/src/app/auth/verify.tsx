@@ -9,7 +9,7 @@
 //   4. migrateAnonymousData(localId) transfers wishlist/events
 //   5. Navigate to home
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -32,7 +33,30 @@ export default function VerifyScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuthActions();
 
-  const { email, password } = getPendingSignup();
+  // Load pending signup data from SecureStore (encrypted, not plain memory)
+  const [pendingData, setPendingData] = useState<{ email: string; password: string } | null>(
+    null,
+  );
+  const [isLoadingPending, setIsLoadingPending] = useState(true);
+
+  useEffect(() => {
+    getPendingSignup().then((data) => {
+      setPendingData(data);
+      setIsLoadingPending(false);
+    });
+  }, []);
+
+  const email = pendingData?.email ?? "";
+  const password = pendingData?.password ?? "";
+
+  // Loading state while reading from SecureStore
+  if (isLoadingPending) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 48 }} />
+      </View>
+    );
+  }
 
   if (!email || !password) {
     return (
@@ -72,8 +96,8 @@ export default function VerifyScreen() {
       // when it detects the isAuthenticated transition. No need to do it here.
       // This avoids a double-migration (verify.tsx + AuthContext both firing).
 
-      // Step 3: Clean up and navigate
-      clearPendingSignup();
+      // Step 3: Clean up encrypted signup data and navigate
+      await clearPendingSignup();
       router.replace("/");
     } catch (err) {
       setError(mapAuthError(err, "verify"));

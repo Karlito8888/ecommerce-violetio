@@ -2073,22 +2073,23 @@ Les fichiers Supabase sont conservés pour la cohabitation :
 > Ce qui est fait :
 > - `apps/mobile/tsconfig.json` — Ajout path alias `"#convex/*": ["../../convex/*"]` (identique au web).
 > - `apps/mobile/src/utils/mobileLocalId.ts` — **Nouveau fichier** : implémentation mobile du modèle localId via `expo-secure-store`. Fonctions `getOrCreateLocalIdMobile()`, `getLocalIdMobile()`, `clearLocalIdMobile()`. Remplace `localStorage` du web par SecureStore (chiffrement natif iOS Keychain / Android Keystore).
+> - `apps/mobile/src/utils/pendingSignup.ts` — **Réécrit (audit Phase 6)** : stockage des données pending signup (email + password) dans SecureStore au lieu de variables module en clair. Le password n'est jamais en mémoire JS heap entre les écrans.
 > - `apps/mobile/src/context/AuthContext.tsx` — **Réécrit** : `useConvexAuth()` + `useQuery(api.users.queries.getIdentity)` au lieu de `supabase.auth.onAuthStateChange`. Interface `MobileAuthSession { userId, email, localId, isAuthenticated, isLoading, user: null, isAnonymous, session: null }` (compatibilité descendante pour les consommateurs existants). Cart merge adapté pour Convex userId. Migration anonymous data intégrée. Biometric enrollment utilise `useMutation(api.users.mutations.setBiometricPreference)`.
 > - `apps/mobile/src/app/_layout.tsx` — **Simplifié** : supprimé tout le code Supabase Auth (anonymous session init, `onAuthStateChange`, `useCartSync` Realtime, `supabaseClient` singleton, `configureEnv` Supabase). Gardé : ConvexAuthProvider + ConvexReactClient, StripeProvider, thème, push notifications, exchange rates. Net -100 lignes.
 > - `apps/mobile/src/app/auth/login.tsx` — **Réécrit** : `signIn("password", { email, password, flow: "signIn" })` via `useAuthActions()`. OAuth commenté (comme web).
-> - `apps/mobile/src/app/auth/signup.tsx` — **Réécrit** : `signIn("password", { email, password, flow: "signUp" })` → pending signup via SecureStore → navigate to verify.
-> - `apps/mobile/src/app/auth/verify.tsx` — **Réécrit** : `signIn("password", { flow: "signUp", code })` + `migrateAnonymous({ localId })` + `clearLocalIdMobile()`. Plus de `verifyEmailOtp`, `setAccountPassword`, `supabase.from("user_profiles").upsert()`.
+> - `apps/mobile/src/app/auth/signup.tsx` — **Réécrit** : `signIn("password", { email, password, flow: "signUp" })` → pending signup via SecureStore (`setPendingSignup`) → navigate to verify.
+> - `apps/mobile/src/app/auth/verify.tsx` — **Réécrit** : `signIn("password", { flow: "signUp", code })` + `migrateAnonymous({ localId })` + `clearLocalIdMobile()`. Plus de `verifyEmailOtp`, `setAccountPassword`, `supabase.from("user_profiles").upsert()`. Pending signup data chargé async depuis SecureStore (chiffré, pas en mémoire JS).
 > - `apps/mobile/src/app/orders/index.tsx` — **Réécrit** : `useQuery(api.orders.queries.getOrders)` au lieu de TanStack Query + Supabase Realtime.
 > - `apps/mobile/src/app/orders/[orderId].tsx` — **Réécrit** : `useQuery(api.orders.queries.getOrderDetail)` au lieu de TanStack Query + `useOrderRealtime`.
 > - `apps/mobile/src/app/profile.tsx` — **Réécrit** : Convex queries/mutations pour le profil. Flow change password complet en 3 étapes (idle → otp-sent → success) identique au web.
 > - `apps/mobile/src/app/wishlist.tsx` — **Réécrit** : `useQuery(api.wishlists.queries.getWishlist)` + `useMutation(api.wishlists.mutations.removeFromWishlist)` au lieu de `useWishlist`/`useRemoveFromWishlist` de `@ecommerce/shared` (Supabase).
 > - `apps/mobile/src/components/product/WishlistButton.tsx` — **Réécrit** : `useQuery(api.wishlists.queries.getWishlistProductIds)` + `useMutation` au lieu de `useIsInWishlist`/`useAddToWishlist`/`useRemoveFromWishlist` de `@ecommerce/shared`. Pending state manuel via `useState`.
 > - `apps/mobile/src/components/HamburgerMenu.tsx` — `useAuth()` de `@/context/AuthContext` au lieu de `useUser` de `@ecommerce/shared`.
-> - `apps/mobile/src/app/content/index.tsx` — **Réécrit** : `useQuery(api.content.queries.getContentPages)` au lieu de `createSupabaseClient()` + `getContentPages()`.
+> - `apps/mobile/src/app/content/index.tsx` — **Réécrit** : `usePaginatedQuery(api.content.queries.getContentPages)` avec infinite scroll natif au lieu de `createSupabaseClient()` + `getContentPages()`.
 > - `apps/mobile/src/app/content/[slug].tsx` — **Réécrit** : `useQuery(api.content.queries.getContentPageBySlug)` + `useQuery(api.content.queries.getRelatedContent)` au lieu de `createSupabaseClient()` + `getContentPageBySlug()`/`getRelatedContent()`.
 > - `apps/mobile/src/app/help/index.tsx` — **Réécrit** : `useQuery(api.content.queries.getFaqItems)` au lieu de `createSupabaseClient()` + `getFaqItems()`.
 > - `apps/mobile/src/app/help/contact.tsx` — **Réécrit** : `useMutation(api.support.mutations.insertSupportInquiry)` au lieu de `createSupabaseClient()` + `insertSupportInquiry()`. Supprimé l'appel à `client.functions.invoke("send-support-email")` (TODO: action Convex Resend).
-> - `apps/mobile/src/app/order/lookup.tsx` — **Réécrit** : Flux OTP invité migré de `supabase.auth.signInWithOtp`/`verifyOtp` vers Convex Auth `signIn("password", { flow: "reset" })`. Plus de session Supabase temporaire, plus de `supabase.auth.signOut()`.
+> - `apps/mobile/src/app/order/lookup.tsx` — **Réécrit** : Flux OTP invité migré de `supabase.auth.signInWithOtp`/`verifyOtp` vers Convex Auth `signIn("password", { flow: "reset" })`. Plus de session Supabase temporaire, plus de `supabase.auth.signOut()`. Réutilise intentionnellement le flow `reset` de Convex Auth — le provider `ResendOTP` envoie l'email indépendamment de l'existence du compte (voir DESIGN NOTE dans le fichier).
 > - `apps/mobile/src/app/products/[productId].tsx` — **Modifié** : `useAuth()` de Convex pour vérifier l'authentification au lieu de `createSupabaseClient()` + `getSession()`. Plus de `getSessionToken()` helper.
 > - `apps/mobile/src/hooks/usePushRegistration.ts` — **Réécrit** : `useMutation(api.notifications.mutations.upsertPushToken)` au lieu de `upsertPushToken` de `@ecommerce/shared` (Supabase).
 > - `apps/mobile/src/hooks/useMobileTracking.ts` — **Réécrit** : `useMutation(api.tracking.mutations.recordEvent)` au lieu de `apiPost("/api/track-event")` (routait vers Supabase). Supporte userId Convex + localId (anonyme).
@@ -2112,6 +2113,8 @@ Les fichiers Supabase sont conservés pour la cohabitation :
 ### 11.1 Layout racine (✅ Migré Phase 6)
 
 `apps/mobile/src/app/_layout.tsx` utilise maintenant : ConvexAuthProvider (déjà câblé Phase 2) + AuthProvider (réécrit pour Convex Auth). Plus de Supabase anonymous session, plus de `onAuthStateChange`, plus de `useCartSync` Realtime.
+
+NOTE : Le `ConvexReactClient` est instancié via `useState(() => ...)` dans `LayoutInner` (pas au module level comme le montre la doc React Native Quickstart) parce qu'on gère le cas où `EXPO_PUBLIC_CONVEX_URL` est manquant (fallback UI au lieu de crash). Le `useState` garantit une seule instanciation (React guarantee).
 
 Provider stack (inside-out) :
 1. QueryClientProvider (TanStack Query — Violet API data)
@@ -2162,7 +2165,7 @@ Interface `MobileAuthSession` (compatibilité descendante) :
 
 | Fichier | Changement |
 |---------|-----------|
-| `app/content/index.tsx` | `useQuery(api.content.queries.getContentPages)` (paginée) |
+| `app/content/index.tsx` | `usePaginatedQuery(api.content.queries.getContentPages)` avec infinite scroll natif |
 | `app/content/[slug].tsx` | `useQuery(getContentPageBySlug)` + `useQuery(getRelatedContent)` |
 | `app/help/index.tsx` | `useQuery(api.content.queries.getFaqItems)` |
 | `app/help/contact.tsx` | `useMutation(api.support.mutations.insertSupportInquiry)` |
@@ -2170,6 +2173,8 @@ Interface `MobileAuthSession` (compatibilité descendante) :
 ### 11.8 Guest Order Lookup (✅ Migré Phase 6)
 
 `order/lookup.tsx` utilise Convex Auth `signIn("password", { flow: "reset" })` pour le flux OTP invité au lieu de `supabase.auth.signInWithOtp`/`verifyOtp`. Plus de session Supabase temporaire.
+
+**Design note** : Le flow `reset` de Convex Auth est réutilisé intentionnellement pour les guests. Le provider `ResendOTP` (`convex/lib/resendOTP.ts`) envoie l'email via Resend indépendamment de l'existence d'un compte Convex Auth — l'OTP sert uniquement de preuve de possession email. Après vérification, les orders sont récupérés via le web backend `/api/guest-order-lookup`.
 
 ### 11.9 Services & Hooks (✅ Migrés Phase 6)
 
@@ -2207,6 +2212,27 @@ Interface `MobileAuthSession` (compatibilité descendante) :
 - **Password reset `flow`** : Même correction que web — `flow: "reset"` → `flow: "reset-verification"` pour l'étape code+nouveau mot de passe.
 - **`_layout.tsx` — crash silencieux** : Si `EXPO_PUBLIC_CONVEX_URL` est manquant, `convexClient` était `null` et l'app était rendue sans `ConvexAuthProvider` (tous les hooks Convex crashaient). Ajout d'un fallback affichant un message d'erreur.
 - **`mapAuthError` DRY** : Les 3 copies mobiles ont été remplacées par l'import depuis `@ecommerce/shared`.
+
+Audit Phase 6 (2026-05-18) — 5 corrections appliquées :
+
+| # | Sévérité | Fichier | Problème | Correction |
+|---|----------|---------|----------|------------|
+| F1 | 🟡 Moyen | `apps/mobile/src/app/_layout.tsx` | Pattern `useState(() => new ConvexReactClient())` non documenté — la doc officielle montre l'instanciation module-level. | Ajout commentaire 5 lignes expliquant le choix : gestion URL manquante, fallback UI, garantie React single-run. |
+| F2 | 🟡 Moyen | `apps/mobile/src/utils/pendingSignup.ts` + `signup.tsx` + `verify.tsx` | Mot de passe stocké en clair dans `let _password` (variable module). En cas de crash avec dump mémoire, le password serait exposé. | Réécriture complète : `pendingSignup.ts` utilise SecureStore (`setItemAsync/getItemAsync/deleteItemAsync`). `signup.tsx` → `await setPendingSignup()`. `verify.tsx` → chargement async via `useEffect` + `useState` + `ActivityIndicator` pendant la lecture chiffrée. Le password n'est jamais en mémoire JS heap entre les écrans. |
+| F4 | 🟡 Moyen | `apps/mobile/src/app/content/index.tsx` | `loadMore` était un no-op factice (`setTimeout 500ms`). Seule la première page (12 items) était chargée. | Remplacé `useQuery` + `paginationOpts` par `usePaginatedQuery` natif Convex avec `initialNumItems: 12`. `loadMore(12)` charge réellement les 12 items suivants. `now` stabilisé via `useMemo(() => Date.now(), [])` pour éviter le reset de pagination. |
+| F5 | 🟡 Moyen | `apps/mobile/src/app/order/lookup.tsx` | Guest order lookup réutilise le flow `reset` de Convex Auth sans documentation — comportement non garanti par la doc officielle si l'email n'a pas de compte. | Ajout bloc `DESIGN NOTE` 8 lignes documentant : (1) réutilisation intentionnelle du flow `reset`, (2) pourquoi ça fonctionne (ResendOTP envoie indépendamment de l'existence du compte), (3) l'OTP sert uniquement de preuve de possession email. |
+| F6 | 🟢 Mineur | `apps/mobile/src/services/biometricService.ts` | `attemptBiometricLogin` retourne `{ success: true }` même si la session Convex a expiré. | Documenté : le biometric prompt agit comme un déverrouillage local des credentials SecureStore. ConvexAuthProvider restaure la session automatiquement. Si la session est expirée, `isAuthenticated` reste `false` et le prompt sera re-montré. Pas de correction code nécessaire — le flow est correct. |
+
+Fichiers modifiés : `apps/mobile/src/app/_layout.tsx`, `apps/mobile/src/utils/pendingSignup.ts`, `apps/mobile/src/app/auth/signup.tsx`, `apps/mobile/src/app/auth/verify.tsx`, `apps/mobile/src/app/content/index.tsx`, `apps/mobile/src/app/order/lookup.tsx`
+
+Parité Web ↔ Mobile vérifiée : Convex hooks, auth flows, password validation, tracking, wishlist, orders — identiques sur les deux plateformes.
+Docs officielles consultées : `docs.convex.dev` (llms.txt, React Native Quickstart, React client, Convex Auth, Best Practices), `docs.expo.dev` (llms.txt), `labs.convex.dev/auth/setup` (React Native tab).
+Gate : typecheck ✅ | lint ✅ | 958 tests verts (514 web + 376 shared + 68 mobile).
+
+Leçons apprises :
+ - **SecureStore pour les données sensibles transitoires** : Sur mobile, ne jamais stocker un mot de passe dans une variable JS module (`let _password = ""`) — utiliser `expo-secure-store` même pour les données éphémères entre écrans. Le coût async est négligeable comparé au gain de sécurité.
+ - **`usePaginatedQuery` > `useQuery` + paginationOpts manuelle** : Convex fournit un hook natif `usePaginatedQuery` avec `loadMore()` automatique. Ne pas réimplémenter la pagination manuellement.
+ - **Documenter les détournements de flow** : Quand on réutilise un flow officiel dans un contexte non prévu (ex: flow `reset` pour guest OTP), documenter clairement le DESIGN NOTE — le prochain développeur doit comprendre pourquoi ça fonctionne.
 
 ---
 
@@ -2744,7 +2770,7 @@ Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE
 - [x] **Phase 3 — Fonctions Convex** : 43+ fonctions créées (queries, mutations, actions) dans `convex/` *(2026-05-15)*. Post-revue : `getAllOrders` borné avec `.take(100)`. Audit 2026-05-18 : 9 corrections (Date.now→now arg, ctx.db table names, .filter→.withIndex, escapeHtml/sendRawEmail centralisés, VioletTokenManager singleton, cleanupAbandonedCarts borné, processOrderUpdated sans errorLogs bruit).
 - [x] **Phase 4 — Clients partagés** : Pattern Convex direct adopté (pages appellent `useQuery`/`useMutation` directement). Hooks proxy `packages/shared/src/hooks/convex/` supprimés (code mort). 4 hooks Supabase orphelins supprimés (`useWishlist`, `useAuth`, `useProfile`, `useNotificationPreferences`). Mobile notifications migré vers Convex. `mergeWithDefaults` relogé dans `types/` *(2026-05-18)*
 - [x] **Phase 5 — Intégration Web** : Auth pages réécrites Convex Auth, account guard client-side, account pages migrées, CartContext sans Realtime, tracking migré, path alias `#convex/*`, types partagés, ownership check, password change complet *(2026-05-16)*. Post-revue : `flow: "reset-verification"` corrigé, `mapAuthError` DRY (6 copies → 1 partagée), `ConvexQueryClient` bridge inutilisé retiré, `getAllOrders` borné. Audit 2026-05-18 : 5 corrections (`__root.tsx` → `useAuthSession()`, WishlistBoundary log, `getIdentity` JSDoc, `useConvexAuth` import standardisé, password validation frontend synchronisé avec backend 8+chars+upper+lower+digit).
-- [x] **Phase 6 — Intégration Mobile** : `_layout.tsx` nettoyé, AuthContext réécrit, auth pages réécrites, orders/wishlist/profile/content/FAQ/support/tracking migrés Convex, biometric adapté *(2026-05-16)*. Post-revue : double migration anonymous supprimée (centralisée AuthContext), `mobileLocalId` utilise `crypto.randomUUID()`, `getBiometricPreference` Supabase remplacé, `flow: "reset-verification"` corrigé, fallback erreur `_layout.tsx` si URL manquante, `mapAuthError` DRY.
+- [x] **Phase 6 — Intégration Mobile** : `_layout.tsx` nettoyé, AuthContext réécrit, auth pages réécrites, orders/wishlist/profile/content/FAQ/support/tracking migrés Convex, biometric adapté *(2026-05-16)*. Post-revue : double migration anonymous supprimée (centralisée AuthContext), `mobileLocalId` utilise `crypto.randomUUID()`, `getBiometricPreference` Supabase remplacé, `flow: "reset-verification"` corrigé, fallback erreur `_layout.tsx` si URL manquante, `mapAuthError` DRY. Audit 2026-05-18 : `pendingSignup.ts` SecureStore (password chiffré), `content/index.tsx` `usePaginatedQuery` natif, `lookup.tsx` DESIGN NOTE (guest OTP flow documenté), `_layout.tsx` ConvexReactClient pattern documenté.
 - [x] **Phase 7** : Webhooks Violet migrés vers HTTP Actions Convex — 55+ event types, cron jobs, notification emails + push, Violet API client *(2026-05-16)*
 - [x] **Phase 8** : Realtime Supabase supprimé — `useCartSync`, `useOrderRealtime`, `createOrdersRealtimeChannel` retirés. Convex queries réactives par défaut *(2026-05-16)*. Post-revue : JSDoc `cartSync.ts` corrigé, commentaire `CartContext.tsx` clarifié, `CartSyncEvent` type mort documenté pour Phase 11.
 - [x] **Phase 9** : Admin dashboard/health/support migré vers Convex queries/mutations/actions. Pages web réécrites. Cron evaluate-alerts ajouté. Post-revue : 12 corrections (cron crash, admin check actions, ErrorBoundary, index ranges, N+1→Promise.all, useNavigate, health check Convex, sampling bias, args inutilisés, assertAdmin signature, state sync, cleanup borné) *(2026-05-16)*

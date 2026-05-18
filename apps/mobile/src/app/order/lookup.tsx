@@ -202,6 +202,17 @@ export default function GuestLookupScreen() {
   }, [token]);
 
   // ── Email step submit — send OTP via Convex Auth (Resend) ──────────────────
+  //
+  // DESIGN NOTE: We use Convex Auth's password reset flow (flow: "reset") to send
+  // an OTP to the guest's email. This is an intentional reuse of the existing OTP
+  // infrastructure rather than building a separate guest verification system.
+  //
+  // This works because our ResendOTP provider (convex/lib/resendOTP.ts) sends emails
+  // via Resend regardless of whether the email matches a Convex Auth account. The OTP
+  // serves purely as proof of email ownership for guest order lookup — no actual
+  // password reset occurs. After OTP verification, we call the web backend's
+  // guest-order-lookup endpoint to fetch orders by email.
+  //
   async function handleEmailSubmit() {
     if (!email.trim()) {
       setError("Please enter your email address.");
@@ -248,10 +259,10 @@ export default function GuestLookupScreen() {
     setError("");
 
     try {
-      // Verify the OTP via Convex Auth
-      // Note: For guest order lookup, we don't actually need to complete the auth flow.
-      // We just need to verify that the user owns the email. The OTP verification
-      // proves email ownership. We then use the email to look up orders.
+      // Verify the OTP via Convex Auth. The OTP proves email ownership.
+      // For guest lookup, we don't need a persistent auth session — we just
+      // need the server to confirm the code was valid. After verification,
+      // we look up orders by email through the web backend API.
       await signIn("password", {
         email: verifyEmail,
         flow: "reset",

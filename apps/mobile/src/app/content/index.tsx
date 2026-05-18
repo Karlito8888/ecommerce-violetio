@@ -5,10 +5,10 @@
 //
 // Convex provides reactivity by default — no manual cache invalidation needed.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { FlatList, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQuery } from "convex/react";
+import { usePaginatedQuery } from "convex/react";
 import { api } from "#convex/_generated/api";
 
 import { ThemedText } from "@/components/themed-text";
@@ -43,27 +43,25 @@ interface ContentListItem {
  */
 export default function ContentListScreen() {
   const [activeType, setActiveType] = useState<string | undefined>(undefined);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const result = useQuery(api.content.queries.getContentPages, {
-    type: activeType,
-    paginationOpts: { numItems: 12, cursor: null },
-    now: Date.now(),
-  });
+  // Stable timestamp — memoized to avoid resetting pagination on re-render.
+  // Content filtering uses this to exclude future-dated articles.
+  const now = useMemo(() => Date.now(), []);
 
-  const items: ContentListItem[] = (result?.page ?? []) as ContentListItem[];
-  const isLoading = result === undefined;
+  const {
+    results: rawItems,
+    loadMore,
+    status,
+  } = usePaginatedQuery(
+    api.content.queries.getContentPages,
+    { type: activeType, now },
+    { initialNumItems: 12 },
+  );
 
-  const loadMore = () => {
-    if (result && result.continueCursor && !result.isDone && !isLoadingMore) {
-      // For now, we only fetch the first page (12 items).
-      // Infinite scroll can be added later using usePaginatedQuery.
-      setIsLoadingMore(true);
-      // Reset after a tick — Convex paginated queries need usePaginatedQuery hook
-      // for proper load-more behavior. This is a known simplification.
-      setTimeout(() => setIsLoadingMore(false), 100);
-    }
-  };
+  const items: ContentListItem[] = rawItems as ContentListItem[];
+  const isLoading = status === "LoadingMore" && items.length === 0;
+  const canLoadMore = status === "CanLoadMore";
+  const isLoadingMore = status === "LoadingMore" && items.length > 0;
 
   return (
     <ThemedView style={styles.container}>
@@ -101,7 +99,7 @@ export default function ContentListScreen() {
           renderItem={({ item }) => <ContentCard content={item as never} />}
           keyExtractor={(item) => (item as ContentListItem)._id}
           contentContainerStyle={styles.list}
-          onEndReached={loadMore}
+          onEndReached={() => canLoadMore && loadMore(12)}
           onEndReachedThreshold={0.5}
           ListEmptyComponent={
             !isLoading ? (

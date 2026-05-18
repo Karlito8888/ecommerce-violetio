@@ -155,6 +155,8 @@
 > **Réf** : `https://docs.violet.io/prism/overview/place-an-order.md` + `https://docs.violet.io/prism/checkout-guides/carts-and-bags/carts/lifecycle-of-a-cart.md`
 >
 > **Code audité** : `apps/web/src/routes/api/cart/` (25+ routes), `apps/web/src/server/checkout.ts`, `apps/web/src/server/cartActions.ts`, `apps/web/src/routes/checkout/`
+>
+> ⚠️ **DÉPENDANCE SUPABASE ACTIVE** — Le checkout web (cart, items, order persistence, error logging) dépend encore de Supabase via `getSupabaseServer()` dans `checkout.ts` et `cartActions.ts`. La migration Convex est en cours (voir `MIGRATION-SUPABASE-TO-CONVEX.md`). Pour un test E2E immédiat, Supabase doit tourner en local (`supabase start`).
 
 #### Étape 4.1 — Créer un Cart
 
@@ -290,8 +292,10 @@
 
 #### 7.1 Webhook Setup
 
-- ✅ **Convex HTTP Action** — `POST /api/webhooks/violet` configuré dans `convex/http.ts`
-- 🔶 **Webhooks créés dans le Channel Dashboard Violet** — Le code les traite, mais il faut créer les subscriptions aux événements dans le dashboard ou via API
+- ✅ **Convex HTTP Action** — `POST /api/webhooks/violet` configuré dans `convex/http.ts` (port 3211)
+- ✅ **48 webhooks créés dans le Channel Dashboard Violet** — Tous mis à jour vers le tunnel Convex le 18 mai
+- ✅ **Tunnel public actif** — `https://truly-adapters-crossing-frog.trycloudflare.com` → Convex 3211 (temporaire, Caddy en prod)
+- ✅ **Tous les webhooks sont `ACTIVE`** — Vérifié via API
 
 **Événements gérés par le code** (tous présents dans le handler) :
 
@@ -346,7 +350,7 @@
 | `PRODUCT_SYNC_COMPLETED` | ✅ | |
 | `PRODUCT_SYNC_FAILED` | ✅ | |
 
-- ❓ **Remote endpoint accessible publiquement** — Le Convex backend doit être joignable par Violet. En prod: Caddy reverse proxy. En dev: tunnel nécessaire (ngrok, etc.)
+- ❓ **Remote endpoint accessible publiquement** — ✅ Tunnel cloudflared actif (`https://truly-adapters-crossing-frog.trycloudflare.com`). Temporaire — URL change à chaque restart. Prod : Caddy sur `api.maisonemile.com`
 - ❓ **Webhook status `ACTIVE`** — Vérifiable via `GET /v1/events/webhooks`
 
 #### 7.2 Webhook Security
@@ -527,18 +531,17 @@
 
 | # | Gap | Impact | Action |
 |---|-----|--------|--------|
-| 1 | **Stripe webhook endpoint à créer** | Pas de webhook Stripe → notifications manquantes | Créer un webhook endpoint Stripe et mettre à jour `STRIPE_WEBHOOK_SECRET` dans `.env.local` |
-| 2 | **Webhooks Violet à créer dans le Channel Dashboard** | Violet ne peut pas envoyer d'événements → pas de sync orders/merchants | Créer les webhooks via API ou Dashboard vers l'endpoint Convex |
-| 3 | **Endpoint Convex pas accessible publiquement** | Violet ne peut pas livrer les webhooks | Configurer tunnel (dev) ou Caddy (prod) |
-| 4 | **KYC merchant Connect incomplet** | Le merchant de test ne peut pas recevoir de payouts | Compléter le KYC via Violet Connect onboarding |
+| 1 | **Checkout web dépend de Supabase (non lancé)** | Cart, items, order persistence, error logging utilisent `getSupabaseServer()` — checkout cassé SANS Supabase | Soit lancer `supabase start` en local, soit migrer le checkout vers Convex (voir `MIGRATION-SUPABASE-TO-CONVEX.md`) |
+| ~~2~~ | ~~Stripe webhook endpoint à créer~~ | ✅ **Résolu** — `we_1TYS11FrhqgD6M70s2SQ30Ye` créé, `STRIPE_WEBHOOK_SECRET` dans `.env.local` |
+| ~~3~~ | ~~Webhooks Violet à créer~~ | ✅ **Résolu** — 48 webhooks mis à jour vers le tunnel Convex |
+| ~~4~~ | ~~Endpoint Convex pas accessible~~ | ✅ **Résolu** — Tunnel cloudflared actif (`https://truly-adapters-crossing-frog.trycloudflare.com` → port 3211). En prod: Caddy sur `api.maisonemile.com` |
+| 5 | **KYC merchant Connect incomplet** | Le merchant de test ne peut pas recevoir de payouts | Compléter le KYC via Violet Connect onboarding
 
 ### 🟡 Important — À vérifier/tester
 
 | # | Gap | Impact | Action |
 |---|-----|--------|--------|
-| 5 | **Test end-to-end complet jamais fait** | Risque de bugs le jour du demo | Faire 1 achat test complet en Test Mode |
-| 6 | **Payment Settings non confirmés avec Violet** | Settings par défaut possiblement incorrects | Email Violet pour confirmer capture/transfer/tax settings |
-| 7 | **Refund/Cancel API pas implémentée côté channel** | Pas grave : les refunds sont merchant-initiés | Clarifier avec Violet si c'est attendu |
+| 5 | **Test end-to-end complet jamais fait** | Risque de bugs le jour du demo | Nécessite Blocker #1 résolu (Supabase lancé OU migré vers Convex) |
 
 ### 🟢 Nice-to-have — Pas bloquant pour le demo
 
@@ -587,15 +590,15 @@ Si le demo est réussi :
 
 | Catégorie | Score | Détail |
 |-----------|-------|--------|
-| **Code & Architecture** | 🟢 90% | Checkout, webhooks, Stripe Elements, 3DS, wallet payments — tout implémenté |
-| **Convex Backend** | 🟢 95% | 24 tables, toutes les queries, mutations, webhook handler complet |
-| **Configuration Stripe** | 🟢 90% | Platform account, Connect, restricted keys Test+Live, credentials partagés — ✅ fait. Webhook endpoint Stripe à créer |
-| **Configuration Violet** | 🟡 70% | Dashboard, Violet Connect, credentials envoyés — ✅ fait. Webhooks à créer dans le Dashboard |
-| **Test end-to-end** | 🔴 0% | `.env.local` corrigé le 18 mai. Jamais testé en conditions réelles Test Mode |
+| **Code & Architecture** | 🟡 70% | Stripe Elements + 3DS ✅ — MAIS checkout web dépend de Supabase (`checkout.ts`, `cartActions.ts`) |
+| **Convex Backend** | 🟢 95% | 24 tables, queries, mutations, webhook handler complet, env vars configurés |
+| **Configuration Stripe** | 🟢 90% | Platform account, Connect, restricted keys Test+Live, credentials partagés. Webhook endpoint Stripe à créer |
+| **Configuration Violet** | 🟡 70% | Dashboard, Violet Connect, credentials envoyés. Webhooks à créer dans le Dashboard |
+| **Test end-to-end** | 🔴 0% | `.env.local` + env vars Convex corrigés le 18 mai. Bloqué par la dépendance Supabase du checkout web |
 
-**Verdict** : Le code et la configuration sont **solides**. Il reste principalement : (1) créer les webhooks Violet + Stripe, (2) exposer l'endpoint Convex publiquement, (3) faire un test end-to-end complet.
+**Verdict** : Le backend Convex et la config Stripe/Violet sont **prêts**. Le blocker principal est la **dépendance Supabase du checkout web** — soit lancer Supabase local (`supabase start`), soit migrer le checkout vers Convex. Ensuite : créer les webhooks + tunnel + test E2E.
 
 ---
 
-*Document mis à jour le 2026-05-18 après audit du codebase*
+*Document mis à jour le 2026-05-18 après audit complet (code + Stripe CLI + Gmail)*
 *URL de booking du Go-Live Demo : https://cal.com/team/violet/violet-go-live-demo*
