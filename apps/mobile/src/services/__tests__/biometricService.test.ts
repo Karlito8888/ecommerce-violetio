@@ -15,19 +15,8 @@ vi.mock("expo-secure-store", () => ({
   deleteItemAsync: vi.fn(),
 }));
 
-// Mock @ecommerce/shared
-vi.mock("@ecommerce/shared", () => ({
-  createSupabaseClient: vi.fn(() => ({
-    auth: {
-      setSession: vi.fn().mockResolvedValue({ data: { session: {} }, error: null }),
-    },
-  })),
-  setBiometricPreference: vi.fn().mockResolvedValue({ error: null }),
-}));
-
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
-import { setBiometricPreference, createSupabaseClient } from "@ecommerce/shared";
 import {
   checkBiometricAvailability,
   authenticateWithBiometric,
@@ -39,6 +28,9 @@ import {
   attemptBiometricLogin,
   resetBiometricFailCount,
 } from "../biometricService";
+
+// Mock function matching new biometricService signature (Convex mutation)
+const mockSetBiometric = vi.fn().mockResolvedValue(null);
 
 describe("checkBiometricAvailability", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -176,6 +168,7 @@ describe("enrollBiometric", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetBiometricFailCount();
+    mockSetBiometric.mockResolvedValue(null);
   });
 
   it("completes enrollment successfully", async () => {
@@ -184,11 +177,11 @@ describe("enrollBiometric", () => {
     vi.mocked(LocalAuthentication.supportedAuthenticationTypesAsync).mockResolvedValue([1]);
     vi.mocked(LocalAuthentication.authenticateAsync).mockResolvedValue({ success: true });
 
-    const result = await enrollBiometric("user-123", "user@test.com", "refresh-token");
+    const result = await enrollBiometric(mockSetBiometric, "user@test.com", "refresh-token");
 
     expect(result.success).toBe(true);
     expect(SecureStore.setItemAsync).toHaveBeenCalled();
-    expect(setBiometricPreference).toHaveBeenCalledWith("user-123", true);
+    expect(mockSetBiometric).toHaveBeenCalledWith({ enabled: true });
   });
 
   it("fails when biometric not available", async () => {
@@ -196,7 +189,7 @@ describe("enrollBiometric", () => {
     vi.mocked(LocalAuthentication.isEnrolledAsync).mockResolvedValue(false);
     vi.mocked(LocalAuthentication.supportedAuthenticationTypesAsync).mockResolvedValue([]);
 
-    const result = await enrollBiometric("user-123", "user@test.com", "refresh-token");
+    const result = await enrollBiometric(mockSetBiometric, "user@test.com", "refresh-token");
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("BIOMETRIC.NOT_AVAILABLE");
@@ -207,7 +200,7 @@ describe("enrollBiometric", () => {
     vi.mocked(LocalAuthentication.isEnrolledAsync).mockResolvedValue(false);
     vi.mocked(LocalAuthentication.supportedAuthenticationTypesAsync).mockResolvedValue([]);
 
-    const result = await enrollBiometric("user-123", "user@test.com", "refresh-token");
+    const result = await enrollBiometric(mockSetBiometric, "user@test.com", "refresh-token");
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("BIOMETRIC.NOT_ENROLLED");
@@ -222,20 +215,20 @@ describe("enrollBiometric", () => {
       error: "user_cancel",
     });
 
-    const result = await enrollBiometric("user-123", "user@test.com", "refresh-token");
+    const result = await enrollBiometric(mockSetBiometric, "user@test.com", "refresh-token");
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("BIOMETRIC.USER_CANCEL");
   });
 
-  it("cleans up credentials if Supabase preference update fails", async () => {
+  it("cleans up credentials if preference update fails", async () => {
     vi.mocked(LocalAuthentication.hasHardwareAsync).mockResolvedValue(true);
     vi.mocked(LocalAuthentication.isEnrolledAsync).mockResolvedValue(true);
     vi.mocked(LocalAuthentication.supportedAuthenticationTypesAsync).mockResolvedValue([1]);
     vi.mocked(LocalAuthentication.authenticateAsync).mockResolvedValue({ success: true });
-    vi.mocked(setBiometricPreference).mockResolvedValueOnce({ error: "DB error" });
+    mockSetBiometric.mockRejectedValueOnce(new Error("DB error"));
 
-    const result = await enrollBiometric("user-123", "user@test.com", "refresh-token");
+    const result = await enrollBiometric(mockSetBiometric, "user@test.com", "refresh-token");
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("BIOMETRIC.STORAGE_ERROR");
@@ -247,10 +240,10 @@ describe("disableBiometric", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("clears credentials and updates preference", async () => {
-    await disableBiometric("user-123");
+    await disableBiometric(mockSetBiometric);
 
     expect(SecureStore.deleteItemAsync).toHaveBeenCalled();
-    expect(setBiometricPreference).toHaveBeenCalledWith("user-123", false);
+    expect(mockSetBiometric).toHaveBeenCalledWith({ enabled: false });
   });
 });
 
@@ -311,36 +304,5 @@ describe("attemptBiometricLogin — 3-strike fallback", () => {
     vi.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
     const failResult = await attemptBiometricLogin();
     expect(failResult.attemptsRemaining).toBe(2);
-  });
-
-  it("falls back to password on session restoration failure after 3 tries", async () => {
-    // Credentials retrieved ok, but session restore fails
-    vi.mocked(SecureStore.getItemAsync)
-      .mockResolvedValueOnce("expired-token")
-      .mockResolvedValueOnce("user@test.com");
-
-    const mockClient = {
-      auth: {
-        setSession: vi.fn().mockResolvedValue({
-          data: null,
-          error: { message: "Token expired" },
-        }),
-      },
-    };
-    vi.mocked(createSupabaseClient).mockReturnValue(mockClient as never);
-
-    // 3 consecutive session failures
-    await attemptBiometricLogin(); // strike 1
-    vi.mocked(SecureStore.getItemAsync)
-      .mockResolvedValueOnce("expired-token")
-      .mockResolvedValueOnce("user@test.com");
-    await attemptBiometricLogin(); // strike 2
-    vi.mocked(SecureStore.getItemAsync)
-      .mockResolvedValueOnce("expired-token")
-      .mockResolvedValueOnce("user@test.com");
-    const result3 = await attemptBiometricLogin(); // strike 3
-
-    expect(result3.fallbackToPassword).toBe(true);
-    expect(result3.error).toBe("BIOMETRIC.SESSION_EXPIRED");
   });
 });

@@ -9,7 +9,7 @@
  * All use the service-role Supabase client to bypass RLS (server-side only).
  *
  * @see apps/web/src/server/cartActions.ts — core cart CRUD
- * @see packages/shared/src/hooks/useCartSync.ts — Realtime subscription hook
+ * @see packages/shared/src/hooks/useCart.ts — cart query hooks (Convex queries are reactive by default)
  */
 
 import { createServerFn } from "@tanstack/react-start";

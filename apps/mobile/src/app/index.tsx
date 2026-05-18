@@ -118,9 +118,9 @@ export default function HomeScreen() {
 }
 
 function RecentlyViewedSection() {
-  const { user, isAnonymous } = useAuth();
+  const { userId: authUserId, isAuthenticated } = useAuth();
   const theme = useTheme();
-  const userId = user && !isAnonymous ? user.id : undefined;
+  const userId = isAuthenticated ? (authUserId ?? undefined) : undefined;
   const { data: productIds, isLoading } = useRecentlyViewed({ userId });
   const router = useRouter();
 

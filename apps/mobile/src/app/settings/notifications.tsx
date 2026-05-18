@@ -84,8 +84,8 @@ const PREFERENCE_CONFIG: Array<{
 ];
 
 export default function NotificationPreferencesScreen() {
-  const { user } = useAuth();
-  const userId = user?.id;
+  const { userId: authUserId } = useAuth();
+  const userId = authUserId ?? undefined;
 
   const { data: preferences, isLoading, isError, refetch } = useNotificationPreferences(userId);
   const updatePreference = useUpdateNotificationPreference(userId);

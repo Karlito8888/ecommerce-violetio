@@ -7,9 +7,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { useQueryClient } from "@tanstack/react-query";
-import { useCartSync } from "@ecommerce/shared";
 import type { CartHealthStatus } from "@ecommerce/shared";
 import { getUserCartFn, mergeAnonymousCartFn, claimCartFn } from "../server/cartSync";
 import { clearCartCookieFn } from "../server/checkout";
@@ -34,9 +31,8 @@ import { clearCartCookieFn } from "../server/checkout";
  * - **Drawer state**: Lives exclusively here. No component-local state for the
  *   drawer — any component (ProductDetail, Header badge) can call `openDrawer()`.
  *
- * - **Cross-device sync (Story 4.6)**: `useCartSync` subscribes to Supabase
- *   Realtime when `userId` is set. Cart merge runs when `userId` transitions
- *   from null → non-null (anonymous → authenticated).
+ * - **Cross-device sync**: Convex queries are reactive by default — no manual Realtime needed.
+ *   Cart merge runs when `userId` transitions from null → non-null (anonymous → authenticated).
  *
  * ## CartProvider mounting
  * `<CartDrawer />` is rendered INSIDE `CartProvider` so it can access context.
@@ -92,9 +88,7 @@ interface CartProviderProps {
   initialCartId?: string | null;
   /** Initial violetCartId from server-read HttpOnly cookie. */
   initialVioletCartId?: string | null;
-  /** Supabase browser client for Realtime subscription (Story 4.6) */
-  supabase: SupabaseClient;
-  /** Authenticated (non-anonymous) user ID for Realtime subscription (Story 4.6). Null = no sync. */
+  /** Authenticated user ID for cart merge on sign-in. Null = no merge. */
   userId?: string | null;
 }
 
@@ -109,7 +103,6 @@ export function CartProvider({
   children,
   initialCartId = null,
   initialVioletCartId = null,
-  supabase,
   userId = null,
 }: CartProviderProps) {
   const [cartId, setCartId] = useState<string | null>(initialCartId);
@@ -146,30 +139,8 @@ export function CartProvider({
     await clearCartCookieFn();
   }, []);
 
-  const queryClient = useQueryClient();
-
-  // Invalidate all cart queries when another device modifies the cart
-  const handleCartUpdated = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["cart"] });
-  }, [queryClient]);
-
-  // Called when another device changes the cart's violet_cart_id (e.g., merge)
-  const handleRemoteCartChange = useCallback(
-    (newVioletCartId: string) => {
-      setVioletCartId(newVioletCartId);
-      queryClient.invalidateQueries({ queryKey: ["cart"] });
-    },
-    [queryClient],
-  );
-
-  // Subscribe to Realtime cart changes for authenticated users (Story 4.6)
-  useCartSync({
-    supabase,
-    userId,
-    currentVioletCartId: violetCartId,
-    onCartUpdated: handleCartUpdated,
-    onRemoteCartChange: handleRemoteCartChange,
-  });
+  // Convex provides reactivity by default — no manual Realtime subscription needed.
+  // Cart queries/mutations will update reactively when the data changes.
 
   // ── Cart merge on anonymous → authenticated transition (Story 4.6) ──
   // When userId changes from null to a value and we have an anonymous cart,

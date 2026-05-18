@@ -1,48 +1,58 @@
+// Mobile tracking hook — migrated from Supabase to Convex mutations (Phase 6).
+//
+// Uses Convex useMutation(api.tracking.mutations.recordEvent) instead of
+// the web backend /api/track-event endpoint (which routed to Supabase).
+//
+// Key difference: The Convex mutation accepts userId directly (Convex userId or localId).
+// No JWT extraction server-side needed — the mutation is public (no auth required).
+
 import { useCallback } from "react";
+import { useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
+
+import { useAuth } from "@/context/AuthContext";
 import { useTracking } from "@ecommerce/shared";
 import type { TrackingEvent, TrackingEventType } from "@ecommerce/shared";
-import { useAuth } from "@/context/AuthContext";
-import { apiPost } from "@/server/apiClient";
 
 /**
- * Mobile tracking hook — sends events to the web backend `/api/track-event`.
- * Returns `trackEvent` (fire-and-forget, deduped, authenticated-only).
+ * Mobile tracking hook — sends events to Convex.
+ * Returns `trackEvent` (fire-and-forget, supports authenticated + anonymous).
  *
  * ## Security
- * The web backend validates the JWT from the Authorization header and
- * extracts `user.id` server-side — the client never supplies a userId.
+ * The Convex mutation recordEvent is public — it accepts any userId string.
+ * This is fine because tracking events are non-sensitive analytics data.
  *
  * ## Error handling
- * Fetch errors are logged with `console.warn` for observability.
- * The `useTracking` hook's try/catch still prevents tracking failures
- * from breaking UX.
+ * Fetch errors are caught silently. Tracking failures never break UX.
  */
 export function useMobileTracking() {
-  const { user, isAnonymous } = useAuth();
-  const userId = user && !isAnonymous ? user.id : undefined;
+  const { userId: authUserId, isAuthenticated, localId } = useAuth();
+  const recordEvent = useMutation(api.tracking.mutations.recordEvent);
 
-  const sendEvent = useCallback(async (_userId: string, event: TrackingEvent) => {
-    try {
-      await apiPost("/api/track-event", {
-        event_type: event.event_type,
-        payload: event.payload,
-      });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn("[tracking] Failed to send event:", err);
-    }
-  }, []);
+  // Use Convex userId if authenticated, otherwise use localId (anonymous)
+  const userId = isAuthenticated ? (authUserId ?? localId) : localId;
 
-  return useTracking({ userId, sendEvent });
+  const sendEvent = useCallback(
+    async (_userId: string, event: TrackingEvent) => {
+      try {
+        await recordEvent({
+          userId,
+          eventType: event.event_type,
+          payload: event.payload,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[tracking] Failed to send event:", err);
+      }
+    },
+    [userId, recordEvent],
+  );
+
+  return useTracking({ userId: userId ?? undefined, sendEvent });
 }
 
 /**
  * Convenience: track a product view. Call from `useFocusEffect` in product detail.
- *
- * M1 note: only `product_id` is sent — `offer_id` and `category` are not
- * available from route params alone. These optional fields will be populated
- * by downstream consumers (Stories 6.3, 6.5) at query time by JOINing
- * `user_events` with the product catalog.
  */
 export function useTrackProductView(productId: string | undefined) {
   const { trackEvent } = useMobileTracking();

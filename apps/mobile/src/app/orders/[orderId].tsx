@@ -1,35 +1,11 @@
-/**
- * Mobile Order Detail Screen — /orders/:orderId
- *
- * Displays the full order with per-merchant bag tracking and Realtime updates.
- * This is the mobile equivalent of the web's /account/orders/$orderId page.
- *
- * ## Data loading
- * - Uses TanStack Query with `orderDetailQueryOptions` (shared with web)
- * - Fetches via `fetchOrderDetailMobile()` → GET /api/orders/:orderId?source=supabase
- * - Realtime subscription via `useOrderRealtime` (shared hook)
- *
- * ## Realtime updates
- * When a webhook (BAG_SHIPPED, ORDER_COMPLETED, BAG_REFUNDED, etc.) updates the
- * Supabase DB, the Realtime subscription invalidates the TanStack Query cache.
- * The user sees live status changes (SHIPPED → DELIVERED, tracking numbers, refunds)
- * without manually refreshing.
- *
- * ## Data source
- * Supabase (NOT Violet API). Same as the web's order detail page.
- * This ensures consistency with webhook-persisted data and enables RLS-protected access.
- *
- * ## Displayed info
- * - Order header: ID, date, overall status
- * - Per-merchant bags: status, items, tracking, refund notices
- * - Pricing breakdown: subtotal, shipping, tax, total
- *
- * @see apps/web/src/routes/account/orders/$orderId.tsx — web equivalent
- * @see packages/shared/src/hooks/useOrders.ts — shared query options + Realtime hook
- * @see apps/mobile/src/server/getOrders.ts — mobile fetch functions
- */
+// apps/mobile/src/app/orders/[orderId].tsx
+//
+// Mobile Order Detail Screen — migrated from Supabase to Convex queries (Phase 6).
+//
+// Uses Convex useQuery for reactive order detail (no Realtime subscription needed).
+// The orderId param is a Convex document ID (Id<"orders">).
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ScrollView,
   Pressable,
@@ -41,47 +17,59 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, router } from "expo-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "convex/react";
 import {
-  createSupabaseClient,
-  useOrderRealtime,
   BAG_STATUS_LABELS,
   ORDER_STATUS_LABELS,
   formatPrice,
   formatDate,
   getBagStatusSummary,
 } from "@ecommerce/shared";
-import type { OrderBagWithItems } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import { colors } from "@ecommerce/ui";
-import { useAuth } from "@/context/AuthContext";
-import { fetchOrderDetailMobile } from "@/server/getOrders";
-import { orderDetailQueryOptions } from "@ecommerce/shared";
+import { api } from "#convex/_generated/api";
+import type { Id } from "#convex/_generated/dataModel";
 
-const supabase = createSupabaseClient();
+interface ConvexOrderBag {
+  _id: string;
+  merchantName: string;
+  status: string;
+  total: number;
+  shippingMethod?: string;
+  trackingUrl?: string;
+  trackingNumber?: string;
+  carrier?: string;
+  items: {
+    _id: string;
+    name: string;
+    quantity: number;
+    price: number;
+    linePrice: number;
+    thumbnail?: string;
+  }[];
+  refunds: { _id: string; amount: number; reason?: string; status: string }[];
+}
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-/** Renders tracking info for a SHIPPED bag. */
-function TrackingInfo({ bag }: { bag: OrderBagWithItems }) {
-  if (bag.status !== "SHIPPED" || !bag.tracking_number) return null;
+function TrackingInfo({ bag }: { bag: ConvexOrderBag }) {
+  if (bag.status !== "SHIPPED" || !bag.trackingNumber) return null;
 
   return (
     <View style={styles.trackingRow}>
-      {bag.carrier && (
+      {bag.carrier ? (
         <ThemedText type="small" themeColor="textSecondary">
-          {bag.carrier} — #{bag.tracking_number}
+          {bag.carrier} — #{bag.trackingNumber}
+        </ThemedText>
+      ) : (
+        <ThemedText type="small" themeColor="textSecondary">
+          Tracking #{bag.trackingNumber}
         </ThemedText>
       )}
-      {!bag.carrier && (
-        <ThemedText type="small" themeColor="textSecondary">
-          Tracking #{bag.tracking_number}
-        </ThemedText>
-      )}
-      {bag.tracking_url ? (
-        <Pressable onPress={() => void Linking.openURL(bag.tracking_url!).catch(() => {})}>
+      {bag.trackingUrl ? (
+        <Pressable onPress={() => void Linking.openURL(bag.trackingUrl!).catch(() => {})}>
           <ThemedText type="small" style={styles.trackingLink}>
             Track →
           </ThemedText>
@@ -91,11 +79,10 @@ function TrackingInfo({ bag }: { bag: OrderBagWithItems }) {
   );
 }
 
-/** Renders refund info for REFUNDED/PARTIALLY_REFUNDED bags. */
-function RefundNotice({ bag, currency }: { bag: OrderBagWithItems; currency: string }) {
-  if (bag.order_refunds.length === 0) return null;
-  const totalRefunded = bag.order_refunds.reduce((sum, r) => sum + r.amount, 0);
-  const firstReason = bag.order_refunds.find((r) => r.reason)?.reason;
+function RefundNotice({ bag, currency }: { bag: ConvexOrderBag; currency: string }) {
+  if (bag.refunds.length === 0) return null;
+  const totalRefunded = bag.refunds.reduce((sum, r) => sum + r.amount, 0);
+  const firstReason = bag.refunds.find((r) => r.reason)?.reason;
 
   return (
     <View style={styles.refundRow}>
@@ -107,8 +94,7 @@ function RefundNotice({ bag, currency }: { bag: OrderBagWithItems; currency: str
   );
 }
 
-/** Renders a single merchant bag card. */
-function BagCard({ bag, currency }: { bag: OrderBagWithItems; currency: string }) {
+function BagCard({ bag, currency }: { bag: ConvexOrderBag; currency: string }) {
   const statusLabel = BAG_STATUS_LABELS[bag.status] ?? bag.status;
   const statusColor =
     bag.status === "COMPLETED"
@@ -123,10 +109,9 @@ function BagCard({ bag, currency }: { bag: OrderBagWithItems; currency: string }
 
   return (
     <View style={styles.bagCard}>
-      {/* Header */}
       <View style={styles.bagHeader}>
         <ThemedText type="default" style={styles.merchantName}>
-          {bag.merchant_name || "Merchant"}
+          {bag.merchantName || "Merchant"}
         </ThemedText>
         <View style={[styles.bagStatusBadge, { backgroundColor: statusColor }]}>
           <ThemedText type="small" style={styles.bagStatusText}>
@@ -135,9 +120,8 @@ function BagCard({ bag, currency }: { bag: OrderBagWithItems; currency: string }
         </View>
       </View>
 
-      {/* Items */}
-      {bag.order_items.map((item) => (
-        <View key={item.id} style={styles.itemRow}>
+      {bag.items.map((item) => (
+        <View key={item._id} style={styles.itemRow}>
           {item.thumbnail ? (
             <Image
               source={{ uri: item.thumbnail }}
@@ -156,29 +140,25 @@ function BagCard({ bag, currency }: { bag: OrderBagWithItems; currency: string }
               </ThemedText>
             )}
           </View>
-          <ThemedText type="default">{formatPrice(item.line_price, currency)}</ThemedText>
+          <ThemedText type="default">{formatPrice(item.linePrice, currency)}</ThemedText>
         </View>
       ))}
 
-      {/* Tracking */}
       <TrackingInfo bag={bag} />
-
-      {/* Refund */}
       <RefundNotice bag={bag} currency={currency} />
 
-      {/* Bag total */}
       <View style={styles.bagFooter}>
         <ThemedText type="small" themeColor="textSecondary">
-          {bag.shipping_method ? `Via ${bag.shipping_method}` : ""}
+          {bag.shippingMethod ? `Via ${bag.shippingMethod}` : ""}
         </ThemedText>
         <View style={styles.bagTotalContainer}>
           <ThemedText type="default" style={styles.bagTotal}>
             {formatPrice(bag.total, currency)}
           </ThemedText>
-          {bag.order_refunds.length > 0 && (
+          {bag.refunds.length > 0 && (
             <ThemedText type="small" themeColor="textSecondary">
               {` — Refund: ${formatPrice(
-                bag.order_refunds.reduce((s, r) => s + r.amount, 0),
+                bag.refunds.reduce((s, r) => s + r.amount, 0),
                 currency,
               )}`}
             </ThemedText>
@@ -193,23 +173,20 @@ function BagCard({ bag, currency }: { bag: OrderBagWithItems; currency: string }
 
 export default function OrderDetailScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
-  const { user, isAnonymous } = useAuth();
-  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Realtime subscription for live order status updates
-  useOrderRealtime(user?.id && !isAnonymous ? user.id : null, queryClient, supabase);
+  // Convex query — reactive by default (no Realtime subscription needed)
+  const order = useQuery(api.orders.queries.getOrderDetail, {
+    orderId: orderId as Id<"orders">,
+  });
 
-  const {
-    data: order,
-    isLoading,
-    isError,
-    refetch,
-    isRefetching,
-  } = useQuery(orderDetailQueryOptions(orderId ?? "", (id) => fetchOrderDetailMobile(id)));
+  const isLoading = order === undefined;
+  const isError = order instanceof Error;
 
   const onRefresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 500);
+  }, []);
 
   if (isLoading) {
     return (
@@ -229,37 +206,33 @@ export default function OrderDetailScreen() {
           <ThemedText themeColor="textSecondary" style={styles.errorText}>
             We couldn&apos;t load this order. Please try again.
           </ThemedText>
-          <Pressable style={styles.retryButton} onPress={() => void refetch()}>
-            <ThemedText type="default" style={styles.retryText}>
-              Retry
-            </ThemedText>
-          </Pressable>
         </View>
       </ThemedView>
     );
   }
 
   const overallStatusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
-  const hasMultipleBags = order.order_bags.length > 1;
-  const bagStatuses = order.order_bags.map((b) => b.status);
+  const bags = order.bags ?? [];
+  const hasMultipleBags = bags.length > 1;
+  const bagStatuses = bags.map((b) => b.status);
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Back navigation */}
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <ThemedText type="default">← Back to Orders</ThemedText>
         </Pressable>
 
-        {/* Order header */}
         <View style={styles.header}>
           <View>
-            <ThemedText type="subtitle">Order #{order.id.slice(0, 8).toUpperCase()}</ThemedText>
+            <ThemedText type="subtitle">
+              Order #{order.violetOrderId.slice(0, 8).toUpperCase()}
+            </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {formatDate(order.created_at, "long")}
+              {formatDate(new Date(order._creationTime).toISOString(), "long")}
             </ThemedText>
           </View>
           <ThemedText type="default" style={styles.overallStatus}>
@@ -267,7 +240,6 @@ export default function OrderDetailScreen() {
           </ThemedText>
         </View>
 
-        {/* Mixed bag state summary */}
         {hasMultipleBags && new Set(bagStatuses).size > 1 && (
           <View style={styles.bagSummary}>
             <ThemedText type="small" themeColor="textSecondary">
@@ -276,12 +248,10 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* Per-merchant bags */}
-        {order.order_bags.map((bag) => (
-          <BagCard key={bag.id} bag={bag} currency={order.currency} />
+        {bags.map((bag: ConvexOrderBag) => (
+          <BagCard key={bag._id} bag={bag} currency={order.currency} />
         ))}
 
-        {/* Pricing breakdown */}
         <View style={styles.pricing}>
           <ThemedText type="default" style={styles.sectionTitle}>
             Order Summary
@@ -293,12 +263,12 @@ export default function OrderDetailScreen() {
           <View style={styles.pricingRow}>
             <ThemedText type="default">Shipping</ThemedText>
             <ThemedText type="default">
-              {formatPrice(order.shipping_total, order.currency)}
+              {formatPrice(order.shippingTotal, order.currency)}
             </ThemedText>
           </View>
           <View style={styles.pricingRow}>
             <ThemedText type="default">Tax</ThemedText>
-            <ThemedText type="default">{formatPrice(order.tax_total, order.currency)}</ThemedText>
+            <ThemedText type="default">{formatPrice(order.taxTotal, order.currency)}</ThemedText>
           </View>
           <View style={[styles.pricingRow, styles.pricingRowTotal]}>
             <ThemedText type="subtitle">Total</ThemedText>
@@ -311,40 +281,24 @@ export default function OrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
-  },
-  loader: {
-    marginTop: Spacing.six,
-  },
-  backButton: {
-    paddingVertical: Spacing.two,
-    marginBottom: Spacing.three,
-  },
+  container: { flex: 1 },
+  scrollContent: { padding: Spacing.four, paddingBottom: Spacing.six },
+  loader: { marginTop: Spacing.six },
+  backButton: { paddingVertical: Spacing.two, marginBottom: Spacing.three },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: Spacing.four,
   },
-  overallStatus: {
-    fontWeight: "600",
-    color: colors.gold,
-  },
+  overallStatus: { fontWeight: "600", color: colors.gold },
   bagSummary: {
     backgroundColor: colors.linen,
     padding: Spacing.three,
     borderRadius: 8,
     marginBottom: Spacing.three,
   },
-  sectionTitle: {
-    fontWeight: "600",
-    marginBottom: Spacing.two,
-  },
+  sectionTitle: { fontWeight: "600", marginBottom: Spacing.two },
   bagCard: {
     backgroundColor: colors.linen,
     borderRadius: 12,
@@ -357,30 +311,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: Spacing.two,
   },
-  merchantName: {
-    fontWeight: "600",
-    flex: 1,
-  },
-  bagStatusBadge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-    borderRadius: 6,
-  },
-  bagStatusText: {
-    color: colors.ivory,
-    fontSize: 11,
-    fontWeight: "600",
-  },
+  merchantName: { fontWeight: "600", flex: 1 },
+  bagStatusBadge: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one, borderRadius: 6 },
+  bagStatusText: { color: colors.ivory, fontSize: 11, fontWeight: "600" },
   itemRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: Spacing.one,
   },
-  itemInfo: {
-    flex: 1,
-    marginRight: Spacing.two,
-  },
+  itemInfo: { flex: 1, marginRight: Spacing.two },
   trackingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -390,10 +330,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.stone,
   },
-  trackingLink: {
-    color: colors.gold,
-    fontWeight: "600",
-  },
+  trackingLink: { color: colors.gold, fontWeight: "600" },
   refundRow: {
     marginTop: Spacing.two,
     paddingTop: Spacing.two,
@@ -409,24 +346,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.stone,
   },
-  itemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    backgroundColor: colors.stone,
-  },
-  itemImagePlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    backgroundColor: colors.stone,
-  },
-  bagTotalContainer: {
-    alignItems: "flex-end",
-  },
-  bagTotal: {
-    fontWeight: "600",
-  },
+  itemImage: { width: 40, height: 40, borderRadius: 6, backgroundColor: colors.stone },
+  itemImagePlaceholder: { width: 40, height: 40, borderRadius: 6, backgroundColor: colors.stone },
+  bagTotalContainer: { alignItems: "flex-end" },
+  bagTotal: { fontWeight: "600" },
   pricing: {
     backgroundColor: colors.linen,
     borderRadius: 12,
@@ -444,22 +367,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.one,
     paddingTop: Spacing.two,
   },
-  errorContainer: {
-    marginTop: Spacing.six,
-    alignItems: "center",
-  },
-  errorText: {
-    textAlign: "center",
-    marginBottom: Spacing.three,
-  },
-  retryButton: {
-    backgroundColor: colors.gold,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: colors.ivory,
-    fontWeight: "600",
-  },
+  errorContainer: { marginTop: Spacing.six, alignItems: "center" },
+  errorText: { textAlign: "center", marginBottom: Spacing.three },
 });

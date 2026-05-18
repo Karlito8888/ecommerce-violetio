@@ -1,3 +1,11 @@
+// Contact form screen — migrated from Supabase to Convex mutations (Phase 6).
+//
+// Uses Convex useMutation(api.support.mutations.insertSupportInquiry) instead of
+// createSupabaseClient + insertSupportInquiry from @ecommerce/shared.
+//
+// Note: The Supabase Edge Function call for sending emails is removed.
+// Email sending should be handled by a Convex action (Phase 7+) or cron.
+
 import { useState } from "react";
 import {
   ScrollView,
@@ -10,14 +18,17 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { createSupabaseClient, insertSupportInquiry, SUPPORT_SUBJECTS } from "@ecommerce/shared";
+import { useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
+import { SUPPORT_SUBJECTS } from "@ecommerce/shared";
 import type { SupportSubject } from "@ecommerce/shared";
+
 import { ThemedText } from "@/components/themed-text";
 import { Colors, Spacing, MaxContentWidth } from "@/constants/theme";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Client-side rate limiting (anon RLS only allows INSERT, not SELECT for count queries)
+// Client-side rate limiting
 const recentSubmissions: number[] = [];
 const RATE_LIMIT = 3;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -46,6 +57,8 @@ export default function ContactScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  const insertInquiry = useMutation(api.support.mutations.insertSupportInquiry);
+
   function validate(): FormErrors {
     const errs: FormErrors = {};
     if (!name.trim()) errs.name = "Name is required";
@@ -71,8 +84,7 @@ export default function ContactScreen() {
     setSubmitting(true);
 
     try {
-      const client = createSupabaseClient();
-      const result = await insertSupportInquiry(client, {
+      const result = await insertInquiry({
         name: name.trim(),
         email: email.trim(),
         subject,
@@ -86,21 +98,9 @@ export default function ContactScreen() {
         return;
       }
 
-      // Fire-and-forget: send emails via Edge Function
-      try {
-        await client.functions.invoke("send-support-email", {
-          body: {
-            inquiry_id: result.id,
-            name: name.trim(),
-            email: email.trim(),
-            subject,
-            message,
-            order_id: orderId.trim() || null,
-          },
-        });
-      } catch {
-        // Email failure should not block the submission
-      }
+      // TODO: Send confirmation email via Convex action (Phase 7+).
+      // Previously: client.functions.invoke("send-support-email", ...)
+      // This will be replaced by a Convex action that calls Resend.
 
       recentSubmissions.push(Date.now());
       setSubmitted(true);

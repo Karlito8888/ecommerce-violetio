@@ -1,3 +1,14 @@
+// apps/mobile/src/app/auth/verify.tsx
+//
+// Email OTP verification screen migrated from Supabase to Convex Auth (Phase 6).
+//
+// Flow:
+//   1. Signup page calls signIn("password", { flow: "signUp" }) → sends OTP via Resend
+//   2. This page collects the 6-digit code
+//   3. signIn("password", { flow: "signUp", code }) verifies the code
+//   4. migrateAnonymousData(localId) transfers wishlist/events
+//   5. Navigate to home
+
 import React, { useState } from "react";
 import {
   View,
@@ -10,19 +21,16 @@ import {
   ScrollView,
 } from "react-native";
 import { router } from "expo-router";
-import {
-  verifyEmailOtp,
-  setAccountPassword,
-  createSupabaseClient,
-  mapAuthError,
-} from "@ecommerce/shared";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { colors, typography, spacing } from "@ecommerce/ui";
 import { getPendingSignup, clearPendingSignup } from "@/utils/pendingSignup";
+import { mapAuthError } from "@ecommerce/shared";
 
 export default function VerifyScreen() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const { signIn } = useAuthActions();
 
   const { email, password } = getPendingSignup();
 
@@ -52,42 +60,23 @@ export default function VerifyScreen() {
 
     setIsLoading(true);
     try {
-      const supabase = createSupabaseClient();
+      // Step 1: Verify OTP and complete sign-up
+      await signIn("password", {
+        email,
+        password,
+        flow: "signUp",
+        code: otp,
+      });
 
-      // Step 2: Verify OTP
-      const { error: verifyError } = await verifyEmailOtp(email, otp, supabase);
-      if (verifyError) {
-        setError(mapAuthError(verifyError.message));
-        return;
-      }
+      // Step 2: Anonymous data migration is handled centrally by AuthContext.tsx
+      // when it detects the isAuthenticated transition. No need to do it here.
+      // This avoids a double-migration (verify.tsx + AuthContext both firing).
 
-      // Step 3: Set password
-      const { error: pwError } = await setAccountPassword(password, supabase);
-      if (pwError) {
-        setError(mapAuthError(pwError.message));
-        return;
-      }
-
-      // Step 4: Create user_profiles row
-      // Note: user_profiles row is auto-created by DB trigger (on_auth_user_created/on_auth_user_updated).
-      // This upsert is a safety net in case the trigger hasn't fired yet due to race conditions.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { error: profileError } = await supabase
-          .from("user_profiles")
-          .upsert({ user_id: user.id });
-        if (profileError) {
-          // eslint-disable-next-line no-console
-          console.error("[auth] Failed to create user profile:", profileError.message);
-        }
-      }
-
+      // Step 3: Clean up and navigate
       clearPendingSignup();
       router.replace("/");
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (err) {
+      setError(mapAuthError(err, "verify"));
     } finally {
       setIsLoading(false);
     }
@@ -133,7 +122,7 @@ export default function VerifyScreen() {
         </Pressable>
 
         <Pressable style={styles.backLink} onPress={() => router.back()}>
-          <Text style={styles.backLinkText}>Didn't receive a code? Try again</Text>
+          <Text style={styles.backLinkText}>Didn&apos;t receive a code? Try again</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -141,19 +130,12 @@ export default function VerifyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.ivory,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: spacing.px[8],
-  },
+  container: { flex: 1, backgroundColor: colors.ivory },
+  scroll: { flexGrow: 1, justifyContent: "center", padding: spacing.px[8] },
   heading: {
     fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
     fontSize: typography.typeScale.h1.size,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RN fontWeight type mismatch with numeric literal
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fontWeight: typography.typeScale.h1.weight as any,
     color: colors.ink,
     textAlign: "center",
@@ -173,13 +155,8 @@ const styles = StyleSheet.create({
     padding: spacing.px[3],
     marginBottom: spacing.px[5],
   },
-  globalErrorText: {
-    color: colors.error,
-    fontSize: typography.typeScale.bodySmall.size,
-  },
-  field: {
-    marginBottom: spacing.px[5],
-  },
+  globalErrorText: { color: colors.error, fontSize: typography.typeScale.bodySmall.size },
+  field: { marginBottom: spacing.px[5] },
   label: {
     fontSize: typography.typeScale.bodySmall.size,
     fontWeight: "500",
@@ -206,18 +183,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: spacing.px[2],
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.ivory,
-    fontSize: typography.typeScale.body.size,
-    fontWeight: "600",
-  },
-  backLink: {
-    marginTop: spacing.px[6],
-    alignItems: "center",
-  },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: colors.ivory, fontSize: typography.typeScale.body.size, fontWeight: "600" },
+  backLink: { marginTop: spacing.px[6], alignItems: "center" },
   backLinkText: {
     color: colors.gold,
     fontSize: typography.typeScale.bodySmall.size,

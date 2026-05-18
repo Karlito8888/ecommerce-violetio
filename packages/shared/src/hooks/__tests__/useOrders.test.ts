@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { QueryClient } from "@tanstack/react-query";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  ordersQueryOptions,
-  orderDetailQueryOptions,
-  createOrdersRealtimeChannel,
-} from "../useOrders.js";
+import { describe, it, expect, vi } from "vitest";
+import { ordersQueryOptions, orderDetailQueryOptions } from "../useOrders.js";
 import { queryKeys } from "../../utils/constants.js";
 
 // ─── ordersQueryOptions ───────────────────────────────────────────────────────
@@ -78,138 +72,12 @@ describe("orderDetailQueryOptions", () => {
     expect(result).toEqual(mockOrder);
   });
 
-  it("handles null response (order not found / RLS blocked)", async () => {
+  it("handles null response (order not found)", async () => {
     const fetchFn = vi.fn().mockResolvedValue(null);
     const options = orderDetailQueryOptions("nonexistent-order", fetchFn);
 
     const result = await options.queryFn!({} as never);
 
     expect(result).toBeNull();
-  });
-});
-
-// ─── createOrdersRealtimeChannel ─────────────────────────────────────────────
-// Tests call the production function directly (not a replica of its logic).
-
-describe("createOrdersRealtimeChannel", () => {
-  let mockChannel: {
-    on: ReturnType<typeof vi.fn>;
-    subscribe: ReturnType<typeof vi.fn>;
-    unsubscribe: ReturnType<typeof vi.fn>;
-  };
-  let mockSupabase: Partial<SupabaseClient>;
-  let mockQueryClient: Partial<QueryClient>;
-
-  beforeEach(() => {
-    mockChannel = {
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn().mockReturnThis(),
-      unsubscribe: vi.fn(),
-    };
-    mockSupabase = {
-      channel: vi.fn().mockReturnValue(mockChannel),
-    };
-    mockQueryClient = {
-      invalidateQueries: vi.fn(),
-    };
-  });
-
-  it("creates channel with correct name for authenticated user", () => {
-    createOrdersRealtimeChannel(
-      mockSupabase as SupabaseClient,
-      "user-123",
-      mockQueryClient as QueryClient,
-    );
-
-    expect(mockSupabase.channel).toHaveBeenCalledWith("orders:user_user-123");
-  });
-
-  it("subscribes to orders table UPDATE with user_id filter", () => {
-    createOrdersRealtimeChannel(
-      mockSupabase as SupabaseClient,
-      "user-123",
-      mockQueryClient as QueryClient,
-    );
-
-    expect(mockChannel.on).toHaveBeenCalledWith(
-      "postgres_changes",
-      expect.objectContaining({
-        event: "UPDATE",
-        table: "orders",
-        filter: "user_id=eq.user-123",
-      }),
-      expect.any(Function),
-    );
-  });
-
-  it("subscribes to order_bags table UPDATE (no filter — no user_id column)", () => {
-    createOrdersRealtimeChannel(
-      mockSupabase as SupabaseClient,
-      "user-123",
-      mockQueryClient as QueryClient,
-    );
-
-    expect(mockChannel.on).toHaveBeenCalledWith(
-      "postgres_changes",
-      expect.objectContaining({
-        event: "UPDATE",
-        table: "order_bags",
-      }),
-      expect.any(Function),
-    );
-  });
-
-  it("invalidates queryKeys.orders.all() when orders UPDATE fires", () => {
-    createOrdersRealtimeChannel(
-      mockSupabase as SupabaseClient,
-      "user-123",
-      mockQueryClient as QueryClient,
-    );
-
-    const ordersCallback = mockChannel.on.mock.calls[0][2] as () => void;
-    ordersCallback();
-
-    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.orders.all(),
-    });
-  });
-
-  it("invalidates queryKeys.orders.all() when order_bags UPDATE fires", () => {
-    createOrdersRealtimeChannel(
-      mockSupabase as SupabaseClient,
-      "user-123",
-      mockQueryClient as QueryClient,
-    );
-
-    const bagsCallback = mockChannel.on.mock.calls[1][2] as () => void;
-    bagsCallback();
-
-    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.orders.all(),
-    });
-  });
-
-  it("calls subscribe() on the channel", () => {
-    createOrdersRealtimeChannel(
-      mockSupabase as SupabaseClient,
-      "user-123",
-      mockQueryClient as QueryClient,
-    );
-
-    expect(mockChannel.subscribe).toHaveBeenCalledOnce();
-  });
-
-  it("returns the channel so callers can unsubscribe", () => {
-    const channel = createOrdersRealtimeChannel(
-      mockSupabase as SupabaseClient,
-      "user-123",
-      mockQueryClient as QueryClient,
-    );
-
-    // The returned channel is the mock (subscribe returns `this`)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ch = channel as any;
-    ch.unsubscribe();
-    expect(mockChannel.unsubscribe).toHaveBeenCalledOnce();
   });
 });

@@ -15,7 +15,9 @@ import WishlistButton from "./WishlistButton";
 import ShareButton from "../ui/ShareButton";
 import { useCartContext } from "../../contexts/CartContext";
 import { createCartFn, addToCartFn } from "../../server/cartActions";
-import { getSupabaseBrowserClient } from "../../utils/supabase";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import type { ShippingInfo } from "@ecommerce/shared";
 import { useUserLocationSafe } from "../../contexts/UserLocationContext";
 
@@ -79,6 +81,11 @@ export default function ProductDetail({ product }: { product: Product }) {
 
   const { violetCartId, setCart, openDrawer } = useCartContext();
 
+  // Convex Auth — get userId for cart ownership
+  const { isAuthenticated } = useConvexAuth();
+  const identity = useQuery(api.users.queries.getIdentity, isAuthenticated ? {} : "skip");
+  const authUserId = isAuthenticated && identity ? identity.subject : null;
+
   const { showVariants, selectedSku, isAvailable, galleryImages } = useProductVariants(
     product,
     selectedValues,
@@ -96,19 +103,18 @@ export default function ProductDetail({ product }: { product: Product }) {
 
   /**
    * Handles "Add to Bag" click:
-   * 1. Reads the Supabase session to get userId (authenticated) or sessionId (anonymous)
+   * 1. Reads Convex Auth to get userId (authenticated) or null (guest)
    * 2. If no cart exists yet, creates one via createCartFn with the correct owner field
    * 3. Adds the selected SKU to the cart
    * 4. Shows confirmation state for 1.5s only on success
    *
-   * ## Why we read the session here (not at component mount)
-   * The session may change between mount and click (e.g. anonymous → signed in).
+   * ## Why we read auth here (not at component mount)
+   * Auth state may change between mount and click (e.g. guest → signed in).
    * Reading at click time ensures we always use the current user context.
    *
-   * ## userId vs sessionId convention (per Violet architecture)
-   * - Authenticated user (is_anonymous = false): userId = user.id, sessionId = null
-   * - Anonymous user (is_anonymous = true): userId = null, sessionId = user.id
-   * Both satisfy the DB CHECK constraint `carts_has_owner`.
+   * ## userId convention (Convex Auth)
+   * - Authenticated user: userId = Convex subject ID
+   * - Guest (no Convex Auth session): userId = null
    */
   const handleAddToCart = useCallback(async () => {
     // eslint-disable-next-line no-console
@@ -120,19 +126,16 @@ export default function ProductDetail({ product }: { product: Product }) {
     setAddButtonState("loading");
 
     try {
-      // Read current Supabase session for cart ownership context
-      const supabase = getSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user ?? null;
-      const userId = user && !user.is_anonymous ? user.id : null;
-      const sessionId = user?.is_anonymous ? user.id : null;
+      // Convex Auth: use authenticated userId for cart ownership
+      // No anonymous session — Convex Auth userId or null for guest carts
+      const userId = authUserId;
 
       let currentVioletCartId = violetCartId;
 
       // Create cart if none exists
       if (!currentVioletCartId) {
         const createResult = await createCartFn({
-          data: { userId, sessionId },
+          data: { userId, sessionId: null },
         });
         if (createResult.error || !createResult.data) {
           // eslint-disable-next-line no-console
@@ -152,7 +155,7 @@ export default function ProductDetail({ product }: { product: Product }) {
         skuId: selectedSku.id,
         quantity: 1,
         userId,
-        sessionId,
+        sessionId: null,
         productName: product.name,
         thumbnailUrl: product.thumbnailUrl ?? undefined,
       });

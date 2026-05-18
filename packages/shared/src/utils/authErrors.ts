@@ -1,15 +1,77 @@
-const AUTH_ERROR_MAP: Record<string, string> = {
-  "User already registered": "An account with this email already exists",
-  "Email already in use": "An account with this email already exists",
-  "Invalid login credentials": "Email or password is incorrect",
-  "Email not confirmed": "Please verify your email before signing in",
-  over_request_rate_limit: "Too many attempts, please wait before trying again",
-  "Password should be at least 6 characters": "Password must be at least 6 characters",
-};
+// @ecommerce/shared — Auth error mapping for Convex Auth.
+//
+// Replaces the Supabase-specific mapAuthError with a Convex Auth version.
+// Each auth context (login, signup, verify, reset) has different error patterns
+// to map — controlled via the `context` parameter.
+//
+// Used by:
+//   apps/web/src/routes/auth/*.tsx
+//   apps/mobile/src/app/auth/*.tsx
 
-/** Maps Supabase auth error messages to user-friendly strings. */
-export function mapAuthError(message: string): string {
-  return AUTH_ERROR_MAP[message] ?? "An authentication error occurred. Please try again.";
+type AuthErrorContext = "signIn" | "signUp" | "verify" | "reset";
+
+/**
+ * Maps a Convex Auth error to a user-friendly message.
+ *
+ * Convex Auth throws Error instances with lowercase messages containing
+ * keywords like "invalid", "expired", "rate", etc. We match on substrings
+ * rather than exact messages because the error text varies between providers.
+ *
+ * @param error - The error thrown by signIn() / signOut()
+ * @param context - The auth flow context for context-specific messages
+ */
+export function mapAuthError(error: unknown, context: AuthErrorContext): string {
+  if (!(error instanceof Error)) {
+    return "An unexpected error occurred. Please try again.";
+  }
+
+  const msg = error.message.toLowerCase();
+
+  // Common patterns across all contexts
+  if (msg.includes("rate") || msg.includes("too many")) {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+
+  // Context-specific patterns
+  switch (context) {
+    case "signIn":
+      if (msg.includes("invalid") || msg.includes("credential") || msg.includes("password")) {
+        return "Invalid email or password.";
+      }
+      if (msg.includes("not found") || msg.includes("no user")) {
+        return "No account found with this email.";
+      }
+      break;
+
+    case "signUp":
+      if (msg.includes("already") || msg.includes("exists") || msg.includes("registered")) {
+        return "An account with this email already exists.";
+      }
+      if (msg.includes("invalid") || msg.includes("password")) {
+        return "Invalid email or password.";
+      }
+      break;
+
+    case "verify":
+      if (msg.includes("expired")) {
+        return "Verification code expired. Please sign up again.";
+      }
+      if (msg.includes("invalid") || msg.includes("code") || msg.includes("verification")) {
+        return "Invalid verification code. Please try again.";
+      }
+      break;
+
+    case "reset":
+      if (msg.includes("expired")) {
+        return "Verification code expired. Please request a new one.";
+      }
+      if (msg.includes("invalid") || msg.includes("code") || msg.includes("verification")) {
+        return "Invalid verification code. Please try again.";
+      }
+      break;
+  }
+
+  return error.message;
 }
 
 /** Validates a redirect URL to prevent open redirect attacks. Only allows relative paths. */

@@ -3,45 +3,28 @@
  *
  * Admin route for platform health monitoring and error tracking.
  *
- * Auth: requires admin role (redirects to "/" if not authenticated).
- * SSR: initial health data loaded server-side.
+ * Auth: requires admin role (verified via Convex Auth).
+ * Data: loaded via Convex reactive queries.
  *
- * Displays service status (Supabase, Violet, Stripe), error metrics,
- * top error types bar chart, recent error log, and alert rule configuration.
+ * Error handling: AdminErrorBoundary catches Convex query errors
+ * (e.g. assertAdmin failure). useQuery never returns Error objects.
  *
- * Accessibility features:
- * - `scope="col"` on table headers for screen reader cell-header association (WCAG 1.3.1)
- * - `aria-label` on status dots for color-blind accessibility
- * - `page-wrap` for consistent layout
+ * Phase 9: migrated from Supabase server functions to Convex queries.
+ * Post-review fixes: ErrorBoundary, useNavigate, Convex-based health check.
  */
 
-import { useState } from "react";
-import { createFileRoute, redirect, Link } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { buildPageMeta } from "@ecommerce/shared";
-import type {
-  PlatformHealthData,
-  HealthCheckResult,
-  ServiceStatus,
-  AlertRule,
-  RecentError,
-  ErrorTypeCount,
-  MerchantConnectionHealth,
-} from "@ecommerce/shared";
-import { getAdminUserFn } from "#/server/adminAuth";
-import { getAdminHealthFn, triggerHealthCheckFn } from "#/server/getAdminHealth";
+import type { ServiceStatus, AlertRule, RecentError, ErrorTypeCount } from "@ecommerce/shared";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { AdminErrorBoundary } from "#/components/admin/ErrorBoundary";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
 export const Route = createFileRoute("/admin/health")({
-  beforeLoad: async () => {
-    const adminUser = await getAdminUserFn();
-    if (!adminUser) {
-      throw redirect({ to: "/" });
-    }
-  },
-  loader: async () => {
-    return getAdminHealthFn();
-  },
   head: () => ({
     meta: buildPageMeta({
       title: "Platform Health | Maison Émile",
@@ -98,61 +81,6 @@ function MetricCard({
   );
 }
 
-/** Displays connection health issues for a single merchant. */
-function MerchantHealthCard({ merchant }: { merchant: MerchantConnectionHealth }) {
-  const statusClass =
-    merchant.overall_status === "NEEDS_ATTENTION"
-      ? "admin-health__merchant-status--critical"
-      : merchant.overall_status === "INCOMPLETE"
-        ? "admin-health__merchant-status--warning"
-        : "admin-health__merchant-status--unknown";
-
-  return (
-    <div className={`admin-health__merchant-card ${statusClass}`}>
-      <div className="admin-health__merchant-header">
-        <span className="admin-health__merchant-name">{merchant.merchant_name}</span>
-        <span className="admin-health__merchant-status">
-          {merchant.overall_status.replace("_", " ")}
-        </span>
-      </div>
-      {merchant.checks.length > 0 ? (
-        <ul className="admin-health__merchant-checks">
-          {merchant.checks
-            .filter((c) => c.status !== "COMPLETE")
-            .map((check) => (
-              <li key={check.type} className="admin-health__merchant-check">
-                <StatusDot
-                  status={
-                    check.status === "NEEDS_ATTENTION"
-                      ? "down"
-                      : check.status === "INCOMPLETE"
-                        ? "unknown"
-                        : "up"
-                  }
-                />
-                <span className="admin-health__check-label">{check.label}</span>
-                {check.message && (
-                  <span className="admin-health__check-message">{check.message}</span>
-                )}
-              </li>
-            ))}
-        </ul>
-      ) : (
-        <p className="admin-health__check-message">
-          Review on{" "}
-          <a
-            href={`https://channel.violet.io/merchants/${merchant.merchant_id}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Channel Dashboard
-          </a>
-        </p>
-      )}
-    </div>
-  );
-}
-
 function webhookSeverity(rate: number): "ok" | "warning" | "critical" {
   if (rate >= 95) return "ok";
   if (rate >= 80) return "warning";
@@ -188,14 +116,12 @@ function TopErrorTypes({ errors }: { errors: ErrorTypeCount[] }) {
   );
 }
 
-/** Displays recent platform errors in a table with timestamp, source, type, and message. */
 function RecentErrorsTable({ errors }: { errors: RecentError[] }) {
   if (errors.length === 0) {
     return <p className="admin-health__empty">No recent errors.</p>;
   }
   return (
     <table className="admin-health__table">
-      {/* Table uses scope="col" on headers for screen reader cell-header association (WCAG 1.3.1) */}
       <thead>
         <tr>
           <th scope="col">Time</th>
@@ -206,7 +132,7 @@ function RecentErrorsTable({ errors }: { errors: RecentError[] }) {
       </thead>
       <tbody>
         {errors.map((err) => (
-          <tr key={err.id}>
+          <tr key={String(err.id)}>
             <td>{new Date(err.createdAt).toLocaleString()}</td>
             <td>{err.source}</td>
             <td className="admin-health__error-type">{err.errorType}</td>
@@ -218,11 +144,9 @@ function RecentErrorsTable({ errors }: { errors: RecentError[] }) {
   );
 }
 
-/** Displays configured alert rules with their thresholds, windows, and trigger history. */
 function AlertRulesTable({ rules }: { rules: AlertRule[] }) {
   return (
     <table className="admin-health__table">
-      {/* Table uses scope="col" on headers for screen reader cell-header association (WCAG 1.3.1) */}
       <thead>
         <tr>
           <th scope="col">Rule</th>
@@ -234,7 +158,7 @@ function AlertRulesTable({ rules }: { rules: AlertRule[] }) {
       </thead>
       <tbody>
         {rules.map((rule) => (
-          <tr key={rule.id}>
+          <tr key={rule.id ? String(rule.id) : rule.ruleName}>
             <td>{rule.ruleName.replace(/_/g, " ")}</td>
             <td>{rule.thresholdValue}</td>
             <td>{rule.timeWindowMinutes > 0 ? `${rule.timeWindowMinutes} min` : "—"}</td>
@@ -252,143 +176,150 @@ function AlertRulesTable({ rules }: { rules: AlertRule[] }) {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 function AdminHealthPage() {
-  const initialData = Route.useLoaderData() as PlatformHealthData;
-  const [healthData, setHealthData] = useState<PlatformHealthData>(initialData);
-  const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(initialData.healthCheck);
-  const [checkingHealth, setCheckingHealth] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
+  const navigate = useNavigate();
 
-  async function handleRunHealthCheck() {
-    setCheckingHealth(true);
-    setError(null);
-    try {
-      const result = await triggerHealthCheckFn();
-      setHealthCheck(result);
-    } catch {
-      setError("Health check failed. Check server logs.");
-    } finally {
-      setCheckingHealth(false);
+  // Health data — reactive Convex query
+  const healthData = useQuery(api.admin.queries.getHealthData);
+
+  // Health check — on-demand Convex query (triggered by button)
+  const [showHealthCheck, setShowHealthCheck] = useState(false);
+  const healthCheckResult = useQuery(
+    api.health.queries.runHealthCheck,
+    showHealthCheck ? {} : "skip",
+  );
+
+  // Auth redirect
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/" });
     }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="page-wrap">
+        <p>Loading…</p>
+      </div>
+    );
+  }
+  if (healthData === undefined) {
+    return (
+      <div className="page-wrap">
+        <p>Loading health data…</p>
+      </div>
+    );
   }
 
-  async function handleRefresh() {
-    setRefreshing(true);
-    setError(null);
-    try {
-      const result = await getAdminHealthFn();
-      setHealthData(result);
-    } catch {
-      setError("Failed to refresh health data.");
-    } finally {
-      setRefreshing(false);
-    }
+  // Convex queries throw on error — caught by AdminErrorBoundary wrapper
+  if (healthData === null) {
+    return (
+      <div className="page-wrap">
+        <p>No health data available.</p>
+        <Link to="/">Back to home</Link>
+      </div>
+    );
   }
 
   const { metrics, alertRules, recentErrors } = healthData;
 
   return (
-    // {/* page-wrap ensures consistent max-width and horizontal padding across all pages */}
-    <div className="page-wrap admin-health">
-      <Link to="/admin" className="admin-health__back">
-        &larr; Back to Dashboard
-      </Link>
+    <AdminErrorBoundary>
+      <div className="page-wrap admin-health">
+        <Link to="/admin" className="admin-health__back">
+          &larr; Back to Dashboard
+        </Link>
 
-      <div className="admin-health__header">
-        <h1 className="admin-health__title">Platform Health</h1>
-        <div className="admin-health__actions">
-          <button className="admin-health__btn" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? "Refreshing…" : "Refresh Metrics"}
-          </button>
-          <button
-            className="admin-health__btn admin-health__btn--primary"
-            onClick={handleRunHealthCheck}
-            disabled={checkingHealth}
-          >
-            {checkingHealth ? "Checking…" : "Run Health Check"}
-          </button>
-        </div>
-      </div>
-
-      {error && <div className="admin-health__error-banner">{error}</div>}
-
-      {/* Service Status Cards */}
-      {healthCheck && (
-        <section className="admin-health__section">
-          <h2 className="admin-health__section-title">
-            Service Status
-            <span
-              className={`admin-health__overall admin-health__overall--${healthCheck.overall_status}`}
+        <div className="admin-health__header">
+          <h1 className="admin-health__title">Platform Health</h1>
+          <div className="admin-health__actions">
+            <button className="admin-health__btn" onClick={() => window.location.reload()}>
+              Refresh Metrics
+            </button>
+            <button
+              className="admin-health__btn admin-health__btn--primary"
+              onClick={() => setShowHealthCheck(true)}
+              disabled={showHealthCheck && healthCheckResult === undefined}
             >
-              {healthCheck.overall_status}
-            </span>
-          </h2>
-          <div className="admin-health__status-grid">
-            <ServiceCard name="Supabase" service={healthCheck.services.supabase} />
-            <ServiceCard name="Violet.io" service={healthCheck.services.violet} />
-            <ServiceCard name="Stripe" service={healthCheck.services.stripe} />
+              {showHealthCheck && healthCheckResult === undefined
+                ? "Checking…"
+                : "Run Health Check"}
+            </button>
           </div>
-          <p className="admin-health__checked-at">
-            Last checked: {new Date(healthCheck.checked_at).toLocaleString()}
-          </p>
+        </div>
 
-          {/* Merchant Connection Health — only non-COMPLETE merchants */}
-          {healthCheck.merchants && healthCheck.merchants.length > 0 && (
-            <div className="admin-health__merchants">
-              <h3 className="admin-health__subsection-title">Merchant Issues</h3>
-              {healthCheck.merchants.map((m) => (
-                <MerchantHealthCard key={m.merchant_id} merchant={m} />
+        {/* Service Status Cards — populated by Convex runHealthCheck query */}
+        {healthCheckResult && (
+          <section className="admin-health__section">
+            <h2 className="admin-health__section-title">
+              Service Status
+              <span
+                className={`admin-health__overall admin-health__overall--${healthCheckResult.overall_status}`}
+              >
+                {healthCheckResult.overall_status}
+              </span>
+            </h2>
+            <div className="admin-health__status-grid">
+              {Object.entries(healthCheckResult.services).map(([name, service]) => (
+                <ServiceCard
+                  key={name}
+                  name={name.charAt(0).toUpperCase() + name.slice(1)}
+                  service={service as ServiceStatus}
+                />
               ))}
             </div>
-          )}
-        </section>
-      )}
+            <p className="admin-health__checked-at">
+              Last checked: {new Date(healthCheckResult.checked_at).toLocaleString()}
+            </p>
+          </section>
+        )}
 
-      {/* Key Metrics */}
-      <section className="admin-health__section">
-        <h2 className="admin-health__section-title">Key Metrics (Last 24h)</h2>
-        <div className="admin-health__metrics-row">
-          <MetricCard
-            label="Errors"
-            value={metrics.errorCount}
-            severity={errorRateSeverity(metrics.errorRatePerHour)}
-          />
-          <MetricCard
-            label="Error Rate / hr"
-            value={metrics.errorRatePerHour.toFixed(1)}
-            severity={errorRateSeverity(metrics.errorRatePerHour)}
-          />
-          <MetricCard
-            label="Webhook Success"
-            value={`${metrics.webhookSuccessRate.toFixed(1)}%`}
-            severity={webhookSeverity(metrics.webhookSuccessRate)}
-          />
-          <MetricCard
-            label="Consec. Failures"
-            value={metrics.consecutiveWebhookFailures}
-            severity={metrics.consecutiveWebhookFailures >= 3 ? "critical" : "ok"}
-          />
+        {/* Key Metrics */}
+        <section className="admin-health__section">
+          <h2 className="admin-health__section-title">Key Metrics (Last 24h)</h2>
+          <div className="admin-health__metrics-row">
+            <MetricCard
+              label="Errors"
+              value={metrics.errorCount}
+              severity={errorRateSeverity(metrics.errorRatePerHour)}
+            />
+            <MetricCard
+              label="Error Rate / hr"
+              value={metrics.errorRatePerHour.toFixed(1)}
+              severity={errorRateSeverity(metrics.errorRatePerHour)}
+            />
+            <MetricCard
+              label="Webhook Success"
+              value={`${metrics.webhookSuccessRate.toFixed(1)}%`}
+              severity={webhookSeverity(metrics.webhookSuccessRate)}
+            />
+            <MetricCard
+              label="Consec. Failures"
+              value={metrics.consecutiveWebhookFailures}
+              severity={metrics.consecutiveWebhookFailures >= 3 ? "critical" : "ok"}
+            />
+          </div>
+        </section>
+
+        {/* Two columns: Error types + Recent errors */}
+        <div className="admin-health__columns">
+          <section className="admin-health__section admin-health__column">
+            <h2 className="admin-health__section-title">Top Error Types</h2>
+            <TopErrorTypes errors={metrics.topErrorTypes} />
+          </section>
+
+          <section className="admin-health__section admin-health__column">
+            <h2 className="admin-health__section-title">Recent Errors</h2>
+            <RecentErrorsTable errors={recentErrors} />
+          </section>
         </div>
-      </section>
 
-      {/* Two columns: Error types + Recent errors */}
-      <div className="admin-health__columns">
-        <section className="admin-health__section admin-health__column">
-          <h2 className="admin-health__section-title">Top Error Types</h2>
-          <TopErrorTypes errors={metrics.topErrorTypes} />
-        </section>
-
-        <section className="admin-health__section admin-health__column">
-          <h2 className="admin-health__section-title">Recent Errors</h2>
-          <RecentErrorsTable errors={recentErrors} />
+        {/* Alert Rules */}
+        <section className="admin-health__section">
+          <h2 className="admin-health__section-title">Alert Rules</h2>
+          <AlertRulesTable rules={alertRules as AlertRule[]} />
         </section>
       </div>
-
-      {/* Alert Rules */}
-      <section className="admin-health__section">
-        <h2 className="admin-health__section-title">Alert Rules</h2>
-        <AlertRulesTable rules={alertRules} />
-      </section>
-    </div>
+    </AdminErrorBoundary>
   );
 }

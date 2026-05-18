@@ -3,41 +3,38 @@
  *
  * Admin dashboard — analytics overview with commission breakdown.
  *
- * Auth: requires admin role (redirects to "/" if not authenticated).
- * SSR: initial dashboard data (30-day default) loaded server-side.
+ * Auth: requires admin role (verified via Convex Auth + assertAdmin).
+ * Data: loaded via Convex reactive queries (no server functions).
  *
  * Features:
- * - KPI cards (orders, revenue, commission, users, conversion, AI search usage)
+ * - KPI cards (orders, revenue, commission, users, conversion)
  * - Per-merchant commission table with totals
- * - Time range selector (today, 7d, 30d, custom dates)
- * - Client-side data refresh without full page reload
- * - Error feedback via `role="alert"` banner
+ * - Time range selector (today, 7d, 30d)
+ * - Distributions lookup per order
+ * - Reactive refresh — data updates automatically when underlying data changes
+ *
+ * Phase 9: migrated from Supabase server functions to Convex queries.
  */
 
-import { useState } from "react";
-import { createFileRoute, redirect, Link } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { buildPageMeta } from "@ecommerce/shared";
-import type { TimeRange, TimeRangeParams, AdminDashboardData } from "@ecommerce/shared";
-import { getAdminUserFn } from "#/server/adminAuth";
-import { getAdminDashboardFn } from "#/server/getAdminDashboard";
+import type { TimeRange, TimeRangeParams } from "@ecommerce/shared";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { AdminErrorBoundary } from "#/components/admin/ErrorBoundary";
 import DashboardMetrics from "#/components/admin/DashboardMetrics";
 import CommissionTable from "#/components/admin/CommissionTable";
 import TimeRangeSelector from "#/components/admin/TimeRangeSelector";
-import { syncOrderDistributionsFn } from "#/server/distributions";
 import DistributionsTable from "#/components/admin/DistributionsTable";
-import type { DistributionRow } from "@ecommerce/shared";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
 export const Route = createFileRoute("/admin/")({
   beforeLoad: async () => {
-    const adminUser = await getAdminUserFn();
-    if (!adminUser) {
-      throw redirect({ to: "/" });
-    }
-  },
-  loader: async () => {
-    return getAdminDashboardFn({ data: { params: { range: "30d" } } });
+    // Client-side guard — Convex Auth stores tokens in localStorage
+    // (no server-side cookie access). Full admin check happens in Convex queries.
   },
   head: () => ({
     meta: buildPageMeta({
@@ -52,132 +49,134 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function AdminDashboardPage() {
-  const initialData = Route.useLoaderData() as AdminDashboardData;
-  const [dashboardData, setDashboardData] = useState<AdminDashboardData>(initialData);
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
+  const navigate = useNavigate();
   const [selectedRange, setSelectedRange] = useState<TimeRange>("30d");
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [distributions, setDistributions] = useState<DistributionRow[]>([]);
-  const [syncingOrderId, setSyncingOrderId] = useState<string | null>(null);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [distributionsOrderId, setDistributionsOrderId] = useState<string | null>(null);
 
-  async function handleRangeChange(params: TimeRangeParams) {
+  // Dashboard data — reactive Convex query (admin-only, assertAdmin in handler)
+  const dashboardData = useQuery(api.admin.queries.getDashboardData, { range: selectedRange });
+
+  // Distributions for a specific order
+  const distributions = useQuery(
+    api.admin.queries.getOrderDistributions,
+    distributionsOrderId ? { violetOrderId: distributionsOrderId } : "skip",
+  );
+
+  // Auth redirect — useEffect avoids side effects during render
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="page-wrap">
+        <p>Loading…</p>
+      </div>
+    );
+  }
+
+  if (dashboardData === undefined) {
+    return (
+      <div className="page-wrap">
+        <p>Loading dashboard…</p>
+      </div>
+    );
+  }
+
+  // Convex queries throw on error (e.g. assertAdmin failure) — caught by AdminErrorBoundary
+  // useQuery never returns an Error object, so `instanceof Error` is dead code.
+  if (dashboardData === null) {
+    return (
+      <div className="page-wrap">
+        <p>No data available.</p>
+        <Link to="/">Back to home</Link>
+      </div>
+    );
+  }
+
+  const { metrics, commission } = dashboardData;
+
+  function handleRangeChange(params: TimeRangeParams) {
     setSelectedRange(params.range);
-    setLoading(true);
-    try {
-      setError(null);
-      const result = await getAdminDashboardFn({ data: { params } });
-      setDashboardData(result);
-    } catch {
-      setError("Failed to load dashboard data. Please try again.");
-    } finally {
-      setLoading(false);
-    }
   }
 
-  async function handleRefresh() {
-    setRefreshing(true);
-    try {
-      setError(null);
-      const result = await getAdminDashboardFn({
-        data: { params: { range: selectedRange } },
-      });
-      setDashboardData(result);
-    } catch {
-      setError("Failed to refresh dashboard data. Please try again.");
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  async function handleSyncDistributions(violetOrderId: string) {
-    setSyncingOrderId(violetOrderId);
-    setSelectedOrderId(violetOrderId);
-    try {
-      const result = await syncOrderDistributionsFn({ data: { violetOrderId } });
-      if (result.data) {
-        setDistributions(result.data);
-      }
-    } catch {
-      setError("Failed to sync distributions. Please try again.");
-    } finally {
-      setSyncingOrderId(null);
-    }
+  function handleSyncDistributions(violetOrderId: string) {
+    setDistributionsOrderId(violetOrderId);
   }
 
   return (
-    <div className="page-wrap admin-dashboard">
-      <header className="admin-dashboard__header">
-        <h1 className="admin-dashboard__title">Dashboard</h1>
-        <TimeRangeSelector value={selectedRange} onChange={handleRangeChange} />
-      </header>
+    <AdminErrorBoundary>
+      <div className="page-wrap admin-dashboard">
+        <header className="admin-dashboard__header">
+          <h1 className="admin-dashboard__title">Dashboard</h1>
+          <TimeRangeSelector value={selectedRange} onChange={handleRangeChange} />
+        </header>
 
-      {error && (
-        <div className="admin-dashboard__error" role="alert">
-          {error}
-        </div>
-      )}
+        <section className="admin-dashboard__metrics">
+          <DashboardMetrics metrics={metrics} />
+        </section>
 
-      <section
-        className={`admin-dashboard__metrics${loading ? " admin-dashboard__metrics--loading" : ""}`}
-      >
-        <DashboardMetrics metrics={dashboardData.metrics} />
-      </section>
+        <section className="admin-dashboard__commission">
+          <h2 className="admin-dashboard__section-title">Commission Breakdown</h2>
+          <CommissionTable data={commission.map((c) => ({ ...c, merchantName: c.name }))} />
+        </section>
 
-      <section className="admin-dashboard__commission">
-        <h2 className="admin-dashboard__section-title">Commission Breakdown</h2>
-        <CommissionTable data={dashboardData.commission} />
-      </section>
+        <section className="admin-dashboard__distributions">
+          <h2 className="admin-dashboard__section-title">Distributions</h2>
+          <div className="admin-dashboard__dist-input">
+            <label htmlFor="dist-order-id">Check distributions for Violet order ID:</label>
+            <input
+              id="dist-order-id"
+              type="text"
+              placeholder="e.g. 123456"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.currentTarget.value) {
+                  handleSyncDistributions(e.currentTarget.value);
+                }
+              }}
+            />
+          </div>
+          {distributionsOrderId && distributions && (
+            <DistributionsTable
+              distributions={distributions.map((d) => ({
+                id: d._id,
+                violet_order_id: d.violetOrderId,
+                violet_bag_id: d.violetBagId ?? "",
+                order_bag_id: "",
+                type: d.type as import("@ecommerce/shared").DistributionType,
+                status: (d.status ?? "UNKNOWN") as import("@ecommerce/shared").DistributionStatus,
+                channel_amount_cents: d.channelAmount ?? d.amount,
+                stripe_fee_cents: d.stripeFee ?? 0,
+                merchant_amount_cents: d.merchantAmount ?? 0,
+                subtotal_cents: d.subtotal ?? 0,
+                synced_at: new Date(d._creationTime).toISOString(),
+              }))}
+              violetOrderId={distributionsOrderId}
+              onSync={handleSyncDistributions}
+              isSyncing={false}
+            />
+          )}
+        </section>
 
-      <section className="admin-dashboard__distributions">
-        <h2 className="admin-dashboard__section-title">Distributions</h2>
-        <div className="admin-dashboard__dist-input">
-          <label htmlFor="dist-order-id">Check distributions for Violet order ID:</label>
-          <input
-            id="dist-order-id"
-            type="text"
-            placeholder="e.g. 123456"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && e.currentTarget.value) {
-                handleSyncDistributions(e.currentTarget.value);
-              }
-            }}
-          />
-        </div>
-        {selectedOrderId && (
-          <DistributionsTable
-            distributions={distributions}
-            violetOrderId={selectedOrderId}
-            onSync={handleSyncDistributions}
-            isSyncing={syncingOrderId === selectedOrderId}
-          />
-        )}
-      </section>
+        <nav className="admin-dashboard__nav">
+          <Link to="/admin/health" className="admin-dashboard__nav-link">
+            Platform Health
+          </Link>
+          <Link to="/admin/support" className="admin-dashboard__nav-link">
+            Support Inquiries
+          </Link>
+        </nav>
 
-      <nav className="admin-dashboard__nav">
-        <Link to="/admin/health" className="admin-dashboard__nav-link">
-          Platform Health
-        </Link>
-        <Link to="/admin/support" className="admin-dashboard__nav-link">
-          Support Inquiries
-        </Link>
-      </nav>
-
-      <footer className="admin-dashboard__footer">
-        <p className="admin-dashboard__refresh-info">
-          Data for period: {new Date(dashboardData.metrics.periodStart).toLocaleDateString()} –{" "}
-          {new Date(dashboardData.metrics.periodEnd).toLocaleDateString()}
-        </p>
-        <button
-          type="button"
-          className="admin-dashboard__refresh-button"
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
-          {refreshing ? "Refreshing…" : "Refresh Data"}
-        </button>
-      </footer>
-    </div>
+        <footer className="admin-dashboard__footer">
+          <p className="admin-dashboard__refresh-info">
+            Data for period: {new Date(metrics.periodStart).toLocaleDateString()} –{" "}
+            {new Date(metrics.periodEnd).toLocaleDateString()}
+          </p>
+        </footer>
+      </div>
+    </AdminErrorBoundary>
   );
 }

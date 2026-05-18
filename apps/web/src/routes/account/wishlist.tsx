@@ -1,84 +1,36 @@
 /**
- * Wishlist Page — /account/wishlist (Story 6.4)
+ * Wishlist Page — /account/wishlist
  *
- * Displays the user's saved products with live pricing from Violet.
- * Protected by the `/account` layout auth guard (account/route.tsx).
+ * Migrated from Supabase to Convex queries (Phase 5).
  *
- * ## Code Review Fixes Applied
- * - **H1**: Added "Add to Bag" button per AC #5 — uses existing cart context
- * - **M1**: Added merchant name display per AC #3 — shows `product.seller`
- * - Both fixes integrate with existing cart infrastructure (CartContext, addToCartFn)
- *   rather than duplicating logic.
+ * Uses Convex queries for wishlist data (reactive by default).
+ * Live product data (prices, availability) still comes from Violet API
+ * via the existing product detail query options.
  *
- * ## Architecture Note: Why live Violet fetch per item?
- * AC #3 requires "prices and availability are re-fetched from Violet on view".
- * We intentionally do NOT cache price/availability in the wishlist_items table.
- * This means a Violet API call per item, but wishlists are low-frequency pages
- * and stale prices would be a worse UX than a slightly slower load.
+ * Protected by the /account layout auth guard (Convex Auth).
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { useQuery, useQueries } from "@tanstack/react-query";
-import {
-  wishlistQueryOptions,
-  wishlistKeys,
-  getWishlist,
-  useRemoveFromWishlist,
-  productDetailQueryOptions,
-  buildPageMeta,
-  formatPrice,
-  useAddToCart,
-} from "@ecommerce/shared";
-import type { Product, ProductDetailFetchFn, AddToCartFn } from "@ecommerce/shared";
+import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { useQueries } from "@tanstack/react-query";
+import { buildPageMeta, formatPrice, useAddToCart } from "@ecommerce/shared";
+import type { Product } from "@ecommerce/shared";
 import { optimizeWithPreset } from "@ecommerce/shared";
+import { api } from "#convex/_generated/api";
 import { getProductFn } from "#/server/getProduct";
 import { addToCartFn, createCartFn } from "#/server/cartActions";
-import { getSupabaseSessionClient } from "#/server/supabaseServer";
 import WishlistButton from "#/components/product/WishlistButton";
 import { useToast } from "#/components/ui/Toast";
 import { useCartContext } from "#/contexts/CartContext";
-import { getSupabaseBrowserClient } from "#/utils/supabase";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
-/**
- * Server function that fetches the wishlist using the authenticated session client.
- *
- * ## Why a dedicated server function instead of wishlistQueryOptions directly?
- *
- * `wishlistQueryOptions` calls `getWishlist(userId)` → `createSupabaseClient()`, which
- * returns an unauthenticated singleton on SSR (the `_setSupabaseClient` injection from
- * `__root.tsx` only runs client-side in the React component). On a hard refresh, the
- * loader runs before React renders, so the singleton is unauthenticated → empty wishlist
- * gets cached for 5 minutes (staleTime).
- *
- * `createServerFn` handlers always run on the server regardless of SSR vs. client
- * navigation, making `getSupabaseSessionClient()` (which reads cookies via the H3 request
- * context) safely available. The returned data seeds the query cache via `setQueryData`,
- * bypassing the unauthenticated `queryFn` for the initial render.
- *
- * This follows the same pattern as `getAuthUserFn` in `account/route.tsx`.
- */
-const prefetchWishlistFn = createServerFn({ method: "GET" })
-  .inputValidator((userId: string) => userId)
-  .handler(async ({ data: userId }) => {
-    const supabase = getSupabaseSessionClient();
-    return getWishlist(userId, supabase);
-  });
+/** Adapter for product detail fetch (Violet API via server function). */
+const fetchProductAdapter = (id: string) => getProductFn({ data: id });
 
-/** Adapter: wraps TanStack Start Server Function to match shared hook signature. */
-const fetchProductAdapter: ProductDetailFetchFn = (id) => getProductFn({ data: id });
-
-/**
- * Add-to-cart adapter for wishlist "Add to Bag" action.
- *
- * ## Why a dedicated adapter here? (Code Review Fix H1)
- * The wishlist page needs to add items to cart (AC #5). Rather than
- * duplicating the cart creation + add logic from ProductDetail, we use
- * the same shared `useAddToCart` hook with the Server Function adapter.
- */
-const addToCartAdapter: AddToCartFn = (input) => addToCartFn({ data: input });
+/** Add-to-cart adapter for wishlist "Add to Bag" action. */
+const addToCartAdapter = (input: Record<string, unknown>) => addToCartFn({ data: input as never });
 
 export const Route = createFileRoute("/account/wishlist")({
   head: () => ({
@@ -90,75 +42,61 @@ export const Route = createFileRoute("/account/wishlist")({
       noindex: true,
     }),
   }),
-  loader: async ({ context }) => {
-    const { user } = context as { user: { id: string; email: string | null } };
-    // Prefetch the wishlist with the authenticated SSR session client.
-    // setQueryData seeds the cache directly, bypassing the unauthenticated
-    // singleton that wishlistQueryOptions would use during SSR.
-    const wishlistData = await prefetchWishlistFn({ data: user.id });
-    context.queryClient.setQueryData(wishlistKeys.all(user.id), wishlistData);
-    return { user };
-  },
   component: WishlistPage,
 });
 
 function WishlistPage() {
-  const { user } = Route.useLoaderData();
-  const wishlist = useQuery(wishlistQueryOptions(user.id));
-  const removeMutation = useRemoveFromWishlist(user.id);
+  const { isAuthenticated } = useConvexAuth();
+  const identity = useQuery(api.users.queries.getIdentity, isAuthenticated ? {} : "skip");
+  const userId = identity?.subject ?? "";
+
+  // Convex query for wishlist (reactive)
+  const wishlist = useQuery(api.wishlists.queries.getWishlist, userId ? { userId } : "skip");
+
+  // Convex mutation for removal
+  const removeMutation = useMutation(api.wishlists.mutations.removeFromWishlist);
+
   const toast = useToast();
   const { violetCartId, setCart, openDrawer } = useCartContext();
 
-  /**
-   * Cart mutation for "Add to Bag" on wishlist items (AC #5).
-   * On success, updates CartContext and opens the cart drawer.
-   */
+  // Cart mutation for "Add to Bag"
   const cartMutation = useAddToCart(violetCartId, addToCartAdapter, (cart) => {
     setCart(cart.id, cart.violetCartId);
     openDrawer();
   });
 
-  const items = wishlist.data?.items ?? [];
+  const items = wishlist?.items ?? [];
   const isEmpty = items.length === 0;
 
   // Fetch live product data from Violet for each wishlisted item
   const productQueries = useQueries({
     queries: items.map((item) => ({
-      ...productDetailQueryOptions(item.product_id, fetchProductAdapter),
+      queryKey: ["product", item.productId],
+      queryFn: () => fetchProductAdapter(item.productId),
+      staleTime: 5 * 60 * 1000,
     })),
   });
 
   // Build product map from query results
   const productMap = new Map<string, Product>();
-  for (const query of productQueries) {
+  for (let i = 0; i < items.length; i++) {
+    const query = productQueries[i];
     if (query.data?.data) {
-      productMap.set(query.data.data.id, query.data.data);
+      productMap.set(items[i].productId, query.data.data);
     }
   }
 
-  /**
-   * Handle "Add to Bag" for a wishlist item.
-   *
-   * ## Why this logic is inline (not extracted)
-   * This mirrors ProductDetail's handleAddToCart but is simpler:
-   * wishlist items use the first available SKU (no variant selection).
-   * If the product has multiple SKUs, we pick the first in-stock one.
-   */
   const handleAddToCart = async (product: Product) => {
     const sku = product.skus.find((s) => s.inStock && s.qtyAvailable > 0) ?? product.skus[0];
     if (!sku) return;
 
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
-      const authUser = userData?.user ?? null;
-      const userId = authUser && !authUser.is_anonymous ? authUser.id : null;
-      const sessionId = authUser?.is_anonymous ? authUser.id : null;
-
       let currentVioletCartId = violetCartId;
 
       if (!currentVioletCartId) {
-        const createResult = await createCartFn({ data: { userId, sessionId } });
+        const createResult = await createCartFn({
+          data: { userId, sessionId: null },
+        });
         if (createResult.error || !createResult.data) {
           toast.error("Could not create cart");
           return;
@@ -172,7 +110,7 @@ function WishlistPage() {
         skuId: sku.id,
         quantity: 1,
         userId,
-        sessionId,
+        sessionId: null,
         productName: product.name,
         thumbnailUrl: product.thumbnailUrl ?? undefined,
       });
@@ -199,17 +137,17 @@ function WishlistPage() {
       ) : (
         <div className="wishlist__grid">
           {items.map((item) => {
-            const product = productMap.get(item.product_id);
+            const product = productMap.get(item.productId);
             const isOutOfStock = product ? !product.available : false;
 
             return (
               <article
-                key={item.id}
+                key={item._id}
                 className={`wishlist-item${isOutOfStock ? " wishlist-item--out-of-stock" : ""}`}
               >
                 <Link
                   to="/products/$productId"
-                  params={{ productId: item.product_id }}
+                  params={{ productId: item.productId }}
                   className="wishlist-item__link"
                 >
                   <div className="wishlist-item__image-wrap">
@@ -230,7 +168,6 @@ function WishlistPage() {
 
                   <div className="wishlist-item__info">
                     <h2 className="wishlist-item__name">{product?.name ?? "Loading…"}</h2>
-                    {/* Merchant name — AC #3 requires this (Code Review Fix M1) */}
                     {product?.seller && <p className="wishlist-item__merchant">{product.seller}</p>}
                     {product && (
                       <p className="wishlist-item__price">
@@ -242,11 +179,10 @@ function WishlistPage() {
 
                 <div className="wishlist-item__actions">
                   <WishlistButton
-                    productId={item.product_id}
+                    productId={item.productId}
                     productName={product?.name}
                     size="sm"
                   />
-                  {/* Add to Bag — AC #5 (Code Review Fix H1) */}
                   {product && !isOutOfStock && (
                     <button
                       type="button"
@@ -263,7 +199,7 @@ function WishlistPage() {
                   <button
                     type="button"
                     className="wishlist-item__remove"
-                    onClick={() => removeMutation.mutate(item.product_id)}
+                    onClick={() => removeMutation({ userId, productId: item.productId })}
                     aria-label={`Remove ${product?.name ?? "product"} from wishlist`}
                   >
                     Remove

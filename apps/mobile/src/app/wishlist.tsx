@@ -1,10 +1,18 @@
-import React from "react";
+// Mobile Wishlist screen — migrated from Supabase to Convex queries (Phase 6).
+//
+// Uses Convex useQuery/useMutation directly instead of
+// useWishlist/useRemoveFromWishlist from @ecommerce/shared (Supabase).
+//
+// Data is reactive by default — no Realtime subscriptions needed.
+
+import React, { useState } from "react";
 import { StyleSheet, FlatList, View, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useWishlist, useRemoveFromWishlist, useUser } from "@ecommerce/shared";
-import type { WishlistItem } from "@ecommerce/shared";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
 
+import { useAuth } from "@/context/AuthContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, Fonts, Spacing } from "@/constants/theme";
@@ -18,15 +26,16 @@ import { Colors, Fonts, Spacing } from "@/constants/theme";
  * Future story can add `useQueries` with product detail fetch (like web).
  */
 export default function WishlistScreen() {
-  const { data: user } = useUser();
-  const userId = user && !user.is_anonymous ? user.id : undefined;
-  const wishlist = useWishlist(userId);
-  const removeMutation = useRemoveFromWishlist(userId ?? "");
+  const { userId, isAuthenticated } = useAuth();
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const items = wishlist.data?.items ?? [];
+  const wishlist = useQuery(api.wishlists.queries.getWishlist, userId ? { userId } : "skip");
+  const removeMutation = useMutation(api.wishlists.mutations.removeFromWishlist);
+
+  const items = wishlist?.items ?? [];
   const isEmpty = items.length === 0;
 
-  if (!userId) {
+  if (!isAuthenticated || !userId) {
     return (
       <SafeAreaView style={styles.container}>
         <ThemedView style={styles.empty}>
@@ -41,20 +50,35 @@ export default function WishlistScreen() {
     );
   }
 
-  const renderItem = ({ item }: { item: WishlistItem }) => (
+  const handleRemove = async (productId: string) => {
+    setRemovingId(productId);
+    try {
+      await removeMutation({ userId, productId });
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const renderItem = ({ item }: { item: { _id: string; productId: string } }) => (
     <Pressable
       style={styles.card}
-      onPress={() => router.push(`/products/${item.product_id}` as never)}
+      onPress={() => router.push(`/products/${item.productId}` as never)}
     >
       <View style={styles.cardImage}>
         <ThemedText style={styles.heartPlaceholder}>{"\u2661"}</ThemedText>
       </View>
       <View style={styles.cardInfo}>
         <ThemedText style={styles.cardName} numberOfLines={2}>
-          Product {item.product_id}
+          Product {item.productId}
         </ThemedText>
-        <Pressable style={styles.removeBtn} onPress={() => removeMutation.mutate(item.product_id)}>
-          <ThemedText style={styles.removeText}>Remove</ThemedText>
+        <Pressable
+          style={styles.removeBtn}
+          onPress={() => handleRemove(item.productId)}
+          disabled={removingId === item.productId}
+        >
+          <ThemedText style={styles.removeText}>
+            {removingId === item.productId ? "Removing…" : "Remove"}
+          </ThemedText>
         </Pressable>
       </View>
     </Pressable>
@@ -74,7 +98,7 @@ export default function WishlistScreen() {
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id}
           renderItem={renderItem}
           numColumns={2}
           columnWrapperStyle={styles.row}

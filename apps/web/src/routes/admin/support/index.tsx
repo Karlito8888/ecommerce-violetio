@@ -3,42 +3,25 @@
  *
  * Admin route for managing customer support inquiries.
  *
- * Auth: requires admin role (redirects to "/" if not authenticated).
- * SSR: initial inquiry list fetched server-side, with client-side re-filtering.
+ * Auth: requires admin role (verified via Convex Auth).
+ * Data: loaded via Convex reactive queries.
  *
- * Accessibility features:
- * - `scope="col"` on table headers for screen reader cell-header association (WCAG 1.3.1)
- * - `role="link"` + keyboard handlers on table rows for keyboard navigation
- * - Filter error announced via `role="alert"` with auto-dismiss
- * - `aria-label` on filter dropdowns
+ * Phase 9: migrated from Supabase server functions to Convex queries/mutations.
  */
 
-import { useState } from "react";
-import { createFileRoute, redirect, Link, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { buildPageMeta } from "@ecommerce/shared";
-import type {
-  SupportInquiry,
-  SupportInquiryFilters,
-  SupportInquiryStatus,
-  SupportSubject,
-} from "@ecommerce/shared";
+import type { SupportInquiryStatus, SupportSubject } from "@ecommerce/shared";
 import { SUPPORT_STATUSES, SUPPORT_SUBJECTS } from "@ecommerce/shared";
-import { getAdminUserFn } from "#/server/adminAuth";
-import { getAdminSupportListFn } from "#/server/getAdminSupport";
+import { useConvexAuth } from "@convex-dev/auth/react";
 import { SupportStatusBadge } from "#/components/admin/SupportStatusBadge";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
 export const Route = createFileRoute("/admin/support/")({
-  beforeLoad: async () => {
-    const adminUser = await getAdminUserFn();
-    if (!adminUser) {
-      throw redirect({ to: "/" });
-    }
-  },
-  loader: async () => {
-    return getAdminSupportListFn({ data: { filters: {} } });
-  },
   head: () => ({
     meta: buildPageMeta({
       title: "Support Inquiries | Maison Émile",
@@ -52,45 +35,36 @@ export const Route = createFileRoute("/admin/support/")({
 });
 
 function AdminSupportPage() {
-  const initialData = Route.useLoaderData();
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const navigate = useNavigate();
-  const [inquiries, setInquiries] = useState<SupportInquiry[]>(initialData.inquiries);
   const [statusFilter, setStatusFilter] = useState<SupportInquiryStatus | "">("");
   const [subjectFilter, setSubjectFilter] = useState<SupportSubject | "">("");
-  const [loading, setLoading] = useState(false);
-  const [filterError, setFilterError] = useState<string | null>(null);
 
-  async function applyFilters(
-    newStatus: SupportInquiryStatus | "",
-    newSubject: SupportSubject | "",
-  ) {
-    setLoading(true);
-    setFilterError(null);
-    try {
-      const filters: SupportInquiryFilters = {};
-      if (newStatus) filters.status = newStatus;
-      if (newSubject) filters.subject = newSubject;
-      const result = await getAdminSupportListFn({ data: { filters } });
-      setInquiries(result.inquiries);
-    } catch {
-      setFilterError("Erreur lors du filtrage. Les données affichées peuvent être obsolètes.");
-      setTimeout(() => setFilterError(null), 5000);
-    } finally {
-      setLoading(false);
+  // Convex reactive query — automatically refetches when data changes
+  const inquiries = useQuery(
+    api.support.queries.getSupportInquiries,
+    statusFilter ? { status: statusFilter } : {},
+  );
+
+  // Auth redirect
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/" });
     }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="page-wrap">
+        <p>Loading…</p>
+      </div>
+    );
   }
 
-  function handleStatusChange(value: string) {
-    const newStatus = value as SupportInquiryStatus | "";
-    setStatusFilter(newStatus);
-    applyFilters(newStatus, subjectFilter);
-  }
-
-  function handleSubjectChange(value: string) {
-    const newSubject = value as SupportSubject | "";
-    setSubjectFilter(newSubject);
-    applyFilters(statusFilter, newSubject);
-  }
+  // Filter by subject client-side (Convex index is on status only)
+  const filteredInquiries = subjectFilter
+    ? (inquiries ?? []).filter((i) => i.subject === subjectFilter)
+    : (inquiries ?? []);
 
   function handleRowClick(inquiryId: string) {
     navigate({ to: "/admin/support/$inquiryId", params: { inquiryId } });
@@ -109,7 +83,7 @@ function AdminSupportPage() {
           <select
             className="support-filters__select"
             value={statusFilter}
-            onChange={(e) => handleStatusChange(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value as SupportInquiryStatus | "")}
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
@@ -122,7 +96,7 @@ function AdminSupportPage() {
           <select
             className="support-filters__select"
             value={subjectFilter}
-            onChange={(e) => handleSubjectChange(e.target.value)}
+            onChange={(e) => setSubjectFilter(e.target.value as SupportSubject | "")}
             aria-label="Filter by subject"
           >
             <option value="">All Subjects</option>
@@ -133,19 +107,15 @@ function AdminSupportPage() {
             ))}
           </select>
         </div>
-        {filterError && (
-          <div className="admin-support__filter-error" role="alert">
-            {filterError}
-          </div>
-        )}
       </header>
 
-      <section className={`admin-support__list${loading ? " admin-support__list--loading" : ""}`}>
-        {inquiries.length === 0 ? (
+      <section
+        className={`admin-support__list${inquiries === undefined ? " admin-support__list--loading" : ""}`}
+      >
+        {filteredInquiries.length === 0 ? (
           <p className="inquiry-list__empty">No inquiries found.</p>
         ) : (
           <div className="inquiry-list">
-            {/* Table uses scope="col" on headers for screen reader cell-header association (WCAG 1.3.1) */}
             <table className="inquiry-list__table">
               <thead>
                 <tr className="inquiry-list__header">
@@ -158,26 +128,26 @@ function AdminSupportPage() {
                 </tr>
               </thead>
               <tbody>
-                {inquiries.map((inquiry) => (
+                {filteredInquiries.map((inquiry) => (
                   <tr
-                    key={inquiry.id}
+                    key={inquiry._id}
                     className="inquiry-list__row"
-                    onClick={() => handleRowClick(inquiry.id)}
+                    onClick={() => handleRowClick(inquiry._id)}
                     role="link"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        handleRowClick(inquiry.id);
+                        handleRowClick(inquiry._id);
                       }
                     }}
                   >
-                    <td>{new Date(inquiry.createdAt).toLocaleDateString()}</td>
+                    <td>{new Date(inquiry._creationTime).toLocaleDateString()}</td>
                     <td>{inquiry.name}</td>
                     <td>{inquiry.email}</td>
                     <td>{inquiry.subject}</td>
                     <td>
-                      <SupportStatusBadge status={inquiry.status} />
+                      <SupportStatusBadge status={inquiry.status as SupportInquiryStatus} />
                     </td>
                     <td>{inquiry.orderId ?? "—"}</td>
                   </tr>

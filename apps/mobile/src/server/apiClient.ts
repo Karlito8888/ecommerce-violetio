@@ -9,6 +9,17 @@
  * which duplicated the logic already in `@ecommerce/shared` (Node, strict TypeScript, 437 tests).
  * Now the mobile app calls the same backend as the web, eliminating ~3 000 lines of Deno duplication.
  *
+ * ## Auth (Phase 6 migration)
+ * Previously used Supabase session JWT for Authorization headers.
+ * Now uses Convex Auth — but the web backend API routes still expect Supabase JWTs
+ * for authenticated endpoints (cart, orders). This is a cohabitation situation:
+ * - Public endpoints (products, collections, merchants): no auth needed
+ * - Authenticated endpoints (cart, orders): web backend still uses Supabase JWT validation
+ *   until Phase 11 completes the full migration
+ *
+ * For now, getAuthHeaders() returns empty headers. Authenticated API routes that
+ * still require Supabase tokens will need to be migrated to Convex Auth in Phase 11.
+ *
  * ## Environment
  * - `EXPO_PUBLIC_API_URL` — base URL of the web backend
  *   - Dev Android: http://10.0.2.2:3000
@@ -19,7 +30,6 @@
  */
 
 import Constants from "expo-constants";
-import { createSupabaseClient } from "@ecommerce/shared";
 
 /** Per-request timeout in ms — prevents indefinite hangs on slow/stalled backend. */
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -49,20 +59,23 @@ function getApiUrl(): string {
 }
 
 /**
- * Returns Authorization headers if the user has an active Supabase session.
- * Anonymous users have a real JWT via Supabase anonymous auth.
+ * Returns Authorization headers if available.
+ *
+ * Phase 6 note: Supabase session removed. The web backend API routes that require
+ * authentication still use Supabase JWT validation (Phase 11 will migrate them).
+ * For now, public endpoints (products, collections, merchants, exchange-rates)
+ * work without auth headers. Authenticated endpoints (cart, orders) will be
+ * migrated to Convex Auth in Phase 11.
  */
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const supabase = createSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  // No Supabase session available — return empty headers.
+  // Authenticated API routes will need Phase 11 migration to accept Convex Auth.
+  return {};
 }
 
 /**
  * GET request to the web backend API.
  *
- * Sends Authorization header if user has an active session.
  * Returns parsed JSON response. Throws on non-2xx status.
  */
 export async function apiGet<T>(path: string): Promise<T> {
@@ -80,8 +93,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 /**
  * POST request to the web backend API.
  *
- * Sends JSON body + Authorization header if user has an active session.
- * Returns parsed JSON response. Throws on non-2xx status.
+ * Sends JSON body. Returns parsed JSON response. Throws on non-2xx status.
  */
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const url = `${getApiUrl()}${path}`;
@@ -102,8 +114,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 /**
  * PUT request to the web backend API.
  *
- * Sends JSON body + Authorization header if user has an active session.
- * Returns parsed JSON response. Throws on non-2xx status.
+ * Sends JSON body. Returns parsed JSON response. Throws on non-2xx status.
  */
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   const url = `${getApiUrl()}${path}`;
@@ -124,7 +135,6 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
 /**
  * DELETE request to the web backend API.
  *
- * Sends Authorization header if user has an active session.
  * Returns parsed JSON response. Throws on non-2xx status.
  */
 export async function apiDelete<T>(path: string): Promise<T> {

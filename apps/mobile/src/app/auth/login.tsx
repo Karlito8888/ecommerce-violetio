@@ -1,3 +1,10 @@
+// apps/mobile/src/app/auth/login.tsx
+//
+// Login screen migrated from Supabase to Convex Auth (Phase 6).
+//
+// Uses signIn("password", { email, password, flow: "signIn" })
+// via useAuthActions() from @convex-dev/auth/react.
+
 import React, { useState } from "react";
 import {
   View,
@@ -10,15 +17,9 @@ import {
   ScrollView,
 } from "react-native";
 import { router, Link } from "expo-router";
-import {
-  signInWithEmail,
-  signInWithSocialProviderMobile,
-  createSupabaseClient,
-  mapAuthError,
-} from "@ecommerce/shared";
-import type { SocialProvider } from "@ecommerce/shared";
-import * as WebBrowser from "expo-web-browser";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { colors, typography, spacing } from "@ecommerce/ui";
+import { mapAuthError } from "@ecommerce/shared";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -26,28 +27,7 @@ export default function LoginScreen() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(null);
-
-  async function handleSocialLogin(provider: SocialProvider) {
-    setError("");
-    setSocialLoading(provider);
-    try {
-      const supabase = createSupabaseClient();
-      const { data, error: oauthError } = await signInWithSocialProviderMobile(provider, supabase);
-      if (oauthError) {
-        setError(mapAuthError(oauthError.message));
-        setSocialLoading(null);
-        return;
-      }
-      if (data?.url) {
-        await WebBrowser.openAuthSessionAsync(data.url);
-      }
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
-    } finally {
-      setSocialLoading(null);
-    }
-  }
+  const { signIn } = useAuthActions();
 
   function validate(): boolean {
     const errors: Record<string, string> = {};
@@ -63,17 +43,10 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      const supabase = createSupabaseClient();
-      const { error: authError } = await signInWithEmail(email, password, supabase);
-
-      if (authError) {
-        setError(mapAuthError(authError.message));
-        return;
-      }
-
+      await signIn("password", { email, password, flow: "signIn" });
       router.replace("/");
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (err) {
+      setError(mapAuthError(err, "signIn"));
     } finally {
       setIsLoading(false);
     }
@@ -131,6 +104,8 @@ export default function LoginScreen() {
           <Text style={styles.buttonText}>{isLoading ? "Signing in..." : "Sign In"}</Text>
         </Pressable>
 
+        {/* OAuth buttons — uncomment when credentials are configured in convex/auth.ts */}
+        {/*
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>or continue with</Text>
@@ -138,36 +113,23 @@ export default function LoginScreen() {
         </View>
 
         <Pressable
-          style={[
-            styles.socialBtn,
-            styles.socialBtnGoogle,
-            socialLoading !== null && styles.buttonDisabled,
-          ]}
-          onPress={() => handleSocialLogin("google")}
-          disabled={socialLoading !== null}
+          style={[styles.socialBtn, styles.socialBtnGoogle]}
+          onPress={() => signIn("google")}
         >
-          <Text style={styles.socialBtnGoogleText}>
-            {socialLoading === "google" ? "Redirecting..." : "Continue with Google"}
-          </Text>
+          <Text style={styles.socialBtnGoogleText}>Continue with Google</Text>
         </Pressable>
 
         <Pressable
-          style={[
-            styles.socialBtn,
-            styles.socialBtnApple,
-            socialLoading !== null && styles.buttonDisabled,
-          ]}
-          onPress={() => handleSocialLogin("apple")}
-          disabled={socialLoading !== null}
+          style={[styles.socialBtn, styles.socialBtnApple]}
+          onPress={() => signIn("apple")}
         >
-          <Text style={styles.socialBtnAppleText}>
-            {socialLoading === "apple" ? "Redirecting..." : "Continue with Apple"}
-          </Text>
+          <Text style={styles.socialBtnAppleText}>Continue with Apple</Text>
         </Pressable>
+        */}
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes not yet regenerated */}
+          <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes */}
           <Link href={"/auth/signup" as any} style={styles.footerLink}>
             Create one
           </Link>
@@ -178,19 +140,12 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.ivory,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: spacing.px[8],
-  },
+  container: { flex: 1, backgroundColor: colors.ivory },
+  scroll: { flexGrow: 1, justifyContent: "center", padding: spacing.px[8] },
   heading: {
     fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
     fontSize: typography.typeScale.h1.size,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RN fontWeight type mismatch with numeric literal
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fontWeight: typography.typeScale.h1.weight as any,
     color: colors.ink,
     textAlign: "center",
@@ -210,13 +165,8 @@ const styles = StyleSheet.create({
     padding: spacing.px[3],
     marginBottom: spacing.px[5],
   },
-  globalErrorText: {
-    color: colors.error,
-    fontSize: typography.typeScale.bodySmall.size,
-  },
-  field: {
-    marginBottom: spacing.px[5],
-  },
+  globalErrorText: { color: colors.error, fontSize: typography.typeScale.bodySmall.size },
+  field: { marginBottom: spacing.px[5] },
   label: {
     fontSize: typography.typeScale.bodySmall.size,
     fontWeight: "500",
@@ -232,9 +182,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.ivory,
   },
-  inputError: {
-    borderColor: colors.error,
-  },
+  inputError: { borderColor: colors.error },
   errorText: {
     color: colors.error,
     fontSize: typography.typeScale.caption.size,
@@ -247,38 +195,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: spacing.px[2],
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.ivory,
-    fontSize: typography.typeScale.body.size,
-    fontWeight: "600",
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: spacing.px[6],
-  },
-  footerText: {
-    color: colors.steel,
-    fontSize: typography.typeScale.bodySmall.size,
-  },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: colors.ivory, fontSize: typography.typeScale.body.size, fontWeight: "600" },
+  footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.px[6] },
+  footerText: { color: colors.steel, fontSize: typography.typeScale.bodySmall.size },
   footerLink: {
     color: colors.gold,
     fontSize: typography.typeScale.bodySmall.size,
     fontWeight: "500",
   },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: spacing.px[5],
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.stone,
-  },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.px[5] },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.stone },
   dividerText: {
     color: colors.steel,
     fontSize: typography.typeScale.caption.size,
@@ -291,19 +218,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.px[3],
     borderWidth: 1,
   },
-  socialBtnGoogle: {
-    backgroundColor: "#fff",
-    borderColor: colors.stone,
-  },
+  socialBtnGoogle: { backgroundColor: "#fff", borderColor: colors.stone },
   socialBtnGoogleText: {
     color: colors.ink,
     fontSize: typography.typeScale.body.size,
     fontWeight: "500",
   },
-  socialBtnApple: {
-    backgroundColor: colors.ink,
-    borderColor: colors.ink,
-  },
+  socialBtnApple: { backgroundColor: colors.ink, borderColor: colors.ink },
   socialBtnAppleText: {
     color: "#fff",
     fontSize: typography.typeScale.body.size,

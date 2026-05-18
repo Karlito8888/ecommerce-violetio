@@ -1,55 +1,56 @@
-/**
- * Account Layout Route — auth guard for all /account/* pages.
- *
- * ## Auth Guard
- * Uses TanStack Router's `beforeLoad` hook to check authentication before
- * rendering any account page. Unauthenticated visitors (including anonymous
- * Supabase sessions) are redirected to /auth/login with a `redirect` param
- * so they return to the correct page after signing in.
- *
- * ## Pattern
- * This is the FIRST account route in the project. The `beforeLoad` auth guard
- * here will protect all child routes (orders, profile, wishlist, etc.) without
- * requiring per-route auth checks.
- *
- * @see apps/web/src/routes/account/orders/index.tsx — orders list (child)
- * @see apps/web/src/routes/account/orders/$orderId.tsx — order detail (child)
- */
+// apps/web/src/routes/account/route.tsx
+//
+// Account Layout Route — auth guard for all /account/* pages.
+//
+// Migrated from Supabase Auth to Convex Auth (Phase 5).
+//
+// Uses client-side Convex Auth check via useConvexAuth().
+// Since Convex Auth stores tokens in localStorage (not cookies),
+// the auth state is only available client-side. During SSR, isLoading is true
+// and we show a loading state. After hydration, the auth state resolves and
+// we either render the outlet or redirect to login.
+//
+// All child routes (orders, profile, wishlist) inherit this guard.
 
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { getSupabaseSessionClient } from "#/server/supabaseServer";
-import { createServerFn } from "@tanstack/react-start";
-
-/**
- * Server function that returns the current authenticated (non-anonymous) user.
- * Returns `null` if there is no session or the session is anonymous.
- *
- * Called from `beforeLoad` to gate access to all account routes.
- */
-const getAuthUserFn = createServerFn({ method: "GET" }).handler(async () => {
-  const supabase = getSupabaseSessionClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || user.is_anonymous) return null;
-  return { id: user.id, email: user.email ?? null };
-});
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useConvexAuth } from "@convex-dev/auth/react";
 
 export const Route = createFileRoute("/account")({
-  beforeLoad: async ({ location }) => {
-    const user = await getAuthUserFn();
-    if (!user) {
-      throw redirect({
-        to: "/auth/login",
-        search: { redirect: location.pathname },
-      });
-    }
-    return { user };
-  },
   component: AccountLayout,
 });
 
 function AccountLayout() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      const currentPath = window.location.pathname;
+      navigate({
+        to: "/auth/login",
+        search: { redirect: currentPath },
+        replace: true,
+      });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
+  if (isLoading) {
+    return (
+      <section className="page-wrap" style={{ padding: "4rem 0", textAlign: "center" }}>
+        <p>Loading...</p>
+      </section>
+    );
+  }
+
+  if (!isAuthenticated) {
+    // Will redirect via useEffect above
+    return (
+      <section className="page-wrap" style={{ padding: "4rem 0", textAlign: "center" }}>
+        <p>Redirecting to login...</p>
+      </section>
+    );
+  }
+
   return <Outlet />;
 }

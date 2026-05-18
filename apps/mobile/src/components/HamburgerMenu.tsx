@@ -10,7 +10,7 @@ import { useRouter } from "expo-router";
 import { Fonts, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import ThemeToggle from "@/components/ThemeToggle";
-import { useUser } from "@ecommerce/shared";
+import { useAuth } from "@/context/AuthContext";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
@@ -56,8 +56,7 @@ export interface HamburgerMenuProps {
 export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
   const theme = useTheme();
   const router = useRouter();
-  const { data: user } = useUser();
-  const isAuthenticated = !!user && !user.is_anonymous;
+  const { isAuthenticated } = useAuth();
 
   const slideAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;

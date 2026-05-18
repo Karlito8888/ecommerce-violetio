@@ -25,7 +25,7 @@ class RecentlyViewedBoundary extends Component<{ children: ReactNode }, { hasErr
 
 function RecentlyViewedRowInner() {
   const { data: user } = useUser();
-  const userId = user && !user.is_anonymous ? user.id : undefined;
+  const userId = user?.id;
 
   const {
     data: productIds,

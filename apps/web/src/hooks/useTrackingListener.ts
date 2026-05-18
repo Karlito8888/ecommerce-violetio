@@ -1,42 +1,51 @@
+// apps/web/src/hooks/useTrackingListener.ts
+//
+// Router-level tracking listener.
+//
+// Migrated from Supabase Server Function to Convex mutation (Phase 5 fix M3).
+// The `trackEventFn` Server Function was routing through Supabase; now we call
+// the Convex `tracking.mutations.recordEvent` mutation directly.
+//
+// The Convex mutation accepts both Convex userId and localId as `userId`,
+// so we pass the appropriate identifier for both authenticated and anonymous users.
+
 import { useEffect, useCallback } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { useTracking, addToRecentlyViewedStorage } from "@ecommerce/shared";
+import { useMutation } from "convex/react";
+import { useTracking, addToRecentlyViewedStorage, getOrCreateLocalId } from "@ecommerce/shared";
 import type { TrackingEvent } from "@ecommerce/shared";
-import { trackEventFn } from "../server/tracking";
+import { api } from "#convex/_generated/api";
 
 /**
  * Web-specific tracking hook — wraps the shared `useTracking` hook with the
- * web `sendEvent` implementation (calls the `trackEventFn` Server Function).
+ * Convex `recordEvent` mutation as the sendEvent implementation.
  *
- * ## Security (H1 code-review fix)
- * The `sendEvent` callback does NOT send `userId` to the server. The Server
- * Function extracts the authenticated user from the session cookie server-side
- * via `getSupabaseSessionClient()`. The `userId` parameter from `useTracking`
- * is only used client-side for the anonymous-user guard and dedup key.
- *
- * ## Why a separate hook?
- * Extracted from `useTrackingListener` so that individual route components
- * (e.g., the search page) can track events with richer context (like
- * `result_count`) without duplicating the sendEvent setup.
- *
- * @param userId - Authenticated user ID (undefined for anonymous/guests).
- *   Only used client-side — the server validates identity independently.
+ * For authenticated users, uses their Convex userId.
+ * For anonymous visitors, uses the localId (crypto.randomUUID in localStorage).
+ * The Convex mutation accepts either identifier.
  */
 export function useWebTracking(userId: string | undefined) {
-  const sendEvent = useCallback(async (_userId: string, event: TrackingEvent) => {
-    await trackEventFn({ data: { event } });
-  }, []);
+  const recordEvent = useMutation(api.tracking.mutations.recordEvent);
 
-  return useTracking({ userId, sendEvent });
+  const sendEvent = useCallback(
+    async (ownerId: string, event: TrackingEvent) => {
+      await recordEvent({
+        userId: ownerId,
+        eventType: event.event_type,
+        payload: event.payload,
+      });
+    },
+    [recordEvent],
+  );
+
+  // Determine the ownerId: Convex userId (auth) or localId (anonymous)
+  const ownerId = userId ?? getOrCreateLocalId();
+
+  return useTracking({ userId: ownerId, sendEvent });
 }
 
 /**
  * [M3 code-review fix] Extracted shared product route regex.
- *
- * Both the localStorage subscription (anonymous + auth) and the server-side
- * tracking subscription (auth only) need to detect `/products/:productId`
- * navigations. Previously the same regex was duplicated in both `useEffect`
- * callbacks. A single constant avoids drift and makes the pattern testable.
  */
 const PRODUCT_ROUTE_PATTERN = /^\/products\/([^/]+)$/;
 
@@ -44,30 +53,19 @@ const PRODUCT_ROUTE_PATTERN = /^\/products\/([^/]+)$/;
  * Router-level tracking listener — fires `product_view` and `category_view`
  * events on TanStack Router navigation.
  *
- * ## What is NOT tracked here (H2 code-review fix)
- * **Search events** are tracked in `routes/search/index.tsx` instead, because
- * the router listener doesn't have access to `result_count` (AC #2 requires it).
- * The search page component tracks after results load with the actual count.
- *
  * ## How it works
  * Subscribes to `router.subscribe('onResolved')` — fires after navigation
- * completes (not on click, not during loading). Uses `toLocation.pathname`
- * and `toLocation.search` to determine the page type and extract parameters.
- *
- * ## Route patterns matched
- * - `/products/:productId` → `product_view` with `{ product_id }`
- * - `/products?category=X` → `category_view` with `{ category_id, category_name }`
+ * completes. Uses `toLocation.pathname` and `toLocation.search` to determine
+ * the page type and extract parameters.
  *
  * ## Two separate subscriptions — by design
  * The localStorage write (first `useEffect`) runs for ALL users including
- * anonymous, while the server tracking (second `useEffect`) only fires for
- * authenticated users. Merging them would require conditional logic inside
- * a single subscription and re-subscribe on `userId` changes, which is more
- * fragile than two independent effects with clear responsibilities.
+ * anonymous, while the Convex tracking (second `useEffect`) fires for both
+ * authenticated and anonymous users via the ownerId pattern.
  *
  * Mounted once in `__root.tsx` — covers all page navigations app-wide.
  *
- * @param userId - Authenticated user ID. Server-side tracking is skipped for anonymous users.
+ * @param userId - Authenticated user ID. Falls back to localId for anonymous visitors.
  */
 export function useTrackingListener(userId: string | undefined) {
   const router = useRouter();
@@ -75,7 +73,6 @@ export function useTrackingListener(userId: string | undefined) {
 
   // Record product views to localStorage for ALL users (anonymous + authenticated).
   // This powers the "Recently Viewed" section on the homepage.
-  // Runs independently of server-side tracking (which requires userId).
   useEffect(() => {
     const unsubscribe = router.subscribe("onResolved", (event) => {
       const productMatch = event.toLocation.pathname.match(PRODUCT_ROUTE_PATTERN);
@@ -86,9 +83,8 @@ export function useTrackingListener(userId: string | undefined) {
     return unsubscribe;
   }, [router]);
 
+  // Record tracking events via Convex for ALL users (ownerId = userId or localId)
   useEffect(() => {
-    if (!userId) return;
-
     const unsubscribe = router.subscribe("onResolved", (event) => {
       const pathname = event.toLocation.pathname;
       const search = event.toLocation.search as Record<string, unknown>;
@@ -103,17 +99,7 @@ export function useTrackingListener(userId: string | undefined) {
         return;
       }
 
-      /**
-       * Category browsing: /products?category=...
-       *
-       * M1 note: `offer_id` and `category` are intentionally omitted from
-       * product_view payloads — they're not available from route params alone.
-       * The product detail page would need to fetch the full product data to
-       * populate these fields. AC #1 marks them as part of the payload spec,
-       * but the types define them as optional (`offer_id?: string`).
-       * Downstream consumers (Stories 6.3, 6.5) can JOIN user_events with
-       * the product catalog to enrich the data at query time.
-       */
+      // Category browsing: /products?category=...
       if (pathname === "/products" && search.category) {
         trackEvent({
           event_type: "category_view",
@@ -126,5 +112,5 @@ export function useTrackingListener(userId: string | undefined) {
     });
 
     return unsubscribe;
-  }, [userId, router, trackEvent]);
+  }, [router, trackEvent]);
 }

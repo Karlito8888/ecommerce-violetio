@@ -2,10 +2,8 @@
  * Shared order hooks and query factories for authenticated order management.
  *
  * ## Purpose
- * Provides platform-agnostic TanStack Query options and Supabase Realtime
- * subscriptions for the authenticated user's order list and detail views.
- * Used by the web app's account/orders pages. Mobile does not yet consume
- * these hooks (confirmation and guest lookup use direct fetch calls).
+ * Provides platform-agnostic TanStack Query options for the authenticated
+ * user's order list and detail views. Used by checkout/confirmation flows.
  *
  * ## Architecture
  * Follows a "query options factory" pattern: functions return `queryOptions()`
@@ -17,28 +15,18 @@
  * (`OrdersFetchFn`, `OrderDetailFetchFn`), keeping this module decoupled
  * from server functions or edge function specifics.
  *
- * ## Realtime
- * The `useOrderRealtime` hook subscribes to Supabase Realtime for live order
- * and bag status changes, using cache invalidation (not state patching) to
- * keep the UI fresh.
- *
- * ## Mobile integration status
- * - Mobile `/orders` list and `/orders/[orderId]` detail pages use `ordersQueryOptions`
- *   and `orderDetailQueryOptions` with mobile-specific fetch functions via web backend API Routes.
- * - Both pages subscribe to `useOrderRealtime` for live status updates (same as web).
- * - The `OrderConfirmationScreen` (mobile) does NOT use these hooks — one-shot post-checkout.
- * - The `GuestLookupScreen` (mobile) does NOT use these hooks — guest lookup by token.
+ * ## Realtime — CONVEX
+ * Convex queries are reactive by default. No manual Realtime subscription needed.
+ * When data changes (via mutation), all connected clients are notified automatically.
+ * The Supabase Realtime hooks (`useOrderRealtime`, `createOrdersRealtimeChannel`)
+ * have been removed — they are unnecessary with Convex.
  *
  * @module useOrders
- * @see {@link file://apps/web/src/routes/account/orders/index.tsx} — web consumer
- * @see {@link file://apps/mobile/src/app/order/[orderId]/confirmation.tsx} — does NOT use this
- * @see {@link file://apps/mobile/src/app/order/lookup.tsx} — does NOT use this
+ * @see {@link file://apps/web/src/routes/account/orders/index.tsx} — web consumer (Convex)
+ * @see {@link file://apps/mobile/src/app/orders/index.tsx} — mobile consumer (Convex)
  */
 
 import { queryOptions } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
-import type { QueryClient } from "@tanstack/react-query";
-import type { SupabaseClient, RealtimeChannel } from "@supabase/supabase-js";
 import type {
   OrderRow,
   OrderBagRow,
@@ -121,96 +109,4 @@ export function orderDetailQueryOptions(orderId: string, fetchFn: OrderDetailFet
     queryKey: queryKeys.orders.detail(orderId),
     queryFn: () => fetchFn(orderId),
   });
-}
-
-// ─── Realtime Subscription Logic ─────────────────────────────────────────────
-
-/**
- * Creates and subscribes to a Supabase Realtime channel for live order status updates.
- *
- * ## Architecture
- * Realtime is used as a **cache-invalidation signal**, NOT for patching state.
- * When an UPDATE event arrives, we invalidate `queryKeys.orders.all()` and let
- * TanStack Query re-fetch from Supabase. This is safe because:
- * - REPLICA IDENTITY DEFAULT only sends the PK on UPDATE (not full row)
- * - Re-fetching always gets the latest data, including RLS-protected rows
- * - Spurious invalidations cause harmless re-fetches
- *
- * ## Channel convention
- * `orders:user_{userId}` — from architecture.md.
- *
- * ## order_bags filter limitation
- * `order_bags` has no `user_id` column, so we cannot filter by user. We subscribe
- * to all `order_bags` UPDATEs — the re-fetch is RLS-protected so only the user's
- * data is returned. At worst, a spurious invalidation triggers a harmless re-fetch.
- *
- * Extracted as a pure function so it can be unit-tested without React.
- *
- * @returns The subscribed RealtimeChannel (call `.unsubscribe()` to clean up).
- */
-export function createOrdersRealtimeChannel(
-  supabase: SupabaseClient,
-  userId: string,
-  queryClient: QueryClient,
-): RealtimeChannel {
-  return supabase
-    .channel(`orders:user_${userId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "orders",
-        filter: `user_id=eq.${userId}`,
-      },
-      () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.orders.all() });
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "order_bags",
-      },
-      () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.orders.all() });
-      },
-    )
-    .subscribe();
-}
-
-// ─── Realtime Subscription Hook ───────────────────────────────────────────────
-
-/**
- * React hook that subscribes to Supabase Realtime for live order status updates.
- * Delegates channel setup to {@link createOrdersRealtimeChannel} (pure, testable).
- *
- * @param userId - Authenticated user ID. Pass `null` to disable subscription.
- * @param queryClient - TanStack Query client for cache invalidation.
- * @param supabase - Browser Supabase client (NOT service-role).
- */
-export function useOrderRealtime(
-  userId: string | null,
-  queryClient: QueryClient,
-  supabase: SupabaseClient,
-): void {
-  const channelRef = useRef<RealtimeChannel | null>(null);
-
-  // Stabilize queryClient ref to avoid re-subscribing on every render
-  const queryClientRef = useRef(queryClient);
-  queryClientRef.current = queryClient;
-
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = createOrdersRealtimeChannel(supabase, userId, queryClientRef.current);
-    channelRef.current = channel;
-
-    return () => {
-      channel.unsubscribe();
-      channelRef.current = null;
-    };
-  }, [supabase, userId]);
 }

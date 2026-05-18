@@ -1,5 +1,8 @@
 /**
- * Push notification registration and listener hooks (Story 6.7).
+ * Push notification registration and listener hooks — migrated to Convex (Phase 6).
+ *
+ * Uses Convex useMutation(api.notifications.mutations.upsertPushToken) instead of
+ * upsertPushToken from @ecommerce/shared (Supabase).
  *
  * MOBILE-ONLY — These hooks import expo-notifications and expo-device.
  * Do NOT import from web app code (apps/web).
@@ -9,14 +12,15 @@
  * 2. Set up Android notification channel (required for Android 8+)
  * 3. Request permission (shows native OS dialog)
  * 4. Get Expo push token (requires EAS projectId)
- * 5. Upsert token to Supabase (multi-device support)
+ * 5. Upsert token to Convex (multi-device support)
  */
 
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
-import { upsertPushToken } from "@ecommerce/shared";
+import { useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
 
 // expo-notifications Android push support was removed from Expo Go in SDK 53.
 // Detect Expo Go via Constants.appOwnership and skip all notification setup.
@@ -24,7 +28,6 @@ import { upsertPushToken } from "@ecommerce/shared";
 const IS_EXPO_GO = Constants.appOwnership === "expo";
 
 // Only import if we're NOT in Expo Go (dev build or production)
-
 const Notifications: typeof import("expo-notifications") | null = IS_EXPO_GO
   ? null
   : (() => {
@@ -36,7 +39,7 @@ const Notifications: typeof import("expo-notifications") | null = IS_EXPO_GO
     })();
 
 /**
- * Registers the device for push notifications and saves the token to Supabase.
+ * Registers the device for push notifications and saves the token to Convex.
  *
  * @param userId - Authenticated user ID. Registration is skipped if undefined.
  *
@@ -44,11 +47,12 @@ const Notifications: typeof import("expo-notifications") | null = IS_EXPO_GO
  * - Requests notification permission on first call
  * - Creates an Android notification channel ("default")
  * - Gets the Expo push token using EAS projectId
- * - Upserts the token to user_push_tokens table
+ * - Upserts the token to Convex userPushTokens table
  * - Silently fails on error (token registration is not critical)
  */
 export function usePushRegistration(userId: string | undefined) {
   const registeredForRef = useRef<string | null>(null);
+  const upsertToken = useMutation(api.notifications.mutations.upsertPushToken);
 
   useEffect(() => {
     if (!userId || registeredForRef.current === userId) return;
@@ -59,7 +63,12 @@ export function usePushRegistration(userId: string | undefined) {
         if (!token) return;
 
         const deviceId = `${Device.modelName ?? "unknown"}-${Platform.OS}`;
-        await upsertPushToken(userId!, token, deviceId, Platform.OS as "ios" | "android");
+        await upsertToken({
+          userId: userId!,
+          expoPushToken: token,
+          deviceId,
+          platform: Platform.OS as "ios" | "android",
+        });
         registeredForRef.current = userId!;
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -68,7 +77,7 @@ export function usePushRegistration(userId: string | undefined) {
     }
 
     register();
-  }, [userId]);
+  }, [userId, upsertToken]);
 }
 
 /**

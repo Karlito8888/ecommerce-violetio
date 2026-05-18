@@ -6,10 +6,11 @@ import AppBanner from "../components/AppBanner";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 import { AppBannerContext, useAppBannerProvider } from "../hooks/useAppBanner";
-import { getSupabaseBrowserClient } from "../utils/supabase";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { CartProvider } from "../contexts/CartContext";
 import { ToastProvider } from "../components/ui/Toast";
-import { useAuthSession } from "../hooks/useAuthSession";
 import { useTrackingListener } from "../hooks/useTrackingListener";
 import CartDrawer from "../features/cart/CartDrawer";
 import CookieConsentBanner from "../components/legal/CookieConsentBanner";
@@ -24,7 +25,6 @@ import { getExchangeRatesFn } from "../server/exchangeRates";
 import { setLiveExchangeRates } from "@ecommerce/shared";
 import UserLocationProvider from "../contexts/UserLocationContext";
 import type { CartFetchFn, UpdateCartItemFn, RemoveFromCartFn } from "@ecommerce/shared";
-import { _setSupabaseClient } from "@ecommerce/shared";
 
 import appCss from "../styles/index.css?url";
 
@@ -104,20 +104,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     setLiveExchangeRates(exchangeRates.rates, exchangeRates.date);
   }
 
-  // Auth session for Realtime subscription (Story 4.6)
-  const { user, isAnonymous } = useAuthSession();
-  const supabase = getSupabaseBrowserClient();
+  // Convex Auth — userId for cart merge + tracking
+  const { isAuthenticated } = useConvexAuth();
+  const identity = useQuery(api.users.queries.getIdentity, isAuthenticated ? {} : "skip");
+  const userId = isAuthenticated && identity ? identity.subject : null;
 
-  // Inject the SSR cookie-based client into the shared package singleton.
-  // Without this, shared hooks (wishlist, profile) default to a localStorage-based
-  // client that has no session — causing all RLS-protected mutations to fail on web.
-  _setSupabaseClient(supabase);
-
-  // Only provide userId for non-anonymous authenticated users — anonymous users don't sync
-  const syncUserId = user && !isAnonymous ? user.id : null;
-
-  // Browsing history tracking (Story 6.2) — only for authenticated users
-  useTrackingListener(syncUserId ?? undefined);
+  // Browsing history tracking — only for authenticated users
+  useTrackingListener(userId ?? undefined);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -127,11 +120,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <ToastProvider>
-          <CartProvider
-            initialVioletCartId={initialVioletCartId}
-            supabase={supabase}
-            userId={syncUserId}
-          >
+          <CartProvider initialVioletCartId={initialVioletCartId} userId={userId}>
             <UserLocationProvider initialCountryCode={initialCountryCode}>
               <AppBannerContext.Provider value={appBanner}>
                 <a href="#main-content" className="sr-only sr-only--focusable">

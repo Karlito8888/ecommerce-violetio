@@ -7,13 +7,17 @@
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/clients/supabase.server.ts",
-    "./server/utils": "./src/utils/server.ts"
+    "./server/utils": "./src/utils/server.ts",
+    "./hooks/convex": "./src/hooks/convex/index.ts"
   },
   "scripts": {
     "test": "vitest run"
   },
   "dependencies": {
+    "@convex-dev/auth": "^0.0.92",
+    "@convex-dev/react-query": "^0.1.0",
     "@supabase/supabase-js": "^2.100.1",
+    "convex": "^1.39.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

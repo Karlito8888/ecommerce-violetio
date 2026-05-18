@@ -142,7 +142,7 @@ function CheckoutPage() {
   const { violetCartId, cartHealth, setCartHealth, resetCart } = useCartContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { user, isAnonymous } = useAuthSession();
+  const { userId, isAuthenticated } = useAuthSession();
   const { data: cartResponse, isLoading: isCartLoading } = useCartQuery(violetCartId, fetchCart);
   const cart = cartResponse?.data ?? null;
 
@@ -922,8 +922,8 @@ function CheckoutPage() {
       const persistResult = await persistAndConfirmOrderFn({
         data: {
           violetOrderId: orderId,
-          userId: isAnonymous ? null : (user?.id ?? null),
-          sessionId: user?.id ?? null,
+          userId: isAuthenticated ? userId : null,
+          sessionId: null,
         },
       });
       guestToken = persistResult.data?.orderLookupToken;

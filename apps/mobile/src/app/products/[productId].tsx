@@ -17,7 +17,6 @@ import {
 import { Image } from "expo-image";
 import * as SecureStore from "expo-secure-store";
 import {
-  createSupabaseClient,
   formatPrice,
   optimizeImageUrl,
   stripHtml,
@@ -33,6 +32,7 @@ import WishlistButton from "@/components/product/WishlistButton";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useTrackProductView } from "@/hooks/useMobileTracking";
+import { useAuth } from "@/context/AuthContext";
 import { apiGet, apiPost } from "@/server/apiClient";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -43,11 +43,7 @@ const HERO_PX = Math.min(Math.round(SCREEN_WIDTH * PixelRatio.get()), 2160);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function getSessionToken(): Promise<string | null> {
-  const supabase = createSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
+// (Helper functions removed — auth comes from useAuth context, no more Supabase session)
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
@@ -56,6 +52,7 @@ type AddState = "idle" | "loading" | "added" | "error";
 export default function ProductDetailScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
   const theme = useTheme();
+  const { isAuthenticated } = useAuth();
 
   const [addState, setAddState] = useState<AddState>("idle");
   const [selectedValues, setSelectedValues] = useState<Record<string, string>>({});
@@ -124,14 +121,12 @@ export default function ProductDetailScreen() {
       Alert.alert("Select options", "Please select all product options before adding to bag.");
       return;
     }
+    if (!isAuthenticated) {
+      Alert.alert("Sign in required", "Please sign in to add items to your bag.");
+      return;
+    }
     setAddState("loading");
     try {
-      const token = await getSessionToken();
-      if (!token) {
-        Alert.alert("Sign in required", "Please sign in to add items to your bag.");
-        setAddState("idle");
-        return;
-      }
       let violetCartId = await SecureStore.getItemAsync(CART_STORAGE_KEY);
       if (!violetCartId) {
         const createJson = await apiPost<{ data?: { violetCartId?: string } }>("/api/cart", {});

@@ -1,25 +1,24 @@
+// apps/web/src/routes/auth/signup.tsx
+//
+// /auth/signup — Account creation page.
+// Migrated from Supabase Auth to Convex Auth (Phase 5).
+//
+// Convex Auth sign-up flow with email verification:
+//   1. signIn("password", { email, password, name, flow: "signUp" })
+//      → Creates account in "pending verification" state
+//      → Sends 6-digit OTP via Resend (configured in convex/lib/resendOTP.ts)
+//   2. Navigate to /auth/verify with email + password in router state
+//   3. User enters code → signIn("password", { email, password, flow: "signUp", code })
+//      → Verifies code, activates account, signs user in
+//   4. migrateAnonymousData(localId) called in verify page to transfer wishlist/events
+
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  signUpWithEmail,
-  signInWithSocialProvider,
-  mapAuthError,
-  sanitizeRedirect,
-  buildPageMeta,
-} from "@ecommerce/shared";
-import type { SocialProvider } from "@ecommerce/shared";
-import { getSupabaseBrowserClient } from "../../utils/supabase";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { buildPageMeta, mapAuthError } from "@ecommerce/shared";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
-/**
- * /auth/signup route — Account creation page.
- *
- * ## SEO (Story 3.8)
- *
- * Uses `buildPageMeta({ noindex: true })` — consistent with all auth routes.
- * @see /auth/login for rationale on using buildPageMeta on noindex pages.
- */
 export const Route = createFileRoute("/auth/signup")({
   head: () => ({
     meta: buildPageMeta({
@@ -39,34 +38,15 @@ export const Route = createFileRoute("/auth/signup")({
 function SignupPage() {
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
+  const { signIn } = useAuthActions();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(null);
-
-  async function handleSocialLogin(provider: SocialProvider) {
-    setError("");
-    setSocialLoading(provider);
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const { error: oauthError } = await signInWithSocialProvider(
-        provider,
-        { redirectTo: `${window.location.origin}${sanitizeRedirect(redirect)}` },
-        supabase,
-      );
-      if (oauthError) {
-        setError(mapAuthError(oauthError.message));
-        setSocialLoading(null);
-      }
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
-      setSocialLoading(null);
-    }
-  }
 
   function validate(): boolean {
     const errors: Record<string, string> = {};
@@ -85,30 +65,25 @@ function SignupPage() {
 
     setIsLoading(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error: authError } = await signUpWithEmail(email, password, supabase);
+      // Convex Auth: sign-up sends verification OTP via Resend.
+      // Account is created in "pending verification" state.
+      await signIn("password", {
+        email,
+        password,
+        ...(name ? { name } : {}),
+        flow: "signUp",
+      });
 
-      if (authError) {
-        setError(mapAuthError(authError.message));
-        return;
-      }
-
-      // When email confirmations are disabled, the email is confirmed immediately
-      // and the account is ready to use — skip the OTP verify page.
-      if (data?.user?.email_confirmed_at) {
-        await navigate({ to: sanitizeRedirect(redirect) });
-        return;
-      }
-
-      // Email confirmations enabled — OTP was sent, go to verify page.
+      // Navigate to verify page with email + password in router state.
+      // Password is passed in-memory only (never persisted to storage).
       await navigate({
         to: "/auth/verify",
         search: { email, redirect },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- password passed via in-memory router state
         state: { password } as any,
       });
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (err) {
+      setError(mapAuthError(err, "signUp"));
     } finally {
       setIsLoading(false);
     }
@@ -121,6 +96,21 @@ function SignupPage() {
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         {error && <div className="auth-form__global-error">{error}</div>}
+
+        <div className="auth-form__field">
+          <label className="auth-form__label" htmlFor="signup-name">
+            Name (optional)
+          </label>
+          <input
+            id="signup-name"
+            className="auth-form__input"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+            placeholder="How you'd like to be called"
+          />
+        </div>
 
         <div className="auth-form__field">
           <label className="auth-form__label" htmlFor="signup-email">
@@ -172,29 +162,6 @@ function SignupPage() {
         <button className="auth-form__submit" type="submit" disabled={isLoading}>
           {isLoading ? "Sending verification..." : "Create Account"}
         </button>
-
-        <div className="auth-form__social-divider">
-          <span>or continue with</span>
-        </div>
-
-        <div className="auth-form__social-buttons">
-          <button
-            type="button"
-            className="auth-form__social-btn auth-form__social-btn--google"
-            onClick={() => handleSocialLogin("google")}
-            disabled={socialLoading !== null}
-          >
-            {socialLoading === "google" ? "Redirecting..." : "Continue with Google"}
-          </button>
-          <button
-            type="button"
-            className="auth-form__social-btn auth-form__social-btn--apple"
-            onClick={() => handleSocialLogin("apple")}
-            disabled={socialLoading !== null}
-          >
-            {socialLoading === "apple" ? "Redirecting..." : "Continue with Apple"}
-          </button>
-        </div>
 
         <div className="auth-form__footer">
           Already have an account?{" "}

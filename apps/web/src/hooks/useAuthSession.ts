@@ -1,61 +1,61 @@
-import { useEffect, useState } from "react";
-import type { AuthSession } from "@ecommerce/shared";
-import { initAnonymousSession } from "@ecommerce/shared";
-import { getSupabaseBrowserClient } from "../utils/supabase";
+// apps/web/src/hooks/useAuthSession.ts
+//
+// Convex Auth-backed session hook for the web app.
+// Replaces the Supabase-based useAuthSession (Phase 5).
+//
+// Key differences from Supabase:
+//   - No anonymous session — localId model (crypto.randomUUID in localStorage)
+//   - No session object — Convex Auth manages tokens internally
+//   - userId comes from Convex Auth identity (subject field)
+//
+// Consumers:
+//   - __root.tsx: userId for CartProvider + tracking
+//   - CartContext.tsx: userId for cart merge
+
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import { useMemo } from "react";
+import { api } from "#convex/_generated/api";
+import { getOrCreateLocalId } from "@ecommerce/shared";
+
+export interface WebAuthSession {
+  /** Convex Auth user ID (subject), or null if not authenticated */
+  userId: string | null;
+  /** User email, or null */
+  email: string | null;
+  /** localId for anonymous visitors (persisted in localStorage) */
+  localId: string;
+  /** Whether Convex Auth session is active */
+  isAuthenticated: boolean;
+  /** Whether auth state is still resolving */
+  isLoading: boolean;
+}
 
 /**
- * React hook that provides the current Supabase auth session.
- * Automatically initializes an anonymous session if none exists.
- * Listens to auth state changes (sign-in, sign-out, token refresh).
+ * Provides the current auth state backed by Convex Auth.
  *
- * Uses the cookie-based browser client from @supabase/ssr so the
- * session is visible to the SSR server on subsequent requests.
+ * - Authenticated: userId and email from Convex Auth identity query
+ * - Anonymous (visitor): localId from localStorage, no server session
+ * - Loading: Convex Auth is resolving the initial state
+ *
+ * The identity query is skipped ("skip") when not authenticated to avoid
+ * unnecessary server calls. Convex will not execute the query in that case.
  */
-export function useAuthSession(): AuthSession {
-  const [state, setState] = useState<AuthSession>({
-    user: null,
-    session: null,
-    isLoading: true,
-    isAnonymous: false,
-  });
+export function useAuthSession(): WebAuthSession {
+  const { isAuthenticated, isLoading } = useConvexAuth();
 
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    let initialSessionHandled = false;
+  const identity = useQuery(api.users.queries.getIdentity, isAuthenticated ? {} : "skip");
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      // Only transition from loading after the initial session is resolved
-      if (event === "INITIAL_SESSION") {
-        initialSessionHandled = true;
-
-        // If no session exists yet, kick off anonymous sign-in
-        if (!session) {
-          initAnonymousSession(supabase).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.warn("[auth] initAnonymousSession error:", err);
-            setState((prev) => ({ ...prev, isLoading: false }));
-          });
-          return; // Don't set isLoading=false yet — wait for SIGNED_IN event from initAnonymousSession
-        }
-      }
-
-      // For INITIAL_SESSION with a session, or any subsequent event, update state
-      if (initialSessionHandled || event !== "INITIAL_SESSION") {
-        setState({
-          user: session?.user ?? null,
-          session,
-          isLoading: false,
-          isAnonymous: session?.user?.is_anonymous ?? false,
-        });
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+  const localId = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return getOrCreateLocalId();
   }, []);
 
-  return state;
+  return {
+    userId: isAuthenticated && identity ? identity.subject : null,
+    email: isAuthenticated && identity ? (identity.email ?? null) : null,
+    localId,
+    isAuthenticated,
+    isLoading,
+  };
 }

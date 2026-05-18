@@ -1,3 +1,10 @@
+// apps/mobile/src/app/auth/signup.tsx
+//
+// Signup screen migrated from Supabase to Convex Auth (Phase 6).
+//
+// Flow: signIn("password", { email, password, flow: "signUp" }) →
+//   OTP sent via Resend → navigate to /auth/verify with pending signup data.
+
 import React, { useState } from "react";
 import {
   View,
@@ -10,46 +17,20 @@ import {
   ScrollView,
 } from "react-native";
 import { router, Link } from "expo-router";
-import {
-  signUpWithEmail,
-  signInWithSocialProviderMobile,
-  createSupabaseClient,
-  mapAuthError,
-} from "@ecommerce/shared";
-import type { SocialProvider } from "@ecommerce/shared";
-import * as WebBrowser from "expo-web-browser";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { colors, typography, spacing } from "@ecommerce/ui";
 import { setPendingSignup } from "@/utils/pendingSignup";
+import { mapAuthError } from "@ecommerce/shared";
 
 export default function SignupScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(null);
-
-  async function handleSocialLogin(provider: SocialProvider) {
-    setError("");
-    setSocialLoading(provider);
-    try {
-      const supabase = createSupabaseClient();
-      const { data, error: oauthError } = await signInWithSocialProviderMobile(provider, supabase);
-      if (oauthError) {
-        setError(mapAuthError(oauthError.message));
-        setSocialLoading(null);
-        return;
-      }
-      if (data?.url) {
-        await WebBrowser.openAuthSessionAsync(data.url);
-      }
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
-    } finally {
-      setSocialLoading(null);
-    }
-  }
+  const { signIn } = useAuthActions();
 
   function validate(): boolean {
     const errors: Record<string, string> = {};
@@ -67,27 +48,21 @@ export default function SignupScreen() {
 
     setIsLoading(true);
     try {
-      const supabase = createSupabaseClient();
-      const { data, error: authError } = await signUpWithEmail(email, password, supabase);
+      // Convex Auth: sign-up sends verification OTP via Resend
+      await signIn("password", {
+        email,
+        password,
+        ...(name ? { name } : {}),
+        flow: "signUp",
+      });
 
-      if (authError) {
-        setError(mapAuthError(authError.message));
-        return;
-      }
-
-      // When email confirmations are disabled, account is ready immediately
-      if (data?.user?.email_confirmed_at) {
-        router.replace("/");
-        return;
-      }
-
-      // Email confirmations enabled — OTP was sent, go to verify page
+      // Store pending signup data for verify screen
       setPendingSignup(email, password);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes not yet regenerated
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       router.push("/auth/verify" as any);
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (err) {
+      setError(mapAuthError(err, "signUp"));
     } finally {
       setIsLoading(false);
     }
@@ -107,6 +82,19 @@ export default function SignupScreen() {
             <Text style={styles.globalErrorText}>{error}</Text>
           </View>
         )}
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Name (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            autoComplete="name"
+            textContentType="name"
+            placeholder="How you'd like to be called"
+            placeholderTextColor={colors.stone}
+          />
+        </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Email</Text>
@@ -162,43 +150,9 @@ export default function SignupScreen() {
           </Text>
         </Pressable>
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or continue with</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <Pressable
-          style={[
-            styles.socialBtn,
-            styles.socialBtnGoogle,
-            socialLoading !== null && styles.buttonDisabled,
-          ]}
-          onPress={() => handleSocialLogin("google")}
-          disabled={socialLoading !== null}
-        >
-          <Text style={styles.socialBtnGoogleText}>
-            {socialLoading === "google" ? "Redirecting..." : "Continue with Google"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[
-            styles.socialBtn,
-            styles.socialBtnApple,
-            socialLoading !== null && styles.buttonDisabled,
-          ]}
-          onPress={() => handleSocialLogin("apple")}
-          disabled={socialLoading !== null}
-        >
-          <Text style={styles.socialBtnAppleText}>
-            {socialLoading === "apple" ? "Redirecting..." : "Continue with Apple"}
-          </Text>
-        </Pressable>
-
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account? </Text>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo typed routes not yet regenerated */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <Link href={"/auth/login" as any} style={styles.footerLink}>
             Sign in
           </Link>
@@ -209,19 +163,12 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.ivory,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: spacing.px[8],
-  },
+  container: { flex: 1, backgroundColor: colors.ivory },
+  scroll: { flexGrow: 1, justifyContent: "center", padding: spacing.px[8] },
   heading: {
     fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
     fontSize: typography.typeScale.h1.size,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RN fontWeight type mismatch with numeric literal
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fontWeight: typography.typeScale.h1.weight as any,
     color: colors.ink,
     textAlign: "center",
@@ -241,13 +188,8 @@ const styles = StyleSheet.create({
     padding: spacing.px[3],
     marginBottom: spacing.px[5],
   },
-  globalErrorText: {
-    color: colors.error,
-    fontSize: typography.typeScale.bodySmall.size,
-  },
-  field: {
-    marginBottom: spacing.px[5],
-  },
+  globalErrorText: { color: colors.error, fontSize: typography.typeScale.bodySmall.size },
+  field: { marginBottom: spacing.px[5] },
   label: {
     fontSize: typography.typeScale.bodySmall.size,
     fontWeight: "500",
@@ -263,9 +205,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.ivory,
   },
-  inputError: {
-    borderColor: colors.error,
-  },
+  inputError: { borderColor: colors.error },
   errorText: {
     color: colors.error,
     fontSize: typography.typeScale.caption.size,
@@ -278,66 +218,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: spacing.px[2],
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.ivory,
-    fontSize: typography.typeScale.body.size,
-    fontWeight: "600",
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: spacing.px[6],
-  },
-  footerText: {
-    color: colors.steel,
-    fontSize: typography.typeScale.bodySmall.size,
-  },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: colors.ivory, fontSize: typography.typeScale.body.size, fontWeight: "600" },
+  footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.px[6] },
+  footerText: { color: colors.steel, fontSize: typography.typeScale.bodySmall.size },
   footerLink: {
     color: colors.gold,
     fontSize: typography.typeScale.bodySmall.size,
-    fontWeight: "500",
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: spacing.px[5],
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.stone,
-  },
-  dividerText: {
-    color: colors.steel,
-    fontSize: typography.typeScale.caption.size,
-    marginHorizontal: spacing.px[3],
-  },
-  socialBtn: {
-    borderRadius: 8,
-    padding: spacing.px[4],
-    alignItems: "center",
-    marginBottom: spacing.px[3],
-    borderWidth: 1,
-  },
-  socialBtnGoogle: {
-    backgroundColor: "#fff",
-    borderColor: colors.stone,
-  },
-  socialBtnGoogleText: {
-    color: colors.ink,
-    fontSize: typography.typeScale.body.size,
-    fontWeight: "500",
-  },
-  socialBtnApple: {
-    backgroundColor: colors.ink,
-    borderColor: colors.ink,
-  },
-  socialBtnAppleText: {
-    color: "#fff",
-    fontSize: typography.typeScale.body.size,
     fontWeight: "500",
   },
 });

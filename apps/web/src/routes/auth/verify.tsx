@@ -1,24 +1,27 @@
+// apps/web/src/routes/auth/verify.tsx
+//
+// /auth/verify — Email OTP verification page.
+// Migrated from Supabase Auth to Convex Auth (Phase 5).
+//
+// Convex Auth verification flow:
+//   1. Signup page calls signIn("password", { flow: "signUp" }) → sends OTP via Resend
+//   2. This page collects the 6-digit code
+//   3. signIn("password", { flow: "signUp", code }) verifies the code
+//   4. On success, anonymous data (wishlist, events) is migrated from localId → userId
+//   5. Navigate to the redirect URL
+//
+// The password is passed via TanStack Router's in-memory state (never persisted).
+// If the user refreshes, the password is lost and they must start over.
+
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  verifyEmailOtp,
-  setAccountPassword,
-  mapAuthError,
-  sanitizeRedirect,
-  buildPageMeta,
-} from "@ecommerce/shared";
-import { getSupabaseBrowserClient } from "../../utils/supabase";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useMutation } from "convex/react";
+import { buildPageMeta, clearLocalId, getLocalId, mapAuthError } from "@ecommerce/shared";
+import { api } from "#convex/_generated/api";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
-/**
- * /auth/verify route — Email OTP verification page.
- *
- * ## SEO (Story 3.8)
- *
- * Uses `buildPageMeta({ noindex: true })` — consistent with all auth routes.
- * @see /auth/login for rationale on using buildPageMeta on noindex pages.
- */
 export const Route = createFileRoute("/auth/verify")({
   head: () => ({
     meta: buildPageMeta({
@@ -43,6 +46,9 @@ function VerifyPage() {
 
   // Password passed via router state (in-memory only, never persisted to storage)
   const password = (router.state.location.state as { password?: string })?.password ?? "";
+
+  const { signIn } = useAuthActions();
+  const migrateAnonymous = useMutation(api.users.mutations.migrateAnonymousData);
 
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
@@ -73,41 +79,33 @@ function VerifyPage() {
 
     setIsLoading(true);
     try {
-      const supabase = getSupabaseBrowserClient();
+      // Step 1: Verify OTP and complete sign-up.
+      // Convex Auth activates the account and signs the user in.
+      await signIn("password", {
+        email,
+        password,
+        flow: "signUp",
+        code: otp,
+      });
 
-      const { error: verifyError } = await verifyEmailOtp(email, otp, supabase);
-      if (verifyError) {
-        setError(mapAuthError(verifyError.message));
-        return;
-      }
-
-      if (password) {
-        const { error: pwError } = await setAccountPassword(password, supabase);
-        if (pwError) {
-          setError(mapAuthError(pwError.message));
-          return;
-        }
-      }
-
-      // Create user_profiles row
-      // Note: user_profiles row is auto-created by DB trigger (on_auth_user_created/on_auth_user_updated).
-      // This upsert is a safety net in case the trigger hasn't fired yet due to race conditions.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { error: profileError } = await supabase
-          .from("user_profiles")
-          .upsert({ user_id: user.id });
-        if (profileError) {
+      // Step 2: Migrate anonymous data (wishlist, events) from localId → userId.
+      // The user is now authenticated, so the mutation can read their identity.
+      const localId = getLocalId();
+      if (localId) {
+        try {
+          await migrateAnonymous({ localId });
+          clearLocalId();
+        } catch (migrationErr) {
+          // Migration failure is non-blocking — user is still signed in.
           // eslint-disable-next-line no-console
-          console.error("[auth] Failed to create user profile:", profileError.message);
+          console.warn("[auth] Anonymous data migration failed:", migrationErr);
         }
       }
 
-      await navigate({ to: sanitizeRedirect(redirect) });
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+      // Step 3: Navigate to the redirect URL.
+      await navigate({ to: redirect });
+    } catch (err) {
+      setError(mapAuthError(err, "verify"));
     } finally {
       setIsLoading(false);
     }

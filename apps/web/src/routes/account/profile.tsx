@@ -1,49 +1,23 @@
 /**
- * Profile Page — /account/profile (Story 6.1)
+ * Profile Page — /account/profile
  *
- * Allows authenticated users to view and edit their display name, avatar URL,
- * and change their password. Email is displayed read-only (managed by Supabase Auth).
+ * Migrated from Supabase to Convex Auth (Phase 5).
+ * Fix M4: Change password flow now includes inline OTP + new password form.
  *
- * ## Auth
- * Protected by the `/account` layout auth guard (account/route.tsx).
- *
- * ## Data
- * Uses `profileQueryOptions` for SSR-compatible data fetching and
- * `useUpdateProfile` for optimistic mutations via TanStack Query.
+ * Uses Convex queries for profile data and mutations for updates.
+ * No more Supabase client or server functions needed.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import {
-  profileQueryOptions,
-  profileKeys,
-  useUpdateProfile,
-  updateProfileSchema,
-  mapAuthError,
-  buildPageMeta,
-  getProfile,
-} from "@ecommerce/shared";
-import { getSupabaseBrowserClient } from "#/utils/supabase";
-import { getSupabaseSessionClient } from "#/server/supabaseServer";
-
-/**
- * Server function that fetches the profile using the authenticated session client.
- *
- * Mirrors the prefetchWishlistFn pattern (Bug #13 fix): the shared `profileQueryOptions`
- * queryFn uses `createSupabaseClient()` which is unauthenticated during SSR, causing
- * RLS to return null and the 5-minute staleTime to cache that null. This server function
- * reads cookies via the H3 request context so RLS passes correctly on hard refresh.
- */
-const prefetchProfileFn = createServerFn({ method: "GET" })
-  .inputValidator((userId: string) => userId)
-  .handler(async ({ data: userId }) => {
-    const supabase = getSupabaseSessionClient();
-    return getProfile(userId, supabase);
-  });
+import { useQuery, useMutation } from "convex/react";
+import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
+import { api } from "#convex/_generated/api";
+import { buildPageMeta } from "@ecommerce/shared";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
+type PasswordStep = "idle" | "otp-sent" | "success";
 
 export const Route = createFileRoute("/account/profile")({
   head: () => ({
@@ -55,19 +29,15 @@ export const Route = createFileRoute("/account/profile")({
       noindex: true,
     }),
   }),
-  loader: async ({ context }) => {
-    const { user } = context as { user: { id: string; email: string | null } };
-    const profileData = await prefetchProfileFn({ data: user.id });
-    context.queryClient.setQueryData(profileKeys.detail(user.id), profileData);
-    return { user };
-  },
   component: ProfilePage,
 });
 
 function ProfilePage() {
-  const { user } = Route.useLoaderData();
-  const profile = useQuery(profileQueryOptions(user.id));
-  const updateProfile = useUpdateProfile(user.id);
+  const { isAuthenticated } = useConvexAuth();
+  const identity = useQuery(api.users.queries.getIdentity, isAuthenticated ? {} : "skip");
+  const profile = useQuery(api.users.queries.getProfile, isAuthenticated ? {} : "skip");
+  const updateProfile = useMutation(api.users.mutations.updateProfile);
+  const { signIn } = useAuthActions();
 
   // Profile form state — synced from query data via useEffect
   const [displayName, setDisplayName] = useState("");
@@ -78,17 +48,18 @@ function ProfilePage() {
   const [preferenceError, setPreferenceError] = useState("");
 
   useEffect(() => {
-    if (profile.data) {
-      setDisplayName(profile.data.display_name ?? "");
-      setAvatarUrl(profile.data.avatar_url ?? "");
+    if (profile) {
+      setDisplayName(profile.displayName ?? "");
+      setAvatarUrl(profile.avatarUrl ?? "");
     }
-  }, [profile.data]);
+  }, [profile]);
 
-  // Password form state
+  // Password form state — multi-step: idle → otp-sent → success
+  const [passwordStep, setPasswordStep] = useState<PasswordStep>("idle");
+  const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
 
   async function handleProfileSubmit(e: React.FormEvent) {
@@ -97,34 +68,50 @@ function ProfilePage() {
     setProfileSuccess("");
     setFieldErrors({});
 
-    const parsed = updateProfileSchema.safeParse({
-      display_name: displayName || null,
-      avatar_url: avatarUrl || null,
-    });
-
-    if (!parsed.success) {
-      const errors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0]?.toString() ?? "form";
-        errors[key] = issue.message;
-      }
-      setFieldErrors(errors);
-      return;
-    }
-
     try {
-      await updateProfile.mutateAsync(parsed.data);
+      await updateProfile({
+        displayName: displayName || undefined,
+        avatarUrl: avatarUrl || undefined,
+      });
       setProfileSuccess("Profile updated successfully.");
     } catch {
       setProfileError("Failed to update profile. Please try again.");
     }
   }
 
-  async function handlePasswordSubmit(e: React.FormEvent) {
+  /** Step 1: Request password reset — sends OTP to email. */
+  async function handleRequestReset(e: React.FormEvent) {
     e.preventDefault();
     setPasswordError("");
-    setPasswordSuccess("");
 
+    if (!identity?.email) {
+      setPasswordError("No email associated with account.");
+      return;
+    }
+
+    setIsPasswordLoading(true);
+    try {
+      await signIn("password", {
+        email: identity.email,
+        flow: "reset",
+      });
+      setPasswordStep("otp-sent");
+    } catch {
+      setPasswordError("Failed to send verification code. Please try again.");
+    } finally {
+      setIsPasswordLoading(false);
+    }
+  }
+
+  /** Step 2: Verify OTP + set new password. */
+  async function handleCompleteReset(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError("");
+
+    if (!otp || otp.length !== 6) {
+      setPasswordError("Please enter the 6-digit code from your email.");
+      return;
+    }
     if (newPassword.length < 6) {
       setPasswordError("Password must be at least 6 characters.");
       return;
@@ -133,26 +120,38 @@ function ProfilePage() {
       setPasswordError("Passwords do not match.");
       return;
     }
+    if (!identity?.email) {
+      setPasswordError("No email associated with account.");
+      return;
+    }
 
     setIsPasswordLoading(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-        setPasswordError(mapAuthError(error.message));
-        return;
-      }
-      setPasswordSuccess("Password changed successfully.");
+      await signIn("password", {
+        email: identity.email,
+        flow: "reset-verification",
+        code: otp,
+        newPassword,
+      });
+      setPasswordStep("success");
+      setOtp("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch {
-      setPasswordError("An unexpected error occurred.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.toLowerCase() : "";
+      if (msg.includes("invalid") || msg.includes("code") || msg.includes("verification")) {
+        setPasswordError("Invalid verification code. Please try again.");
+      } else if (msg.includes("expired")) {
+        setPasswordError("Verification code expired. Please request a new one.");
+      } else {
+        setPasswordError("Failed to change password. Please try again.");
+      }
     } finally {
       setIsPasswordLoading(false);
     }
   }
 
-  if (profile.isLoading) {
+  if (profile === undefined) {
     return (
       <section className="page-wrap profile">
         <h1 className="profile__heading">My Profile</h1>
@@ -183,7 +182,7 @@ function ProfilePage() {
               id="profile-email"
               className="profile__input profile__input--readonly"
               type="email"
-              value={user.email ?? ""}
+              value={identity?.email ?? ""}
               readOnly
             />
             <p className="profile__field-hint">Email is managed by your login provider.</p>
@@ -225,14 +224,14 @@ function ProfilePage() {
           </div>
 
           <div className="profile__actions">
-            <button className="profile__submit" type="submit" disabled={updateProfile.isPending}>
-              {updateProfile.isPending ? "Saving..." : "Save Changes"}
+            <button className="profile__submit" type="submit">
+              Save Changes
             </button>
           </div>
         </form>
       </div>
 
-      {/* ── Preferences Section (Story 6.3) ── */}
+      {/* ── Preferences Section ── */}
       <div className="profile__section">
         <h2 className="profile__section-title">Preferences</h2>
         {preferenceError && <div className="profile__error">{preferenceError}</div>}
@@ -250,12 +249,15 @@ function ProfilePage() {
             type="checkbox"
             id="personalized-search"
             className="profile__checkbox"
-            checked={profile.data?.preferences?.personalized_search !== false}
+            checked={profile?.preferences?.personalized_search !== false}
             onChange={async (e) => {
               setPreferenceError("");
               try {
-                await updateProfile.mutateAsync({
-                  preferences: { personalized_search: e.target.checked },
+                await updateProfile({
+                  preferences: {
+                    ...(profile?.preferences as Record<string, unknown>),
+                    personalized_search: e.target.checked,
+                  },
                 });
               } catch {
                 setPreferenceError("Failed to update preference. Please try again.");
@@ -268,45 +270,101 @@ function ProfilePage() {
       {/* ── Password Section ── */}
       <div className="profile__section">
         <h2 className="profile__section-title">Change Password</h2>
-        <form onSubmit={handlePasswordSubmit} noValidate>
-          {passwordSuccess && <div className="profile__success">{passwordSuccess}</div>}
-          {passwordError && <div className="profile__error">{passwordError}</div>}
 
-          <div className="profile__field">
-            <label className="profile__label" htmlFor="profile-new-password">
-              New Password
-            </label>
-            <input
-              id="profile-new-password"
-              className="profile__input"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-              minLength={6}
-            />
-          </div>
+        {passwordStep === "success" ? (
+          <div className="profile__success">Password changed successfully.</div>
+        ) : passwordStep === "otp-sent" ? (
+          /* Step 2: Enter OTP + new password */
+          <form onSubmit={handleCompleteReset} noValidate>
+            {passwordError && <div className="profile__error">{passwordError}</div>}
 
-          <div className="profile__field">
-            <label className="profile__label" htmlFor="profile-confirm-password">
-              Confirm Password
-            </label>
-            <input
-              id="profile-confirm-password"
-              className="profile__input"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
+            <p className="profile__field-hint" style={{ marginBottom: "1rem" }}>
+              We sent a 6-digit code to <strong>{identity?.email}</strong>.
+            </p>
 
-          <div className="profile__actions">
-            <button className="profile__submit" type="submit" disabled={isPasswordLoading}>
-              {isPasswordLoading ? "Changing..." : "Change Password"}
-            </button>
-          </div>
-        </form>
+            <div className="profile__field">
+              <label className="profile__label" htmlFor="profile-otp">
+                Verification Code
+              </label>
+              <input
+                id="profile-otp"
+                className="profile__input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                autoComplete="one-time-code"
+                autoFocus
+              />
+            </div>
+
+            <div className="profile__field">
+              <label className="profile__label" htmlFor="profile-new-password">
+                New Password
+              </label>
+              <input
+                id="profile-new-password"
+                className="profile__input"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                minLength={6}
+              />
+            </div>
+
+            <div className="profile__field">
+              <label className="profile__label" htmlFor="profile-confirm-password">
+                Confirm Password
+              </label>
+              <input
+                id="profile-confirm-password"
+                className="profile__input"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="profile__actions">
+              <button className="profile__submit" type="submit" disabled={isPasswordLoading}>
+                {isPasswordLoading ? "Changing..." : "Change Password"}
+              </button>
+              <button
+                type="button"
+                className="profile__submit profile__submit--secondary"
+                onClick={() => {
+                  setPasswordStep("idle");
+                  setPasswordError("");
+                  setOtp("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* Step 1: Request password reset */
+          <form onSubmit={handleRequestReset} noValidate>
+            {passwordError && <div className="profile__error">{passwordError}</div>}
+
+            <p className="profile__field-hint" style={{ marginBottom: "1rem" }}>
+              Click below to receive a verification code at your email address. You&apos;ll then
+              enter the code along with your new password.
+            </p>
+
+            <div className="profile__actions">
+              <button className="profile__submit" type="submit" disabled={isPasswordLoading}>
+                {isPasswordLoading ? "Sending..." : "Send Verification Code"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </section>
   );

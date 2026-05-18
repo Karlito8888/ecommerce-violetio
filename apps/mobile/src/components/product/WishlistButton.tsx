@@ -1,4 +1,12 @@
-import React, { useCallback } from "react";
+// Mobile WishlistButton — migrated from Supabase to Convex queries (Phase 6).
+//
+// Uses Convex useQuery/useMutation directly instead of
+// useIsInWishlist/useAddToWishlist/useRemoveFromWishlist from @ecommerce/shared.
+//
+// Key difference: Convex ReactMutation is a callable (no isPending).
+// Pending state tracked via useState.
+
+import React, { useCallback, useState } from "react";
 import { Pressable, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -7,13 +15,10 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
-import {
-  useIsInWishlist,
-  useAddToWishlist,
-  useRemoveFromWishlist,
-  useUser,
-} from "@ecommerce/shared";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
 
+import { useAuth } from "@/context/AuthContext";
 import { ThemedText } from "@/components/themed-text";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -21,12 +26,10 @@ import { useTheme } from "@/hooks/use-theme";
  * Mobile wishlist heart toggle button.
  *
  * Mirrors the web WishlistButton component:
- * - Only renders for authenticated (non-anonymous) users
+ * - Only renders for authenticated users
  * - Animated heart icon (filled ♥ when in wishlist, outline ♡ when not)
  * - Scale bounce animation on toggle
  * - Two sizes: "sm" for product cards, "md" for product detail page
- *
- * Uses shared hooks from @ecommerce/shared for wishlist state management.
  */
 
 interface WishlistButtonProps {
@@ -40,13 +43,12 @@ export default function WishlistButton({
   productName,
   size = "sm",
 }: WishlistButtonProps) {
-  const { data: user } = useUser();
-  const userId = user && !user.is_anonymous ? user.id : undefined;
+  const { userId, isAuthenticated } = useAuth();
   const theme = useTheme();
   const scale = useSharedValue(1);
 
-  // Don't render for guests or anonymous users
-  if (!userId) return null;
+  // Don't render for guests
+  if (!isAuthenticated || !userId) return null;
 
   return (
     <WishlistButtonInner
@@ -73,18 +75,20 @@ function WishlistButtonInner({
   theme: ReturnType<typeof useTheme>;
   scale: SharedValue<number>;
 }) {
-  const isInWishlist = useIsInWishlist(productId, userId);
-  const addMutation = useAddToWishlist(userId);
-  const removeMutation = useRemoveFromWishlist(userId);
+  const [isPending, setIsPending] = useState(false);
 
-  const isPending = addMutation.isPending || removeMutation.isPending;
+  const productIds = useQuery(api.wishlists.queries.getWishlistProductIds, { userId });
+  const addMutation = useMutation(api.wishlists.mutations.addToWishlist);
+  const removeMutation = useMutation(api.wishlists.mutations.removeFromWishlist);
+
+  const isInWishlist = productIds?.includes(productId) ?? false;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleProp.value }],
   }));
 
   const handlePress = useCallback(() => {
-    if (isPending) return;
+    if (isPending || productIds === undefined) return;
 
     // Bounce animation
     scaleProp.value = withSequence(
@@ -92,12 +96,23 @@ function WishlistButtonInner({
       withTiming(1, { duration: 150 }),
     );
 
-    if (isInWishlist) {
-      removeMutation.mutate(productId);
-    } else {
-      addMutation.mutate(productId);
-    }
-  }, [isPending, isInWishlist, addMutation, removeMutation, productId, scaleProp]);
+    setIsPending(true);
+    const mutation = isInWishlist ? removeMutation : addMutation;
+    mutation({ userId, productId })
+      .catch(() => {
+        // Wishlist failures are non-blocking
+      })
+      .finally(() => setIsPending(false));
+  }, [
+    isPending,
+    isInWishlist,
+    addMutation,
+    removeMutation,
+    userId,
+    productId,
+    scaleProp,
+    productIds,
+  ]);
 
   const label = isInWishlist
     ? `Remove ${productName ?? "product"} from wishlist`

@@ -1,34 +1,11 @@
-/**
- * Mobile Order List Screen — /orders
- *
- * Displays the authenticated user's order history with Realtime updates.
- * This is the mobile equivalent of the web's /account/orders page.
- *
- * ## Data loading
- * - Uses TanStack Query with `ordersQueryOptions` (shared with web)
- * - Fetches via `fetchOrdersMobile()` → GET /api/orders (web backend)
- * - Realtime subscription via `useOrderRealtime` (shared hook)
- *
- * ## Realtime updates
- * When a webhook (ORDER_COMPLETED, BAG_SHIPPED, etc.) updates the Supabase DB,
- * the Realtime subscription invalidates the TanStack Query cache, triggering
- * an automatic re-fetch. The user sees live status changes without manual refresh.
- *
- * ## Authentication
- * Only visible to authenticated (non-anonymous) users.
- * The API Route enforces auth + RLS ensures user-only access.
- *
- * ## UX states
- * - Loading: ActivityIndicator
- * - Empty: CTA to browse products
- * - Error: message with retry
- *
- * @see apps/web/src/routes/account/orders/index.tsx — web equivalent
- * @see packages/shared/src/hooks/useOrders.ts — shared query options + Realtime hook
- * @see apps/mobile/src/server/getOrders.ts — mobile fetch functions
- */
+// apps/mobile/src/app/orders/index.tsx
+//
+// Mobile Order List Screen — migrated from Supabase to Convex queries (Phase 6).
+//
+// Uses Convex useQuery directly (reactive by default — no Realtime subscription needed).
+// The Supabase client, useOrderRealtime, and TanStack Query are removed.
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ScrollView,
   Pressable,
@@ -38,39 +15,31 @@ import {
   RefreshControl,
 } from "react-native";
 import { router } from "expo-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  createSupabaseClient,
-  useOrderRealtime,
-  ordersQueryOptions,
-  ORDER_STATUS_LABELS,
-  formatPrice,
-  formatDate,
-} from "@ecommerce/shared";
-import type { OrderWithBagCount } from "@ecommerce/shared";
+import { useQuery } from "convex/react";
+import { ORDER_STATUS_LABELS, formatPrice, formatDate } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import { colors } from "@ecommerce/ui";
 import { useAuth } from "@/context/AuthContext";
-import { fetchOrdersMobile } from "@/server/getOrders";
+import { api } from "#convex/_generated/api";
 
-// Singleton Supabase client for Realtime (same instance as _layout.tsx)
-const supabase = createSupabaseClient();
+interface ConvexOrder {
+  _id: string;
+  _creationTime: number;
+  violetOrderId: string;
+  status: string;
+  total: number;
+  currency: string;
+  bags: { _id: string; merchantName: string; status: string; total: number }[];
+}
 
-/**
- * Order list item card.
- *
- * Displays: date, status, truncated order ID, merchant count, and total.
- * Taps navigate to the order detail screen.
- */
-function OrderCard({ order }: { order: OrderWithBagCount }) {
-  const dateStr = formatDate(order.created_at, "short");
+function OrderCard({ order }: { order: ConvexOrder }) {
+  const dateStr = formatDate(new Date(order._creationTime).toISOString(), "short");
+  const bagCount = order.bags?.length ?? 0;
+  const merchantText = bagCount === 1 ? "1 merchant" : `${bagCount} merchants`;
+  const shortId = order.violetOrderId.slice(0, 8).toUpperCase();
 
-  const merchantText = order.bag_count === 1 ? "1 merchant" : `${order.bag_count} merchants`;
-  const shortId = order.id.slice(0, 8).toUpperCase();
-
-  // Simple status color mapping
   const statusColor =
     order.status === "COMPLETED"
       ? colors.success
@@ -85,7 +54,7 @@ function OrderCard({ order }: { order: OrderWithBagCount }) {
   return (
     <Pressable
       style={styles.card}
-      onPress={() => router.push(`/orders/${order.id}` as never)}
+      onPress={() => router.push(`/orders/${order._id}` as never)}
       accessibilityRole="button"
       accessibilityLabel={`Order ${shortId}, ${statusLabel}, ${merchantText}`}
     >
@@ -113,27 +82,24 @@ function OrderCard({ order }: { order: OrderWithBagCount }) {
 }
 
 export default function OrdersScreen() {
-  const { user, isAnonymous } = useAuth();
-  const queryClient = useQueryClient();
+  const { userId, isAuthenticated } = useAuth();
 
-  // Realtime subscription for live order status updates
-  useOrderRealtime(user?.id && !isAnonymous ? user.id : null, queryClient, supabase);
+  // Convex query — reactive by default, no Realtime subscription needed
+  const orders = useQuery(api.orders.queries.getOrders, userId ? { userId } : "skip");
 
-  const {
-    data: orders,
-    isLoading,
-    isError,
-    refetch,
-    isRefetching,
-  } = useQuery(ordersQueryOptions(() => fetchOrdersMobile()));
+  const isLoading = orders === undefined;
+  const isError = orders instanceof Error;
 
-  // Pull-to-refresh handler
+  // Pull-to-refresh: Convex queries auto-update, but we can force a refetch
+  // by briefly unmounting (not needed with Convex reactivity).
+  const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+    setRefreshing(true);
+    // Convex is reactive — just show the spinner briefly
+    setTimeout(() => setRefreshing(false), 500);
+  }, []);
 
-  // Not authenticated — show message
-  if (isAnonymous || !user) {
+  if (!isAuthenticated) {
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="subtitle" style={styles.title}>
@@ -159,11 +125,6 @@ export default function OrdersScreen() {
           <ThemedText themeColor="textSecondary" style={styles.errorText}>
             We couldn&apos;t load your orders. Please try again.
           </ThemedText>
-          <Pressable style={styles.retryButton} onPress={() => void refetch()}>
-            <ThemedText type="default" style={styles.retryText}>
-              Retry
-            </ThemedText>
-          </Pressable>
         </View>
       )}
 
@@ -183,10 +144,10 @@ export default function OrdersScreen() {
           ) : (
             <ScrollView
               contentContainerStyle={styles.list}
-              refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
-              {orders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+              {orders.map((order: ConvexOrder) => (
+                <OrderCard key={order._id} order={order} />
               ))}
             </ScrollView>
           )}
@@ -197,20 +158,10 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: Spacing.four,
-    paddingTop: Spacing.six,
-  },
-  title: {
-    marginBottom: Spacing.three,
-  },
-  loader: {
-    marginTop: Spacing.six,
-  },
-  list: {
-    paddingBottom: Spacing.six,
-  },
+  container: { flex: 1, padding: Spacing.four, paddingTop: Spacing.six },
+  title: { marginBottom: Spacing.three },
+  loader: { marginTop: Spacing.six },
+  list: { paddingBottom: Spacing.six },
   card: {
     backgroundColor: colors.linen,
     borderRadius: 12,
@@ -223,59 +174,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: Spacing.one,
   },
-  statusBadge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-    borderRadius: 6,
-  },
-  statusText: {
-    color: colors.ivory,
-    fontSize: 11,
-    fontWeight: "600",
-  },
+  statusBadge: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one, borderRadius: 6 },
+  statusText: { color: colors.ivory, fontSize: 11, fontWeight: "600" },
   cardMeta: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: Spacing.one,
   },
-  cardTotal: {
-    fontWeight: "600",
-  },
-  errorContainer: {
-    marginTop: Spacing.six,
-    alignItems: "center",
-  },
-  errorText: {
-    textAlign: "center",
-    marginBottom: Spacing.three,
-  },
-  retryButton: {
-    backgroundColor: colors.gold,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: colors.ivory,
-    fontWeight: "600",
-  },
-  emptyContainer: {
-    marginTop: Spacing.six,
-    alignItems: "center",
-  },
-  emptyText: {
-    textAlign: "center",
-    marginBottom: Spacing.three,
-  },
+  cardTotal: { fontWeight: "600" },
+  errorContainer: { marginTop: Spacing.six, alignItems: "center" },
+  errorText: { textAlign: "center", marginBottom: Spacing.three },
+  emptyContainer: { marginTop: Spacing.six, alignItems: "center" },
+  emptyText: { textAlign: "center", marginBottom: Spacing.three },
   browseButton: {
     backgroundColor: colors.gold,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
     borderRadius: 8,
   },
-  browseText: {
-    color: colors.ivory,
-    fontWeight: "600",
-  },
+  browseText: { color: colors.ivory, fontWeight: "600" },
 });

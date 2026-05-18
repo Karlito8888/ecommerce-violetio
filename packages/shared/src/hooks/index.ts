@@ -13,13 +13,7 @@ export {
   getCartItemCount,
 } from "./useCart.js";
 export type { CartFetchFn, AddToCartFn, UpdateCartItemFn, RemoveFromCartFn } from "./useCart.js";
-export { useCartSync } from "./useCartSync.js";
-export {
-  ordersQueryOptions,
-  orderDetailQueryOptions,
-  useOrderRealtime,
-  createOrdersRealtimeChannel,
-} from "./useOrders.js";
+export { ordersQueryOptions, orderDetailQueryOptions } from "./useOrders.js";
 export type {
   OrdersFetchFn,
   OrderDetailFetchFn,

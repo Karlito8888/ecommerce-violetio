@@ -48,8 +48,7 @@ const CATEGORY_LINKS: { to: string; label: string; search?: Record<string, strin
  */
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { data: user } = useUser();
-  const isAuthenticated = !!user && !user.is_anonymous;
+  const { isAuthenticated } = useUser();
 
   return (
     <header className="site-header">

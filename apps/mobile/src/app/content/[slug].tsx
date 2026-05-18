@@ -1,4 +1,11 @@
-import React, { useEffect, useState } from "react";
+// Content detail screen — migrated from Supabase to Convex queries (Phase 6).
+//
+// Uses Convex useQuery for content page + related content instead of
+// createSupabaseClient + getContentPageBySlug/getRelatedContent from @ecommerce/shared.
+//
+// Convex provides reactivity by default — data stays in sync automatically.
+
+import React from "react";
 import {
   ScrollView,
   Text,
@@ -9,81 +16,53 @@ import {
   Share,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  createSupabaseClient,
-  getContentPageBySlug,
-  getRelatedContent,
-  CONTENT_TYPE_LABELS,
-  stripMarkdownSyntax,
-} from "@ecommerce/shared";
-import type { ContentPage, RelatedContentItem } from "@ecommerce/shared";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
+import { CONTENT_TYPE_LABELS, stripMarkdownSyntax } from "@ecommerce/shared";
+
+/** Local type matching Convex contentPages schema. */
+interface ContentPage {
+  _id: string;
+  slug: string;
+  title: string;
+  type: string;
+  bodyMarkdown: string;
+  author: string;
+  publishedAt?: number;
+  seoDescription?: string;
+  featuredImageUrl?: string;
+  relatedSlugs: string[];
+}
+
+interface RelatedContentItem {
+  _id: string;
+  slug: string;
+  title: string;
+  type: string;
+}
 
 /**
  * Mobile content detail screen.
  *
- * **Data fetching (M3 — documented decision):**
- * Uses manual `useEffect`/`useState` instead of TanStack Query because
- * `@tanstack/react-query` is not installed in the mobile app (it's only a
- * peerDependency of `@ecommerce/shared`, consumed by the web app).
- * Tradeoffs vs the web approach:
- * - No caching — re-fetches on every mount
- * - No deduplication — concurrent navigations can cause redundant fetches
- * - No automatic error retry or refetch-on-focus
- * Migration plan: install `@tanstack/react-query` + `QueryClientProvider` in
- * the mobile `_layout.tsx`, then reuse `contentDetailQueryOptions` from shared.
- *
- * **Markdown rendering (M4 — documented decision):**
- * Uses `stripMarkdownSyntax()` to show clean plain text instead of raw markdown.
- * This is an MVP approach — a proper React Native markdown renderer (e.g.
- * `react-native-markdown-display`) should replace this in a future iteration
- * for formatted headings, lists, links, and interactive product embeds.
- *
- * **Shared functions (M2/M3 from Story 7.6 review):**
- * Uses `getContentPageBySlug` and `getRelatedContent` from `@ecommerce/shared`
- * instead of inline Supabase queries. This eliminates code duplication and
- * ensures consistent column selection, mapping, and filtering across platforms.
+ * Uses Convex queries for data fetching (reactive by default).
+ * Markdown rendering uses stripMarkdownSyntax() for clean plain text (MVP).
  */
 export default function ContentDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
-  const [content, setContent] = useState<ContentPage | null>(null);
-  const [relatedItems, setRelatedItems] = useState<RelatedContentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const content = useQuery(api.content.queries.getContentPageBySlug, { slug }) as
+    | ContentPage
+    | null
+    | undefined;
 
-    async function fetchContent() {
-      const client = createSupabaseClient();
-      const page = await getContentPageBySlug(client, slug);
+  const relatedItems = useQuery(
+    api.content.queries.getRelatedContent,
+    content?.relatedSlugs?.length ? { slugs: content.relatedSlugs } : "skip",
+  ) as RelatedContentItem[] | undefined;
 
-      if (cancelled) return;
-
-      if (!page) {
-        setError(true);
-        setLoading(false);
-        return;
-      }
-
-      setContent(page);
-
-      // Fetch related content if slugs are present
-      if (page.relatedSlugs.length > 0) {
-        const related = await getRelatedContent(client, page.relatedSlugs);
-        if (!cancelled) {
-          setRelatedItems(related);
-        }
-      }
-
-      setLoading(false);
-    }
-
-    fetchContent();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  const loading = content === undefined;
+  const error = content === null;
 
   if (loading) {
     return (
@@ -152,11 +131,11 @@ export default function ContentDetailScreen() {
         </Text>
       </View>
 
-      {/* Body — stripped markdown for readable plain text (MVP, see JSDoc above) */}
+      {/* Body — stripped markdown for readable plain text (MVP) */}
       <Text style={styles.body}>{stripMarkdownSyntax(content.bodyMarkdown)}</Text>
 
       {/* Related content */}
-      {relatedItems.length > 0 && (
+      {relatedItems && relatedItems.length > 0 && (
         <View style={styles.relatedSection}>
           <Text style={styles.relatedTitle}>Related Articles</Text>
           {relatedItems.map((item) => (

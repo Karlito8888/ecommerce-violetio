@@ -1,6 +1,8 @@
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { QueryClient } from "@tanstack/react-query";
+import { ConvexReactClient } from "convex/react";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { routeTree } from "./routeTree.gen";
 
 /**
@@ -10,8 +12,7 @@ import { routeTree } from "./routeTree.gen";
  *
  * Route loaders need `queryClient` to call `ensureQueryData()` /
  * `ensureInfiniteQueryData()` for SSR prefetching. Without context, loaders
- * can only return raw data (bypassing TanStack Query cache entirely — which
- * was the bug in the original Story 3.2 implementation).
+ * can only return raw data (bypassing TanStack Query cache entirely).
  *
  * With context, the SSR flow becomes:
  * 1. Loader calls `queryClient.ensureInfiniteQueryData(productsInfiniteQueryOptions(...))`
@@ -27,20 +28,31 @@ export interface RouterContext {
 }
 
 /**
- * Creates the application router with TanStack Query SSR support.
+ * Creates the application router with TanStack Query SSR + Convex Auth support.
  *
- * `setupRouterSsrQueryIntegration` from `@tanstack/react-router-ssr-query`:
- * - Injects `QueryClientProvider` via `router.options.Wrap` (no manual provider needed)
- * - Dehydrates query cache server-side into the HTML stream
- * - Rehydrates client-side — cached data available immediately without re-fetch
- * - Handles `redirect()` thrown inside queries/mutations by default
+ * Convex data uses `convex/react` hooks directly (useQuery, useMutation).
+ * Violet API data uses TanStack Query hooks. These two systems are independent —
+ * no bridge needed. The `@convex-dev/react-query` package was previously wired
+ * here but was unused (no hook called `convexQuery()`), so it was removed.
  *
  * The QueryClient is created **per-request** (inside getRouter) to prevent
  * cross-request data leakage in SSR. Each SSR request gets its own isolated cache.
  *
  * @see https://tanstack.com/router/latest/docs/framework/react/guide/data-loading
+ * @see https://labs.convex.dev/auth/setup
  */
 export function getRouter() {
+  const CONVEX_URL = import.meta.env.VITE_CONVEX_URL;
+  if (!CONVEX_URL) {
+    throw new Error("Missing VITE_CONVEX_URL environment variable");
+  }
+
+  const convexClient = new ConvexReactClient(CONVEX_URL, {
+    unsavedChangesWarning: false,
+    // Self-hosted: URL is not *.convex.cloud, skip the deployment check.
+    skipConvexDeploymentUrlCheck: true,
+  });
+
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -62,6 +74,12 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
+
+    // ConvexAuthProvider wraps the app INSIDE the SSR QueryClientProvider.
+    // This ensures auth state is available to all routes and queries.
+    Wrap: ({ children }: { children: React.ReactNode }) => (
+      <ConvexAuthProvider client={convexClient}>{children}</ConvexAuthProvider>
+    ),
 
     defaultNotFoundComponent: () => (
       <div className="page-wrap" style={{ padding: "4rem 0", textAlign: "center" }}>

@@ -1,4 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+// Help Center / FAQ screen — migrated from Supabase to Convex queries (Phase 6).
+//
+// Uses Convex useQuery(api.content.queries.getFaqItems) instead of
+// createSupabaseClient + getFaqItems from @ecommerce/shared.
+//
+// Data shape change: Convex returns { category: string, items: FaqItemDoc[] }
+// instead of { name: string, items: FaqItem[] }. Local type adapter used.
+
+import { useState, useMemo, useCallback } from "react";
 import {
   SectionList,
   TextInput,
@@ -9,12 +17,28 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { createSupabaseClient, getFaqItems } from "@ecommerce/shared";
-import type { FaqCategory, FaqItem } from "@ecommerce/shared";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { stripMarkdownSyntax } from "@ecommerce/shared";
+
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, Spacing, MaxContentWidth } from "@/constants/theme";
+
+/** Local type matching Convex faqItems schema. */
+interface FaqItemDoc {
+  _id: string;
+  category: string;
+  question: string;
+  answerMarkdown: string;
+  sortOrder: number;
+  isPublished: boolean;
+}
+
+interface FaqCategoryGroup {
+  category: string;
+  items: FaqItemDoc[];
+}
 
 /**
  * Help Center / FAQ screen for mobile.
@@ -25,28 +49,14 @@ import { Colors, Spacing, MaxContentWidth } from "@/constants/theme";
  */
 export default function HelpScreen() {
   const router = useRouter();
-  const [categories, setCategories] = useState<FaqCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const categories = useQuery(api.content.queries.getFaqItems) as FaqCategoryGroup[] | undefined;
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    async function loadFaq() {
-      try {
-        const client = createSupabaseClient();
-        const result = await getFaqItems(client);
-        setCategories(result);
-      } catch {
-        setError("Failed to load FAQ. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadFaq();
-  }, []);
+  const loading = categories === undefined;
 
   const filtered = useMemo(() => {
+    if (!categories) return [];
     if (!searchQuery.trim()) return categories;
     const lower = searchQuery.toLowerCase();
     return categories
@@ -64,7 +74,7 @@ export default function HelpScreen() {
   const sections = useMemo(
     () =>
       filtered.map((cat) => ({
-        title: cat.name,
+        title: cat.category,
         data: cat.items,
       })),
     [filtered],
@@ -87,14 +97,6 @@ export default function HelpScreen() {
     );
   }
 
-  if (error) {
-    return (
-      <SafeAreaView style={styles.center}>
-        <ThemedText style={styles.errorText}>{error}</ThemedText>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <ThemedView style={styles.container}>
       <View style={styles.searchContainer}>
@@ -112,14 +114,18 @@ export default function HelpScreen() {
 
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         renderSectionHeader={({ section }) => (
           <ThemedView style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
           </ThemedView>
         )}
         renderItem={({ item }) => (
-          <FaqItemRow item={item} expanded={expandedIds.has(item.id)} onToggle={toggleItem} />
+          <FaqItemRow
+            item={item as FaqItemDoc}
+            expanded={expandedIds.has((item as FaqItemDoc)._id)}
+            onToggle={toggleItem}
+          />
         )}
         contentContainerStyle={styles.listContent}
         stickySectionHeadersEnabled={false}
@@ -155,7 +161,7 @@ function FaqItemRow({
   expanded,
   onToggle,
 }: {
-  item: FaqItem;
+  item: FaqItemDoc;
   expanded: boolean;
   onToggle: (id: string) => void;
 }) {
@@ -163,7 +169,7 @@ function FaqItemRow({
     <View style={styles.itemContainer}>
       <TouchableOpacity
         style={styles.questionRow}
-        onPress={() => onToggle(item.id)}
+        onPress={() => onToggle(item._id)}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={item.question}
@@ -265,12 +271,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.textSecondary,
     textAlign: "center",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "red",
-    textAlign: "center",
-    padding: Spacing.four,
   },
   contactCta: {
     alignItems: "center",

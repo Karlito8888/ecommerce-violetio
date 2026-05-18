@@ -48,6 +48,15 @@ vi.mock("../../../contexts/CartContext", () => ({
   CartProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+// Mock Convex Auth and Convex React hooks (Phase 5 migration)
+vi.mock("@convex-dev/auth/react", () => ({
+  useConvexAuth: vi.fn().mockReturnValue({ isAuthenticated: false, isLoading: false }),
+}));
+
+vi.mock("convex/react", () => ({
+  useQuery: vi.fn().mockReturnValue(null),
+}));
+
 function createMockSku(overrides: Partial<SKU> = {}): SKU {
   return {
     id: "sku-1",
