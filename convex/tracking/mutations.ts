@@ -22,6 +22,7 @@ export const recordEvent = mutation({
     eventType: v.string(),
     payload: v.optional(v.any()),
   },
+  returns: v.null(),
   handler: async (ctx, { userId, eventType, payload }) => {
     await ctx.db.insert("userEvents", {
       userId,

@@ -30,7 +30,6 @@ import { Route as CollectionsCollectionIdRouteImport } from './routes/collection
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
-import { Route as ApiTrackEventRouteImport } from './routes/api/track-event'
 import { Route as ApiGuestOrderLookupRouteImport } from './routes/api/guest-order-lookup'
 import { Route as ApiExchangeRatesRouteImport } from './routes/api/exchange-rates'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
@@ -176,11 +175,6 @@ const AuthSignupRoute = AuthSignupRouteImport.update({
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/auth/login',
   path: '/auth/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiTrackEventRoute = ApiTrackEventRouteImport.update({
-  id: '/api/track-event',
-  path: '/api/track-event',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGuestOrderLookupRoute = ApiGuestOrderLookupRouteImport.update({
@@ -410,7 +404,6 @@ export interface FileRoutesByFullPath {
   '/admin/health': typeof AdminHealthRoute
   '/api/exchange-rates': typeof ApiExchangeRatesRoute
   '/api/guest-order-lookup': typeof ApiGuestOrderLookupRoute
-  '/api/track-event': typeof ApiTrackEventRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -475,7 +468,6 @@ export interface FileRoutesByTo {
   '/admin/health': typeof AdminHealthRoute
   '/api/exchange-rates': typeof ApiExchangeRatesRoute
   '/api/guest-order-lookup': typeof ApiGuestOrderLookupRoute
-  '/api/track-event': typeof ApiTrackEventRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -541,7 +533,6 @@ export interface FileRoutesById {
   '/admin/health': typeof AdminHealthRoute
   '/api/exchange-rates': typeof ApiExchangeRatesRoute
   '/api/guest-order-lookup': typeof ApiGuestOrderLookupRoute
-  '/api/track-event': typeof ApiTrackEventRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -608,7 +599,6 @@ export interface FileRouteTypes {
     | '/admin/health'
     | '/api/exchange-rates'
     | '/api/guest-order-lookup'
-    | '/api/track-event'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -673,7 +663,6 @@ export interface FileRouteTypes {
     | '/admin/health'
     | '/api/exchange-rates'
     | '/api/guest-order-lookup'
-    | '/api/track-event'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -738,7 +727,6 @@ export interface FileRouteTypes {
     | '/admin/health'
     | '/api/exchange-rates'
     | '/api/guest-order-lookup'
-    | '/api/track-event'
     | '/auth/login'
     | '/auth/signup'
     | '/auth/verify'
@@ -802,7 +790,6 @@ export interface RootRouteChildren {
   AdminHealthRoute: typeof AdminHealthRoute
   ApiExchangeRatesRoute: typeof ApiExchangeRatesRoute
   ApiGuestOrderLookupRoute: typeof ApiGuestOrderLookupRoute
-  ApiTrackEventRoute: typeof ApiTrackEventRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
@@ -1002,13 +989,6 @@ declare module '@tanstack/react-router' {
       path: '/auth/login'
       fullPath: '/auth/login'
       preLoaderRoute: typeof AuthLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/track-event': {
-      id: '/api/track-event'
-      path: '/api/track-event'
-      fullPath: '/api/track-event'
-      preLoaderRoute: typeof ApiTrackEventRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/guest-order-lookup': {
@@ -1353,7 +1333,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminHealthRoute: AdminHealthRoute,
   ApiExchangeRatesRoute: ApiExchangeRatesRoute,
   ApiGuestOrderLookupRoute: ApiGuestOrderLookupRoute,
-  ApiTrackEventRoute: ApiTrackEventRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,
   AuthVerifyRoute: AuthVerifyRoute,

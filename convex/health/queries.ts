@@ -31,6 +31,19 @@ export const getStatus = query({
  */
 export const runHealthCheck = query({
   args: { now: v.number() },
+  returns: v.object({
+    overall_status: v.string(),
+    services: v.record(
+      v.string(),
+      v.object({
+        status: v.string(),
+        latency_ms: v.optional(v.number()),
+        error: v.optional(v.string()),
+      }),
+    ),
+    checked_at: v.string(),
+    merchants: v.array(v.any()),
+  }),
   handler: async (_ctx, { now }) => {
     const services: Record<string, { status: string; latency_ms?: number; error?: string }> = {};
 

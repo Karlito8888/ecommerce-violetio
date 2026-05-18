@@ -17,7 +17,7 @@
     "lint:fix": "eslint apps/ packages/ convex/ --fix",
     "format": "prettier --check \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\" \"convex/**/*.ts\"",
     "format:fix": "prettier --write \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.{ts,tsx}\" \"convex/**/*.ts\"",
-    "test": "bun --cwd=apps/web run test && bun --cwd=packages/shared run test && bun --cwd=apps/mobile run test",
+    "test": "bun --cwd=apps/web run test && bun --cwd=packages/shared run test && bun --cwd=apps/mobile run test && npx vitest run --root convex",
     "check": "bun run format && bun run lint && bun run typecheck && bun run test && bun run build",
     "fix-all": "bun run format:fix && bun run lint:fix && bun run typecheck",
     "generate:sitemap": "bun run scripts/generate-sitemap.ts"
@@ -26,11 +26,13 @@
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "convex-test": "^0.0.53",
     "eslint": "^10.2.1",
     "prettier": "^3.8.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "typescript-eslint": "^8.56.1"
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.1.6"
   },
   "overrides": {
     "react": "19.2.0",

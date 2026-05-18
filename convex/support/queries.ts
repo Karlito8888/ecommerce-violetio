@@ -19,6 +19,19 @@ export const getSupportInquiries = query({
   args: {
     status: v.optional(v.string()),
   },
+  returns: v.array(
+    v.object({
+      _id: v.id("supportInquiries"),
+      _creationTime: v.number(),
+      name: v.string(),
+      email: v.string(),
+      subject: v.string(),
+      message: v.string(),
+      orderId: v.optional(v.string()),
+      status: v.string(),
+      internalNotes: v.optional(v.string()),
+    }),
+  ),
   handler: async (ctx, { status }) => {
     await assertAdmin(ctx);
 
@@ -39,6 +52,20 @@ export const getSupportInquiries = query({
  */
 export const getSupportInquiry = query({
   args: { inquiryId: v.id("supportInquiries") },
+  returns: v.union(
+    v.object({
+      _id: v.id("supportInquiries"),
+      _creationTime: v.number(),
+      name: v.string(),
+      email: v.string(),
+      subject: v.string(),
+      message: v.string(),
+      orderId: v.optional(v.string()),
+      status: v.string(),
+      internalNotes: v.optional(v.string()),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, { inquiryId }) => {
     await assertAdmin(ctx);
     return await ctx.db.get("supportInquiries", inquiryId);
@@ -51,6 +78,25 @@ export const getSupportInquiry = query({
  */
 export const getLinkedOrder = query({
   args: { violetOrderId: v.string() },
+  returns: v.union(
+    v.object({
+      _id: v.id("orders"),
+      _creationTime: v.number(),
+      violetOrderId: v.string(),
+      userId: v.optional(v.string()),
+      sessionId: v.optional(v.string()),
+      email: v.string(),
+      status: v.string(),
+      subtotal: v.number(),
+      shippingTotal: v.number(),
+      taxTotal: v.number(),
+      total: v.number(),
+      currency: v.string(),
+      orderLookupTokenHash: v.optional(v.string()),
+      emailSent: v.boolean(),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, { violetOrderId }) => {
     await assertAdmin(ctx);
     return await ctx.db
@@ -66,6 +112,7 @@ export const getLinkedOrder = query({
  */
 export const countRecentInquiries = query({
   args: { email: v.string(), now: v.number() },
+  returns: v.number(),
   handler: async (ctx, { email, now }) => {
     const oneHourAgo = now - 60 * 60 * 1000;
     // Use index range on by_email ["email", _creationTime] — avoids loading all inquiries

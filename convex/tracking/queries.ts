@@ -18,6 +18,15 @@ export const getUserEvents = query({
     eventType: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
+  returns: v.array(
+    v.object({
+      _id: v.id("userEvents"),
+      _creationTime: v.number(),
+      userId: v.string(),
+      eventType: v.string(),
+      payload: v.optional(v.any()),
+    }),
+  ),
   handler: async (ctx, { userId, eventType, limit }) => {
     let q;
 

@@ -1,12 +1,9 @@
 // apps/mobile/src/context/AuthContext.tsx
 //
-// Auth context migrated from Supabase to Convex Auth (Phase 6).
+// Auth context backed by Convex Auth + biometric (SecureStore).
 //
-// Key changes from Supabase:
-//   - No anonymous session — localId model (SecureStore-backed UUID)
-//   - No onAuthStateChange — useConvexAuth() is reactive by default
-//   - Biometric auth stores Convex refresh token instead of Supabase refresh token
-//   - Cart merge logic preserved but adapted for Convex userId
+// Phase 11 cleanup: removed Supabase-compat fields (user, session, isAnonymous)
+// that had zero consumers.
 //
 // The context provides both Convex Auth state and biometric state,
 // so existing consumers (BiometricPrompt, BiometricToggle, ProfileScreen)
@@ -42,12 +39,6 @@ export interface MobileAuthSession {
   isAuthenticated: boolean;
   /** Whether auth state is still resolving */
   isLoading: boolean;
-  /** Supabase-compatible user object — null (no more Supabase users) */
-  user: null;
-  /** Always false — no more anonymous auth, use localId instead */
-  isAnonymous: boolean;
-  /** Supabase session — always null (kept for compatibility) */
-  session: null;
 }
 
 interface BiometricAuthSession extends MobileAuthSession {
@@ -64,9 +55,6 @@ const defaultBiometricSession: BiometricAuthSession = {
   localId: "",
   isAuthenticated: false,
   isLoading: true,
-  user: null,
-  isAnonymous: true,
-  session: null,
   biometricStatus: null,
   biometricEnabled: false,
   attemptBiometricLogin: async () => ({ success: false }),
@@ -117,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // identity.subject is used below via identity directly
     // No need for a local userId binding here
 
-    // Check biometric preference from Convex (replaces Supabase getBiometricPreference)
+    // Check biometric preference from Convex
     // This query is reactive — if the preference changes (e.g. biometric toggle),
     // the component re-renders automatically.
     // Note: biometricEnabled is set here on first auth detection.
@@ -207,8 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: "BIOMETRIC.AUTH_FAILED" };
     }
     // Note: biometricService needs adaptation for Convex Auth tokens.
-    // For now, it still stores Supabase refresh tokens — will be fully
-    // migrated when Supabase is removed (Phase 11).
+    // TODO: Phase 11 — adapt enrollBiometric for Convex refresh token storage.
     const result = await enrollBiometric(
       setBiometricMutation,
       identity.email ?? "",
@@ -234,9 +221,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localId,
     isAuthenticated,
     isLoading: convexLoading || isMigrating,
-    user: null, // Supabase compatibility — always null
-    isAnonymous: !isAuthenticated,
-    session: null, // Supabase compatibility — always null
     biometricStatus,
     biometricEnabled,
     attemptBiometricLogin,

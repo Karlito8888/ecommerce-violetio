@@ -7,24 +7,15 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": {
-        "SUPABASE_URL": "http://localhost:54321",
-        "SUPABASE_ANON_KEY": ""
-      }
+      "env": {}
     },
     "preview": {
       "distribution": "internal",
-      "env": {
-        "SUPABASE_URL": "https://your-project.supabase.co",
-        "SUPABASE_ANON_KEY": ""
-      }
+      "env": {}
     },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "SUPABASE_URL": "https://your-project.supabase.co",
-        "SUPABASE_ANON_KEY": ""
-      }
+      "env": {}
     }
   }
 }

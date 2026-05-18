@@ -8,7 +8,7 @@ import type { ApiResponse, Cart } from "../../types/index.js";
 
 function makeCart(overrides: Partial<Cart> = {}): Cart {
   return {
-    id: "supabase-uuid-1",
+    id: "cart-uuid-1",
     violetCartId: "12345",
     userId: null,
     sessionId: "anon-session-1",

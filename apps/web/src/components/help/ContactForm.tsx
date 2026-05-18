@@ -7,7 +7,8 @@
 import { useState } from "react";
 import { SUPPORT_SUBJECTS } from "@ecommerce/shared";
 import type { SupportSubject } from "@ecommerce/shared";
-import { submitSupportFn } from "../../server/submitSupport";
+import { useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
@@ -50,6 +51,8 @@ export default function ContactForm() {
   const [formState, setFormState] = useState<FormState>("idle");
   const [submitError, setSubmitError] = useState("");
 
+  const insertInquiry = useMutation(api.support.mutations.insertSupportInquiry);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -59,30 +62,25 @@ export default function ContactForm() {
       return;
     }
 
+    // Honeypot check — bots fill hidden fields
+    if (honeypot) {
+      setFormState("success");
+      return;
+    }
+
     setErrors({});
     setFormState("submitting");
     setSubmitError("");
 
     try {
-      const result = await submitSupportFn({
-        data: {
-          inquiry: {
-            name: name.trim(),
-            email: email.trim(),
-            subject,
-            message,
-            orderId: orderId.trim() || undefined,
-          },
-          honeypot: honeypot || undefined,
-        },
+      await insertInquiry({
+        name: name.trim(),
+        email: email.trim(),
+        subject,
+        message,
+        orderId: orderId.trim() || undefined,
       });
-
-      if (result.success) {
-        setFormState("success");
-      } else {
-        setSubmitError(result.error ?? "Something went wrong. Please try again.");
-        setFormState("error");
-      }
+      setFormState("success");
     } catch {
       setSubmitError("Something went wrong. Please try again.");
       setFormState("error");

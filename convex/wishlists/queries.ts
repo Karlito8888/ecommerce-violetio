@@ -21,6 +21,21 @@ import { v } from "convex/values";
  */
 export const getWishlist = query({
   args: { userId: v.string() },
+  returns: v.union(
+    v.object({
+      _id: v.id("wishlists"),
+      _creationTime: v.number(),
+      userId: v.string(),
+      items: v.array(
+        v.object({
+          _id: v.id("wishlistItems"),
+          _creationTime: v.number(),
+          productId: v.string(),
+        }),
+      ),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, { userId }) => {
     const wishlist = await ctx.db
       .query("wishlists")
@@ -54,6 +69,7 @@ export const getWishlist = query({
  */
 export const getWishlistProductIds = query({
   args: { userId: v.string() },
+  returns: v.array(v.string()),
   handler: async (ctx, { userId }) => {
     const wishlist = await ctx.db
       .query("wishlists")

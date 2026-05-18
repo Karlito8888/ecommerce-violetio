@@ -9,13 +9,14 @@
  *
  * 1. **Token-based** (`?token=<base64url>`): Arrived from the confirmation page link.
  *    On mount, the token is auto-submitted to `lookupOrderByTokenFn` which hashes it
- *    server-side (SHA-256) and queries Supabase by hash. Shows skeleton during lookup.
+ *    server-side (SHA-256) and queries the Convex orders table by hash.
  *    This path requires NO authentication — the token's 256-bit entropy is the auth.
  *
  * 2. **Email-based** (no token): The guest enters their email to receive a 6-digit OTP
- *    via Supabase Auth (`signInWithOtp`). After verifying, all orders for that email
- *    are fetched via `lookupOrdersByEmailFn` and the temporary OTP session is signed
- *    out immediately to prevent the guest from accessing authenticated routes.
+ *    via Convex Auth `signIn("password", { flow: "reset", email })`. The ResendOTP
+ *    provider sends the email independently of account existence. After verifying,
+ *    all orders for that email are fetched via `lookupOrdersByEmailFn`.
+ *    No session cleanup needed — the reset flow doesn't create a persistent session.
  *
  * ## State machine
  * ```
@@ -27,18 +28,16 @@
  * ```
  *
  * ## Data source
- * Uses Supabase local mirror (NOT Violet API). The server functions in guestOrders.ts
- * query with service_role since guest orders have no user_id for RLS.
+ * Token-based lookup uses the Convex orders table (via server function).
+ * Email-based lookup uses Convex query after OTP verification.
  *
- * ## Security measures
- * - **Token path**: No rate limiting needed (256-bit search space).
- * - **Email path**: Rate limiting handled by Supabase Auth OTP limits.
- *   The `isRateLimited` state disables the submit button on 429 responses.
- * - **OTP session cleanup**: `signOut()` is called in a `finally` block after
- *   fetching results, ensuring cleanup even if the fetch fails.
- * - **shouldCreateUser: true**: Creates a Supabase user for OTP verification.
- *   This is necessary because Supabase requires a user record for OTP. The
- *   immediate signOut prevents this user from accessing authenticated routes.
+ * ## DESIGN NOTE (Guest OTP via reset flow)
+ * The email-based path reuses Convex Auth's password reset flow (`flow: "reset"`)
+ * for OTP delivery to guests who may NOT have a Convex Auth account. This works
+ * because our custom ResendOTP provider (`convex/lib/resendOTP.ts`) sends the
+ * OTP email via Resend API regardless of whether the email has an associated account.
+ * The OTP serves solely as proof of email possession — it does NOT create a session
+ * or user record if the email is unregistered. Same pattern as mobile `order/lookup.tsx`.
  *
  * ## SEO: noindex
  * Guest lookup pages should not be indexed — they contain transient personal data
@@ -70,7 +69,7 @@ import type {
   OrderItemRow,
   OrderRefundRow,
 } from "@ecommerce/shared";
-import { getSupabaseBrowserClient } from "#/utils/supabase";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { lookupOrderByTokenFn, lookupOrdersByEmailFn } from "#/server/guestOrders";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
@@ -369,12 +368,18 @@ function LookupPage() {
       });
   }, [token]);
 
+  // Convex Auth actions for guest OTP (reuses reset flow — see DESIGN NOTE above)
+  const { signIn } = useAuthActions();
+
   /**
-   * Handles email form submission — sends a Supabase OTP to the entered email.
+   * Handles email form submission — sends a 6-digit OTP via Convex Auth reset flow.
    *
-   * Uses `signInWithOtp({ shouldCreateUser: true })` to ensure OTP works even
-   * for emails that don't have a Supabase user record. On success, transitions
-   * to the "verify" step. Handles rate limiting (429) by disabling the submit button.
+   * Reuses `signIn("password", { flow: "reset", email })` to send an OTP via Resend.
+   * The ResendOTP provider sends the email regardless of account existence.
+   * Handles rate limiting (429) by disabling the submit button.
+   *
+   * DESIGN NOTE: Same pattern as mobile `order/lookup.tsx`. The `flow: "reset"` is
+   * intentionally reused for guest OTP — it does NOT require an existing account.
    *
    * @param e - Form submit event. Email is read from the named input element.
    */
@@ -392,29 +397,21 @@ function LookupPage() {
 
     setIsLoading(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: true },
-      });
-
-      if (otpError) {
-        const isRateLimit =
-          otpError.status === 429 ||
-          otpError.message.toLowerCase().includes("rate limit") ||
-          otpError.message.toLowerCase().includes("too many");
-        if (isRateLimit) {
-          setIsRateLimited(true);
-          setError("Too many requests. Please wait before trying again.");
-        } else {
-          setError("Unable to send verification code. Please try again.");
-        }
-        return;
-      }
-
+      // Convex Auth reset flow — sends OTP via Resend (works for non-registered emails)
+      await signIn("password", { flow: "reset", email });
       setCurrentStep({ step: "verify", email });
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const isRateLimit =
+        message.toLowerCase().includes("rate limit") ||
+        message.toLowerCase().includes("too many") ||
+        message.toLowerCase().includes("429");
+      if (isRateLimit) {
+        setIsRateLimited(true);
+        setError("Too many requests. Please wait before trying again.");
+      } else {
+        setError("Unable to send verification code. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -423,9 +420,10 @@ function LookupPage() {
   /**
    * Handles OTP verification — verifies the 6-digit code and fetches orders.
    *
-   * Flow: verify OTP → fetch orders via server function → sign out OTP session.
-   * The `signOut()` is in a `finally` block to ensure cleanup even if the order
-   * fetch fails. On success, transitions to the "results" step.
+   * Uses Convex Auth `signIn("password", { flow: "reset-verification", email, code })`
+   * to verify the OTP. If successful, fetches orders via server function.
+   * No session cleanup needed — the reset-verification flow doesn't create a
+   * persistent session (unlike the old Supabase OTP flow).
    *
    * @param e - Form submit event. OTP is read from the named input element.
    */
@@ -444,28 +442,14 @@ function LookupPage() {
 
     setIsLoading(true);
     try {
-      const supabase = getSupabaseBrowserClient();
+      // Verify OTP via Convex Auth reset-verification flow
+      await signIn("password", { flow: "reset-verification", email, code: otp });
 
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: "email",
-      });
-
-      if (verifyError) {
-        setError("Invalid or expired code. Please try again.");
-        return;
-      }
-
-      // Fetch orders, then always sign out (AC #3: clean up temporary OTP session)
-      try {
-        const orders = await lookupOrdersByEmailFn();
-        setCurrentStep({ step: "results", orders });
-      } finally {
-        await supabase.auth.signOut();
-      }
+      // OTP verified — fetch orders by email
+      const orders = await lookupOrdersByEmailFn();
+      setCurrentStep({ step: "results", orders });
     } catch {
-      setError("An unexpected error occurred. Please try again.");
+      setError("Invalid or expired code. Please try again.");
     } finally {
       setIsLoading(false);
     }

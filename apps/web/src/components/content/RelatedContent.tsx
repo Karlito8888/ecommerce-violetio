@@ -1,8 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CONTENT_TYPE_LABELS } from "@ecommerce/shared";
-import type { RelatedContentItem } from "@ecommerce/shared";
-import { getRelatedContentFn } from "../../server/getContent";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
+import { useMemo } from "react";
 
 interface RelatedContentProps {
   slugs: string[];
@@ -10,25 +10,19 @@ interface RelatedContentProps {
 
 /**
  * Related content section rendered at the bottom of content detail pages.
- * Fetches related articles by slugs and displays them as linked cards.
+ * Fetches related articles by slugs from Convex and displays them as linked cards.
  * Renders nothing if no slugs provided or no results found.
- *
- * Uses `useQuery` (not `useSuspenseQuery`) intentionally: related content is
- * optional supplementary data that should NOT block the main article render
- * via Suspense. If the fetch fails, the section simply doesn't appear.
  *
  * ## BEM: .related-content
  */
 export default function RelatedContent({ slugs }: RelatedContentProps) {
-  const { data } = useQuery({
-    queryKey: ["content", "related", slugs],
-    queryFn: () => getRelatedContentFn({ data: slugs }),
-    enabled: slugs.length > 0,
-  });
+  const now = useMemo(() => Date.now(), []);
+  const pages = useQuery(
+    api.content.queries.getRelatedContent,
+    slugs.length > 0 ? { slugs, now } : "skip",
+  );
 
-  const items: RelatedContentItem[] = data?.data ?? [];
-
-  if (items.length === 0) return null;
+  if (!pages || pages.length === 0) return null;
 
   return (
     <section className="related-content" aria-labelledby="related-content-title">
@@ -36,34 +30,34 @@ export default function RelatedContent({ slugs }: RelatedContentProps) {
         Related Articles
       </h2>
       <div className="related-content__list">
-        {items.map((item) => (
+        {pages.map((page) => (
           <Link
-            key={item.slug}
+            key={page.slug}
             to="/content/$slug"
-            params={{ slug: item.slug }}
+            params={{ slug: page.slug }}
             className="related-content__item"
           >
             <div
-              className={`related-content__image ${!item.featuredImageUrl ? `related-content__image--placeholder related-content__image--${item.type}` : ""}`}
+              className={`related-content__image ${!page.featuredImageUrl ? `related-content__image--placeholder related-content__image--${page.type}` : ""}`}
             >
-              {item.featuredImageUrl ? (
+              {page.featuredImageUrl ? (
                 <img
-                  src={item.featuredImageUrl}
-                  alt={item.title}
+                  src={page.featuredImageUrl}
+                  alt={page.title}
                   className="related-content__img"
                   loading="lazy"
                 />
               ) : (
                 <span className="related-content__placeholder-label">
-                  {CONTENT_TYPE_LABELS[item.type] || item.type}
+                  {CONTENT_TYPE_LABELS[page.type] || page.type}
                 </span>
               )}
             </div>
             <div className="related-content__info">
               <span className="related-content__badge">
-                {CONTENT_TYPE_LABELS[item.type] || item.type}
+                {CONTENT_TYPE_LABELS[page.type] || page.type}
               </span>
-              <h3 className="related-content__name">{item.title}</h3>
+              <h3 className="related-content__name">{page.title}</h3>
             </div>
           </Link>
         ))}

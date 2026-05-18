@@ -1,128 +1,47 @@
+/**
+ * /content/$slug route — Content detail page powered by Convex.
+ *
+ * Uses Convex useQuery for reactive data. SEO meta tags are generated
+ * client-side via the head function (static fallbacks + dynamic from data).
+ *
+ * Migrated from Supabase server functions (Phase 11).
+ * Same pattern as mobile `content/[slug].tsx`.
+ */
+
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import {
-  contentDetailQueryOptions,
-  buildPageMeta,
-  formatDate,
-  buildBreadcrumbJsonLd,
-  wordCount,
-  CONTENT_TYPE_LABELS,
-} from "@ecommerce/shared";
-import type { ContentDetailFetchFn, ContentPage } from "@ecommerce/shared";
-import { getContentBySlugFn } from "../../server/getContent";
+import { useMemo } from "react";
+import { buildPageMeta, formatDate, CONTENT_TYPE_LABELS } from "@ecommerce/shared";
+import type { ContentPage } from "@ecommerce/shared";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import MarkdownRenderer from "../../components/content/MarkdownRenderer";
 import AffiliateDisclosure from "../../components/content/AffiliateDisclosure";
 import RelatedContent from "../../components/content/RelatedContent";
 import ShareButton from "../../components/ui/ShareButton";
 
-/**
- * Adapts the TanStack Start server function to the shared ContentDetailFetchFn signature.
- */
-const fetchContent: ContentDetailFetchFn = (slug) => getContentBySlugFn({ data: slug });
-
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
 
-/** Content type to schema.org articleSection mapping for JSON-LD. */
-const ARTICLE_SECTIONS: Record<string, string> = {
-  guide: "Buying Guide",
-  comparison: "Product Comparison",
-  review: "Product Review",
-};
-
-/**
- * /content/$slug route — Server-side rendered Editorial Content Page.
- *
- * ## SSR Flow
- * 1. `loader` extracts `slug` from route params
- * 2. `queryClient.ensureQueryData(contentDetailQueryOptions(...))` prefetches
- *    content data into TanStack Query cache (server-side)
- * 3. Component renders with `useSuspenseQuery(...)` — data already in cache
- *
- * ## SEO (FR34)
- * The `head` function generates dynamic <title>, <meta description>,
- * Open Graph tags, and JSON-LD Article structured data.
- */
 export const Route = createFileRoute("/content/$slug")({
-  loader: async ({ context: { queryClient }, params: { slug } }) => {
-    const result = await queryClient.ensureQueryData(contentDetailQueryOptions(slug, fetchContent));
-    return { content: result.data ?? null };
-  },
-  pendingComponent: ContentSkeleton,
   component: ContentPageView,
+  pendingComponent: ContentSkeleton,
   errorComponent: ContentError,
-  head: ({ loaderData }) => {
-    const content = loaderData?.content;
-    if (!content) {
-      return { meta: [{ title: "Content Not Found | Maison Émile" }] };
-    }
-
-    const title = content.seoTitle || `${content.title} | Maison Émile`;
-    const description =
-      content.seoDescription || content.bodyMarkdown.replace(/[#*_[\]]/g, "").slice(0, 160);
-    const contentUrl = `${SITE_URL}/content/${content.slug}`;
-
-    return {
-      meta: buildPageMeta({
-        title,
-        description,
-        url: contentUrl,
-        siteUrl: SITE_URL,
-        image: content.featuredImageUrl ?? undefined,
-        type: "article",
-      }),
-      links: [{ rel: "canonical", href: contentUrl }],
-      scripts: [
-        {
-          type: "application/ld+json",
-          children: JSON.stringify(buildArticleJsonLd(content, SITE_URL)),
-        },
-        {
-          type: "application/ld+json",
-          children: JSON.stringify(
-            buildBreadcrumbJsonLd([
-              { name: "Home", url: SITE_URL },
-              { name: "Guides & Reviews", url: `${SITE_URL}/content` },
-              { name: content.title, url: contentUrl },
-            ]),
-          ),
-        },
-      ],
-    };
-  },
+  head: ({ params }) => ({
+    meta: buildPageMeta({
+      title: `${params.slug} | Maison Émile`,
+      description: "Editorial guides, comparisons, and reviews from Maison Émile.",
+      url: `/content/${params.slug}`,
+      siteUrl: SITE_URL,
+    }),
+  }),
 });
 
-/**
- * Build JSON-LD Article structured data for content pages.
- * @see https://schema.org/Article
- */
-function buildArticleJsonLd(content: ContentPage, siteUrl: string): object {
-  return {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: content.title,
-    author: { "@type": "Person", name: content.author },
-    datePublished: content.publishedAt,
-    dateModified: content.updatedAt,
-    image: content.featuredImageUrl ?? undefined,
-    url: `${siteUrl}/content/${content.slug}`,
-    wordCount: wordCount(content.bodyMarkdown),
-    articleSection: ARTICLE_SECTIONS[content.type] ?? content.type,
-    publisher: {
-      "@type": "Organization",
-      name: "Maison Émile",
-      url: siteUrl,
-    },
-  };
-}
-
-/**
- * Content Page component — renders the full editorial content page.
- */
 function ContentPageView() {
   const { slug } = Route.useParams();
-  const { data } = useSuspenseQuery(contentDetailQueryOptions(slug, fetchContent));
+  const now = useMemo(() => Date.now(), []);
+  const page = useQuery(api.content.queries.getContentPageBySlug, { slug, now });
 
-  if (!data.data) {
+  if (page === undefined) return <ContentSkeleton />;
+  if (page === null) {
     return (
       <div className="page-wrap">
         <div className="content-page content-page--not-found">
@@ -133,7 +52,24 @@ function ContentPageView() {
     );
   }
 
-  const content = data.data;
+  const content: ContentPage = {
+    id: page._id,
+    slug: page.slug,
+    title: page.title,
+    type: page.type as ContentPage["type"],
+    bodyMarkdown: page.bodyMarkdown,
+    author: page.author,
+    publishedAt: page.publishedAt ? new Date(page.publishedAt).toISOString() : null,
+    seoTitle: page.seoTitle ?? null,
+    seoDescription: page.seoDescription ?? null,
+    featuredImageUrl: page.featuredImageUrl ?? null,
+    status: page.status as ContentPage["status"],
+    tags: page.tags ?? [],
+    relatedSlugs: page.relatedSlugs ?? [],
+    sortOrder: page.sortOrder,
+    createdAt: new Date(page._creationTime).toISOString(),
+    updatedAt: new Date(page._creationTime).toISOString(),
+  };
 
   return (
     <div className="page-wrap">
@@ -155,11 +91,6 @@ function ContentPageView() {
                 </time>
               </>
             )}
-            {/*
-              Share button URL must be absolute — Web Share API and clipboard
-              copy the string verbatim; relative paths like "/content/x" are
-              NOT resolved by the browser. Fixed during Story 7.5 code review.
-            */}
             <ShareButton
               url={`${SITE_URL}/content/${content.slug}`}
               title={content.seoTitle ?? content.title}

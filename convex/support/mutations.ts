@@ -21,6 +21,7 @@ export const insertSupportInquiry = mutation({
     message: v.string(),
     orderId: v.optional(v.string()),
   },
+  returns: v.id("supportInquiries"),
   handler: async (ctx, { name, email, subject, message, orderId }) => {
     const id = await ctx.db.insert("supportInquiries", {
       name,
@@ -42,6 +43,7 @@ export const updateInquiryStatus = mutation({
     inquiryId: v.id("supportInquiries"),
     status: v.string(), // "new" | "in-progress" | "resolved"
   },
+  returns: v.null(),
   handler: async (ctx, { inquiryId, status }) => {
     await assertAdmin(ctx);
     await ctx.db.patch("supportInquiries", inquiryId, { status });
@@ -56,6 +58,7 @@ export const updateInternalNotes = mutation({
     inquiryId: v.id("supportInquiries"),
     notes: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, { inquiryId, notes }) => {
     await assertAdmin(ctx);
     await ctx.db.patch("supportInquiries", inquiryId, { internalNotes: notes });

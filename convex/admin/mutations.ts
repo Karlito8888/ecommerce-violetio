@@ -21,6 +21,7 @@ export const replyToSupportInquiry = action({
     inquiryId: v.id("supportInquiries"),
     replyMessage: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, { inquiryId, replyMessage }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");

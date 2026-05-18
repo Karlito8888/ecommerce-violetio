@@ -1,29 +1,38 @@
 // convex/users/mutations.ts
 //
-// Mutations pour la gestion des utilisateurs et la migration anonymous → authenticated.
-// Le modèle localId (voir packages/shared/src/utils/localId.ts) associe les données
-// pré-inscription à un UUID local. À l'inscription, ces données sont migrées vers
-// le userId Convex Auth via migrateAnonymousData().
+// Mutations for user management and anonymous → authenticated data migration.
+// The localId model (see packages/shared/src/utils/localId.ts) associates pre-signup
+// data with a local UUID. On signup, this data is migrated to the Convex Auth userId
+// via migrateAnonymousData().
 
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
- * Migre les données associées à un localId vers un userId Convex Auth.
- * Appelé une seule fois après une inscription réussie.
+ * Migrates data associated with a localId to a Convex Auth userId.
+ * Called once after a successful signup.
  *
- * Données migrées :
+ * Migrated data:
  *   - wishlists + wishlist_items (userId: localId → userId)
  *   - user_events (userId: localId → userId)
  *   - notification_preferences (userId: localId → userId)
  *   - user_push_tokens (userId: localId → userId)
- *   - carts actifs (userId: localId → userId)
+ *   - active carts (userId: localId → userId)
  */
 export const migrateAnonymousData = mutation({
   args: {
     localId: v.string(),
   },
+  returns: v.object({
+    migrated: v.object({
+      wishlists: v.number(),
+      events: v.number(),
+      preferences: v.number(),
+      pushTokens: v.number(),
+      carts: v.number(),
+    }),
+  }),
   handler: async (ctx, { localId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
@@ -75,7 +84,7 @@ export const migrateAnonymousData = mutation({
       }
     }
 
-    // 2. Migrer les user_events
+    // 2. Migrate user events
     const events = await ctx.db
       .query("userEvents")
       .withIndex("by_user_type", (q) => q.eq("userId", localId))
@@ -84,7 +93,7 @@ export const migrateAnonymousData = mutation({
       await ctx.db.patch("userEvents", event._id, { userId });
     }
 
-    // 3. Migrer les notification_preferences
+    // 3. Migrate notification preferences
     const prefs = await ctx.db
       .query("notificationPreferences")
       .withIndex("by_userId_type", (q) => q.eq("userId", localId))
@@ -93,7 +102,7 @@ export const migrateAnonymousData = mutation({
       await ctx.db.patch("notificationPreferences", pref._id, { userId });
     }
 
-    // 4. Migrer les user_push_tokens
+    // 4. Migrate push tokens
     const tokens = await ctx.db
       .query("userPushTokens")
       .withIndex("by_userId", (q) => q.eq("userId", localId))
@@ -102,7 +111,7 @@ export const migrateAnonymousData = mutation({
       await ctx.db.patch("userPushTokens", token._id, { userId });
     }
 
-    // 5. Migrer les carts actifs
+    // 5. Migrate active carts
     const carts = await ctx.db
       .query("carts")
       .withIndex("by_userId", (q) => q.eq("userId", localId))
@@ -126,7 +135,7 @@ export const migrateAnonymousData = mutation({
 });
 
 /**
- * Met à jour le profil utilisateur.
+ * Updates the authenticated user's profile.
  */
 export const updateProfile = mutation({
   args: {
@@ -134,6 +143,7 @@ export const updateProfile = mutation({
     avatarUrl: v.optional(v.string()),
     preferences: v.optional(v.record(v.string(), v.any())),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
@@ -154,11 +164,12 @@ export const updateProfile = mutation({
 });
 
 /**
- * Active ou désactive le flag biometricEnabled sur le profil utilisateur.
- * Remplace setBiometricPreference() de @ecommerce/shared (Supabase).
+ * Enables or disables the biometricEnabled flag on the user's profile.
+ * Replaces setBiometricPreference() from @ecommerce/shared (Supabase).
  */
 export const setBiometricPreference = mutation({
   args: { enabled: v.boolean() },
+  returns: v.null(),
   handler: async (ctx, { enabled }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");

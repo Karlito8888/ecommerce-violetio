@@ -13,6 +13,24 @@ import { query } from "../_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 
+const contentPageValidator = v.object({
+  _id: v.id("contentPages"),
+  _creationTime: v.number(),
+  slug: v.string(),
+  title: v.string(),
+  type: v.string(),
+  bodyMarkdown: v.string(),
+  author: v.string(),
+  status: v.string(),
+  publishedAt: v.optional(v.number()),
+  seoTitle: v.optional(v.string()),
+  seoDescription: v.optional(v.string()),
+  featuredImageUrl: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
+  relatedSlugs: v.optional(v.array(v.string())),
+  sortOrder: v.number(),
+});
+
 // ─── Content Pages ────────────────────────────────────────────────
 
 /**
@@ -21,6 +39,7 @@ import { paginationOptsValidator } from "convex/server";
  */
 export const getContentPageBySlug = query({
   args: { slug: v.string(), now: v.number() },
+  returns: v.union(contentPageValidator, v.null()),
   handler: async (ctx, { slug, now }) => {
     const page = await ctx.db
       .query("contentPages")
@@ -48,6 +67,7 @@ export const getContentPages = query({
     paginationOpts: paginationOptsValidator,
     now: v.number(),
   },
+  returns: v.any(),
   handler: async (ctx, { type, paginationOpts, now }) => {
     const results = await ctx.db
       .query("contentPages")
@@ -75,6 +95,7 @@ export const getContentPages = query({
  */
 export const getRelatedContent = query({
   args: { slugs: v.array(v.string()), now: v.number() },
+  returns: v.array(contentPageValidator),
   handler: async (ctx, { slugs, now }) => {
     if (slugs.length === 0) return [];
 
@@ -106,6 +127,22 @@ export const getRelatedContent = query({
  */
 export const getFaqItems = query({
   args: {},
+  returns: v.array(
+    v.object({
+      name: v.string(),
+      items: v.array(
+        v.object({
+          _id: v.id("faqItems"),
+          _creationTime: v.number(),
+          category: v.string(),
+          question: v.string(),
+          answerMarkdown: v.string(),
+          sortOrder: v.number(),
+          isPublished: v.boolean(),
+        }),
+      ),
+    }),
+  ),
   handler: async (ctx) => {
     const items = await ctx.db
       .query("faqItems")
@@ -124,6 +161,6 @@ export const getFaqItems = query({
 
     return Array.from(categories.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([category, items]) => ({ category, items }));
+      .map(([category, items]) => ({ name: category, items }));
   },
 });

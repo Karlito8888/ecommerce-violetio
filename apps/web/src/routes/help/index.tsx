@@ -15,9 +15,10 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { buildPageMeta, buildBreadcrumbJsonLd, stripMarkdownSyntax } from "@ecommerce/shared";
-import type { FaqItem } from "@ecommerce/shared";
-import { getFaqItemsFn } from "../../server/getFaq";
+import { buildPageMeta, buildBreadcrumbJsonLd } from "@ecommerce/shared";
+import { type FaqCategory } from "@ecommerce/shared";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { filterFaq } from "../../utils/faqFilter";
 import FaqAccordion from "../../components/help/FaqAccordion";
 import FaqSearch from "../../components/help/FaqSearch";
@@ -32,59 +33,48 @@ const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
  * FAQPage JSON-LD structured data enables Google rich results.
  */
 export const Route = createFileRoute("/help/")({
-  loader: async () => {
-    const categories = await getFaqItemsFn();
-    return { categories };
-  },
   component: HelpPage,
-  head: ({ loaderData }) => {
-    const allItems = loaderData?.categories?.flatMap((c) => c.items) ?? [];
-    return {
-      meta: buildPageMeta({
-        title: "Help Center — FAQ | Maison Émile",
-        description:
-          "Find answers to common questions about shipping, returns, payment methods, order tracking, and more.",
-        url: "/help",
-        siteUrl: SITE_URL,
-      }),
-      links: [{ rel: "canonical", href: `${SITE_URL}/help` }],
-      scripts: [
-        {
-          type: "application/ld+json",
-          children: JSON.stringify(buildFaqJsonLd(allItems)),
-        },
-        {
-          type: "application/ld+json",
-          children: JSON.stringify(
-            buildBreadcrumbJsonLd([
-              { name: "Home", url: SITE_URL },
-              { name: "Help Center", url: `${SITE_URL}/help` },
-            ]),
-          ),
-        },
-      ],
-    };
-  },
+  head: () => ({
+    meta: buildPageMeta({
+      title: "Help Center — FAQ | Maison Émile",
+      description:
+        "Find answers to common questions about shipping, returns, payment methods, order tracking, and more.",
+      url: "/help",
+      siteUrl: SITE_URL,
+    }),
+    links: [{ rel: "canonical", href: `${SITE_URL}/help` }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify(
+          buildBreadcrumbJsonLd([
+            { name: "Home", url: SITE_URL },
+            { name: "Help Center", url: `${SITE_URL}/help` },
+          ]),
+        ),
+      },
+    ],
+  }),
 });
 
-/** Build FAQPage schema.org structured data for Google rich results. */
-function buildFaqJsonLd(items: FaqItem[]) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: items.map((item) => ({
-      "@type": "Question",
-      name: item.question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: stripMarkdownSyntax(item.answerMarkdown),
-      },
-    })),
-  };
-}
-
 function HelpPage() {
-  const { categories } = Route.useLoaderData();
+  // Convex query — reactive, replaces Supabase server function
+  const convexCategories = useQuery(api.content.queries.getFaqItems);
+  const categories: FaqCategory[] =
+    convexCategories?.map((c) => ({
+      name: c.name,
+      items: c.items.map((item) => ({
+        id: item._id,
+        category: item.category,
+        question: item.question,
+        answerMarkdown: item.answerMarkdown,
+        sortOrder: item.sortOrder,
+        isPublished: item.isPublished,
+        createdAt: new Date(item._creationTime).toISOString(),
+        updatedAt: new Date(item._creationTime).toISOString(),
+      })),
+    })) ?? [];
+
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 

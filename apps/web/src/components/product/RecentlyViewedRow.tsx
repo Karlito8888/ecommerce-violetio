@@ -4,6 +4,8 @@ import { useRecentlyViewed, productDetailQueryOptions } from "@ecommerce/shared"
 import { useUser } from "#/hooks/useUser";
 import type { Product, ProductDetailFetchFn } from "@ecommerce/shared";
 import { getProductFn } from "#/server/getProduct";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import BaseProductCard from "./BaseProductCard";
 
 /** Adapter: wraps TanStack Start Server Function to match shared hook signature. */
@@ -27,11 +29,25 @@ function RecentlyViewedRowInner() {
   const { data: user } = useUser();
   const userId = user?.id;
 
+  // Pre-fetch user events from Convex to inject into useRecentlyViewed
+  const userEvents = useQuery(
+    api.tracking.queries.getUserEvents,
+    userId ? { userId, eventType: "product_view", limit: 24 } : "skip",
+  );
+
+  const fetchUserEvents = async (
+    _uid: string,
+    _eventType: string,
+    _limit: number,
+  ): Promise<Array<{ payload?: Record<string, unknown> }>> => {
+    return (userEvents ?? []) as Array<{ payload?: Record<string, unknown> }>;
+  };
+
   const {
     data: productIds,
     isLoading: idsLoading,
     isError: idsError,
-  } = useRecentlyViewed({ userId });
+  } = useRecentlyViewed({ userId, fetchUserEvents });
 
   // Fetch live product data from Violet for each recently viewed product ID
   const productQueries = useQueries({

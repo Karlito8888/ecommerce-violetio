@@ -20,6 +20,7 @@ import { v } from "convex/values";
  */
 export const addToWishlist = mutation({
   args: { userId: v.string(), productId: v.string() },
+  returns: v.null(),
   handler: async (ctx, { userId, productId }) => {
     // Find or create the wishlist
     let wishlist = await ctx.db
@@ -56,6 +57,7 @@ export const addToWishlist = mutation({
  */
 export const removeFromWishlist = mutation({
   args: { userId: v.string(), productId: v.string() },
+  returns: v.null(),
   handler: async (ctx, { userId, productId }) => {
     const wishlist = await ctx.db
       .query("wishlists")

@@ -103,6 +103,7 @@ export const sendEmail = action({
     html: v.string(),
     text: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (_ctx, { to, subject, html, text }) => {
     const result = await sendRawEmail({ to, subject, html, text });
     if (!result.success) {

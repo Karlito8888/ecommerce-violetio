@@ -1,6 +1,4 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-/** M6 review fix: Added .js extension for ESM consistency. */
-import { getUserEvents } from "../clients/tracking.js";
 import { queryKeys } from "../utils/constants.js";
 import type { RecentlyViewedEntry } from "../types/recentlyViewed.types.js";
 
@@ -12,16 +10,6 @@ const MAX_RECENTLY_VIEWED = 12;
 /**
  * Reads recently viewed product entries from localStorage.
  * Returns empty array on SSR, parse failure, or missing key.
- */
-/**
- * M3 review fix: Added `typeof localStorage !== "undefined"` guard.
- *
- * The original `typeof window === "undefined"` guard is insufficient for
- * React Native, where `window` IS defined but `localStorage` is NOT.
- * Without this fix, calling this function on mobile (anonymous path)
- * would throw `ReferenceError: localStorage is not defined`.
- *
- * The double guard covers both SSR (no window) and React Native (no localStorage).
  */
 export function getRecentlyViewedFromStorage(): RecentlyViewedEntry[] {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return [];
@@ -58,61 +46,62 @@ export function addToRecentlyViewedStorage(productId: string): void {
 /**
  * Options for the `useRecentlyViewed` hook and `recentlyViewedQueryOptions`.
  *
- * ### [H3 code-review fix] Options object instead of positional params
- * AC #7 specifies `useRecentlyViewed(options: { userId?, supabaseClient?, limit? })`.
- * The original implementation used positional params `(userId, limit)`.
- * Refactored to an options object for:
- *   1. Spec compliance with AC #7
- *   2. Forward-compatibility (easy to add `supabaseClient` later)
- *   3. Consistency with `useBrowsingHistory` and other shared hooks
+ * The authenticated path requires a `fetchUserEvents` function injected by
+ * the consuming component (platform-specific). On web/mobile, this calls
+ * the Convex query `api.tracking.queries.getUserEvents`. This keeps the
+ * shared hook backend-agnostic (no Convex import in packages/shared).
  *
- * ### Why no `supabaseClient` parameter?
- * The authenticated path calls `getUserEvents()` which uses the global
- * Supabase client created in `clients/supabase.ts`. Passing a client
- * instance would require threading it through `queryFn`, which adds
- * complexity with no current benefit. If multi-client support is needed
- * (e.g., admin impersonation), add `supabaseClient` to this interface.
+ * Anonymous users read from localStorage (no fetch needed).
  */
 export interface UseRecentlyViewedOptions {
   /** Authenticated user ID. If undefined, reads from localStorage (anonymous). */
   userId?: string;
   /** Maximum number of recently viewed entries to return (default: 12). */
   limit?: number;
+  /**
+   * Platform-specific function to fetch user events.
+   * Called for authenticated users to get product_view events.
+   * Should return events with payload.product_id fields.
+   *
+   * @example
+   * ```ts
+   * // Web/Mobile consumer:
+   * const events = await fetchUserEvents(userId, "product_view", limit * 2);
+   * ```
+   */
+  fetchUserEvents?: (
+    userId: string,
+    eventType: string,
+    limit: number,
+  ) => Promise<Array<{ payload?: Record<string, unknown> }>>;
 }
 
 /**
  * Creates TanStack Query options for recently viewed product IDs.
  *
- * - Authenticated users: reads from `user_events` table (cross-device).
+ * - Authenticated users: calls `fetchUserEvents` (injected by consumer).
  * - Anonymous users: reads from localStorage (client-only).
  *
  * Returns raw product IDs (strings), NOT enriched product data.
- * Consumers must fetch product details separately (e.g., via `useQueries`
- * with `productDetailQueryOptions` — same pattern as the wishlist page).
- *
- * @param options - See {@link UseRecentlyViewedOptions}
+ * Consumers must fetch product details separately.
  */
 export function recentlyViewedQueryOptions(options: UseRecentlyViewedOptions = {}) {
-  const { userId, limit = MAX_RECENTLY_VIEWED } = options;
+  const { userId, limit = MAX_RECENTLY_VIEWED, fetchUserEvents } = options;
   const isAuthenticated = !!userId;
 
   return queryOptions({
     queryKey: isAuthenticated
-      ? queryKeys.recentlyViewed.forUser(userId)
+      ? queryKeys.recentlyViewed.forUser(userId!)
       : queryKeys.recentlyViewed.anonymous(),
     queryFn: async (): Promise<string[]> => {
-      if (isAuthenticated) {
-        // Authenticated: fetch from user_events table (RLS-protected)
-        const events = await getUserEvents(userId, {
-          eventType: "product_view",
-          limit: limit * 2, // over-fetch to account for duplicate product_ids
-        });
+      if (isAuthenticated && fetchUserEvents) {
+        const events = await fetchUserEvents(userId!, "product_view", limit * 2);
 
         // Deduplicate: keep first occurrence (most recent) of each product_id
         const seen = new Set<string>();
         const ids: string[] = [];
         for (const event of events) {
-          const productId = (event.payload as { product_id?: string }).product_id;
+          const productId = (event.payload as { product_id?: string })?.product_id;
           if (productId && !seen.has(productId)) {
             seen.add(productId);
             ids.push(productId);
@@ -122,18 +111,11 @@ export function recentlyViewedQueryOptions(options: UseRecentlyViewedOptions = {
         return ids;
       }
 
-      // Anonymous: read from localStorage
+      // Anonymous or no fetchUserEvents: read from localStorage
       const entries = getRecentlyViewedFromStorage();
       return entries.slice(0, limit).map((e) => e.productId);
     },
-    staleTime: 2 * 60 * 1000, // 2 min — matches browsing history staleTime
-    /**
-     * [L2 code-review fix] Explicit `enabled: true`.
-     * AC #7 states "enabled: true always (anonymous path doesn't need auth)".
-     * TanStack Query defaults to true, but being explicit here documents the
-     * intentional design decision: this query runs for ALL users, including
-     * anonymous ones (unlike most auth-gated queries in the codebase).
-     */
+    staleTime: 2 * 60 * 1000,
     enabled: true,
   });
 }
@@ -142,16 +124,22 @@ export function recentlyViewedQueryOptions(options: UseRecentlyViewedOptions = {
  * React hook for recently viewed product IDs.
  *
  * Returns an array of product ID strings in reverse chronological order.
- * Abstracts the storage layer: localStorage for anonymous, user_events for authenticated.
- *
- * The consuming component is responsible for enriching IDs into full product data
- * (use `useQueries` with `productDetailQueryOptions` — see wishlist page pattern).
+ * Anonymous users read from localStorage; authenticated users call
+ * the injected `fetchUserEvents` function.
  *
  * @example
  * ```tsx
- * const { data: productIds, isLoading } = useRecentlyViewed({ userId });
- * const { data: productIds } = useRecentlyViewed({ userId, limit: 6 });
- * const { data: productIds } = useRecentlyViewed({}); // anonymous
+ * // Web consumer with Convex:
+ * const { data: productIds } = useRecentlyViewed({
+ *   userId,
+ *   fetchUserEvents: async (uid, type, lim) => {
+ *     // Call Convex query
+ *     return await convexQuery(api.tracking.queries.getUserEvents, { userId: uid, eventType: type, limit: lim });
+ *   },
+ * });
+ *
+ * // Anonymous (no fetchUserEvents needed):
+ * const { data: productIds } = useRecentlyViewed({});
  * ```
  */
 export function useRecentlyViewed(options: UseRecentlyViewedOptions = {}) {

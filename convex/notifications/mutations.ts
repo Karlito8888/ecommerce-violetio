@@ -24,6 +24,7 @@ export const upsertPushToken = mutation({
     deviceId: v.string(),
     platform: v.string(), // "ios" | "android"
   },
+  returns: v.null(),
   handler: async (ctx, { userId, expoPushToken, deviceId, platform }) => {
     // Check if this token already exists (same expoPushToken)
     const existingByToken = await ctx.db
@@ -52,6 +53,7 @@ export const upsertPushToken = mutation({
  */
 export const deletePushToken = mutation({
   args: { expoPushToken: v.string() },
+  returns: v.null(),
   handler: async (ctx, { expoPushToken }) => {
     const existing = await ctx.db
       .query("userPushTokens")
@@ -74,6 +76,7 @@ export const upsertNotificationPreference = mutation({
     notificationType: v.string(),
     enabled: v.boolean(),
   },
+  returns: v.null(),
   handler: async (ctx, { userId, notificationType, enabled }) => {
     const existing = await ctx.db
       .query("notificationPreferences")

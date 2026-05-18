@@ -158,9 +158,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     reactCompiler: true,
   },
   extra: {
-    supabaseUrl: process.env.SUPABASE_URL ?? "http://localhost:54321",
-    // Set via .env.local — empty in dev is OK, required for production
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
     // Web backend URL consumed by apiClient.ts via Constants.expoConfig.extra.apiUrl.
     // Falls back to process.env.EXPO_PUBLIC_API_URL then "http://10.0.2.2:3000".
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:3000",

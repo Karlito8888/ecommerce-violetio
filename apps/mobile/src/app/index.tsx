@@ -17,7 +17,9 @@ import ProductList from "@/components/product/ProductList";
 import { Fonts, Spacing, MaxContentWidth } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useRecentlyViewed, productsInfiniteQueryOptions } from "@ecommerce/shared";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery as useTanstackQuery } from "@tanstack/react-query";
+import { useQuery } from "convex/react";
+import { api } from "#convex/_generated/api";
 import { fetchProductsMobile, fetchCategoriesMobile } from "@/server/getProducts";
 
 /** Fallback when dynamic categories fetch fails. */
@@ -34,7 +36,7 @@ const categoriesQuery = {
 export default function HomeScreen() {
   const theme = useTheme();
   const [activeCategory, setActiveCategory] = useState<string | undefined>(undefined);
-  const { data: categories = FALLBACK_CATEGORIES } = useQuery(categoriesQuery);
+  const { data: categories = FALLBACK_CATEGORIES } = useTanstackQuery(categoriesQuery);
 
   const { trackEvent } = useMobileTracking();
   const prevCategory = useRef(activeCategory);
@@ -121,7 +123,21 @@ function RecentlyViewedSection() {
   const { userId: authUserId, isAuthenticated } = useAuth();
   const theme = useTheme();
   const userId = isAuthenticated ? (authUserId ?? undefined) : undefined;
-  const { data: productIds, isLoading } = useRecentlyViewed({ userId });
+
+  // Pre-fetch user events from Convex for recently viewed (authenticated path)
+  const userEvents = useQuery(
+    api.tracking.queries.getUserEvents,
+    userId ? { userId, eventType: "product_view", limit: 24 } : "skip",
+  );
+  const fetchUserEvents = async (
+    _uid: string,
+    _eventType: string,
+    _limit: number,
+  ): Promise<Array<{ payload?: Record<string, unknown> }>> => {
+    return (userEvents ?? []) as Array<{ payload?: Record<string, unknown> }>;
+  };
+
+  const { data: productIds, isLoading } = useRecentlyViewed({ userId, fetchUserEvents });
   const router = useRouter();
 
   if (isLoading) {

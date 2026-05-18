@@ -15,6 +15,129 @@ import type { Doc } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { assertAdmin } from "../lib/admin";
 
+// ── Shared return-type validators (DRY) ────────────────────────────────────
+
+const orderDocValidator = v.object({
+  _id: v.id("orders"),
+  _creationTime: v.number(),
+  violetOrderId: v.string(),
+  userId: v.optional(v.string()),
+  sessionId: v.optional(v.string()),
+  email: v.string(),
+  status: v.string(),
+  subtotal: v.number(),
+  shippingTotal: v.number(),
+  taxTotal: v.number(),
+  total: v.number(),
+  currency: v.string(),
+  orderLookupTokenHash: v.optional(v.string()),
+  emailSent: v.boolean(),
+});
+
+const orderItemValidator = v.object({
+  _id: v.id("orderItems"),
+  _creationTime: v.number(),
+  orderBagId: v.id("orderBags"),
+  skuId: v.string(),
+  name: v.string(),
+  quantity: v.number(),
+  price: v.number(),
+  linePrice: v.number(),
+  thumbnail: v.optional(v.string()),
+});
+
+const orderRefundValidator = v.object({
+  _id: v.id("orderRefunds"),
+  _creationTime: v.number(),
+  orderBagId: v.id("orderBags"),
+  violetRefundId: v.string(),
+  amount: v.number(),
+  reason: v.optional(v.string()),
+  currency: v.string(),
+  status: v.string(),
+});
+
+const orderBagWithItemsValidator = v.object({
+  _id: v.id("orderBags"),
+  _creationTime: v.number(),
+  orderId: v.id("orders"),
+  violetBagId: v.string(),
+  merchantName: v.string(),
+  merchantId: v.optional(v.id("merchants")),
+  status: v.string(),
+  financialStatus: v.string(),
+  fulfillmentStatus: v.optional(v.string()),
+  subtotal: v.number(),
+  shippingTotal: v.number(),
+  taxTotal: v.number(),
+  total: v.number(),
+  shippingMethod: v.optional(v.string()),
+  trackingNumber: v.optional(v.string()),
+  trackingUrl: v.optional(v.string()),
+  carrier: v.optional(v.string()),
+  commissionRatePct: v.optional(v.number()),
+  items: v.array(orderItemValidator),
+});
+
+const orderBagWithItemsAndRefundsValidator = v.object({
+  _id: v.id("orderBags"),
+  _creationTime: v.number(),
+  orderId: v.id("orders"),
+  violetBagId: v.string(),
+  merchantName: v.string(),
+  merchantId: v.optional(v.id("merchants")),
+  status: v.string(),
+  financialStatus: v.string(),
+  fulfillmentStatus: v.optional(v.string()),
+  subtotal: v.number(),
+  shippingTotal: v.number(),
+  taxTotal: v.number(),
+  total: v.number(),
+  shippingMethod: v.optional(v.string()),
+  trackingNumber: v.optional(v.string()),
+  trackingUrl: v.optional(v.string()),
+  carrier: v.optional(v.string()),
+  commissionRatePct: v.optional(v.number()),
+  items: v.array(orderItemValidator),
+  refunds: v.array(orderRefundValidator),
+});
+
+const enrichedOrderValidator = v.object({
+  _id: v.id("orders"),
+  _creationTime: v.number(),
+  violetOrderId: v.string(),
+  userId: v.optional(v.string()),
+  sessionId: v.optional(v.string()),
+  email: v.string(),
+  status: v.string(),
+  subtotal: v.number(),
+  shippingTotal: v.number(),
+  taxTotal: v.number(),
+  total: v.number(),
+  currency: v.string(),
+  orderLookupTokenHash: v.optional(v.string()),
+  emailSent: v.boolean(),
+  bags: v.array(orderBagWithItemsAndRefundsValidator),
+});
+
+const guestEnrichedOrderValidator = v.object({
+  _id: v.id("orders"),
+  _creationTime: v.number(),
+  violetOrderId: v.string(),
+  userId: v.optional(v.string()),
+  sessionId: v.optional(v.string()),
+  email: v.string(),
+  status: v.string(),
+  subtotal: v.number(),
+  shippingTotal: v.number(),
+  taxTotal: v.number(),
+  total: v.number(),
+  currency: v.string(),
+  orderLookupTokenHash: v.optional(v.string()),
+  emailSent: v.boolean(),
+  bags: v.array(orderBagWithItemsValidator),
+});
+
 type EnrichedOrder = Doc<"orders"> & {
   bags: (Doc<"orderBags"> & {
     items: Doc<"orderItems">[];
@@ -61,6 +184,7 @@ async function enrichOrderWithBags(ctx: QueryCtx, order: Doc<"orders">): Promise
  */
 export const getOrders = query({
   args: { userId: v.string(), limit: v.optional(v.number()) },
+  returns: v.array(enrichedOrderValidator),
   handler: async (ctx, { userId, limit }) => {
     const maxOrders = limit ?? 50;
     const orders = await ctx.db
@@ -84,6 +208,7 @@ export const getOrders = query({
  */
 export const getOrderDetail = query({
   args: { orderId: v.id("orders") },
+  returns: v.union(enrichedOrderValidator, v.null()),
   handler: async (ctx, { orderId }) => {
     const order = await ctx.db.get("orders", orderId);
     if (!order) return null;
@@ -111,6 +236,7 @@ export const getOrderDetail = query({
  */
 export const getGuestOrderByToken = query({
   args: { orderLookupTokenHash: v.string() },
+  returns: v.union(guestEnrichedOrderValidator, v.null()),
   handler: async (ctx, { orderLookupTokenHash }) => {
     const order = await ctx.db
       .query("orders")
@@ -147,6 +273,7 @@ export const getAllOrders = query({
     status: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
+  returns: v.array(orderDocValidator),
   handler: async (ctx, { status, limit: maxOrders }) => {
     await assertAdmin(ctx);
     const limit = maxOrders ?? 100;

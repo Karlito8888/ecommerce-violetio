@@ -13,6 +13,16 @@ import { v } from "convex/values";
  */
 export const getUserPushTokens = query({
   args: { userId: v.string() },
+  returns: v.array(
+    v.object({
+      _id: v.id("userPushTokens"),
+      _creationTime: v.number(),
+      userId: v.string(),
+      expoPushToken: v.string(),
+      deviceId: v.string(),
+      platform: v.string(),
+    }),
+  ),
   handler: async (ctx, { userId }) => {
     return await ctx.db
       .query("userPushTokens")
@@ -26,6 +36,15 @@ export const getUserPushTokens = query({
  */
 export const getNotificationPreferences = query({
   args: { userId: v.string() },
+  returns: v.array(
+    v.object({
+      _id: v.id("notificationPreferences"),
+      _creationTime: v.number(),
+      userId: v.string(),
+      notificationType: v.string(),
+      enabled: v.boolean(),
+    }),
+  ),
   handler: async (ctx, { userId }) => {
     return await ctx.db
       .query("notificationPreferences")

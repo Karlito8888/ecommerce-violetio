@@ -151,7 +151,7 @@ describe("addToRecentlyViewedStorage", () => {
 // ─── recentlyViewedQueryOptions Tests (L3 code-review fix) ─────────
 // Covers the anonymous path: verifies that the query function actually
 // reads from localStorage and returns product IDs in the right order.
-// The authenticated path requires mocking getUserEvents (Supabase client)
+// The authenticated path uses Convex useQuery
 // which is out of scope for these pure-function unit tests.
 
 describe("recentlyViewedQueryOptions (anonymous path)", () => {

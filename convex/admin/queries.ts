@@ -29,6 +29,7 @@ import { assertAdmin } from "../lib/admin";
  */
 export const checkIsAdmin = internalQuery({
   args: { userId: v.string() },
+  returns: v.boolean(),
   handler: async (ctx, { userId }) => {
     const profile = await ctx.db
       .query("userProfiles")
@@ -67,6 +68,28 @@ export const getDashboardData = query({
     range: v.string(), // "today" | "7d" | "30d"
     now: v.number(),
   },
+  returns: v.object({
+    metrics: v.object({
+      totalOrders: v.number(),
+      grossRevenueCents: v.number(),
+      commissionEstimateCents: v.number(),
+      activeUsers: v.number(),
+      totalVisitors: v.number(),
+      conversionRate: v.number(),
+      aiSearchUsagePct: v.number(),
+      periodStart: v.string(),
+      periodEnd: v.string(),
+    }),
+    commission: v.array(
+      v.object({
+        name: v.string(),
+        grossSubtotalCents: v.number(),
+        commissionCents: v.number(),
+        bagCount: v.number(),
+        commissionRate: v.number(),
+      }),
+    ),
+  }),
   handler: async (ctx, { range, now }) => {
     await assertAdmin(ctx);
 
@@ -178,6 +201,24 @@ export const getDashboardData = query({
  */
 export const getOrderDistributions = query({
   args: { violetOrderId: v.string() },
+  returns: v.array(
+    v.object({
+      _id: v.id("orderDistributions"),
+      _creationTime: v.number(),
+      distributionId: v.optional(v.string()),
+      violetOrderId: v.string(),
+      violetBagId: v.optional(v.string()),
+      type: v.string(),
+      channelAmount: v.optional(v.number()),
+      stripeFee: v.optional(v.number()),
+      merchantAmount: v.optional(v.number()),
+      subtotal: v.optional(v.number()),
+      amount: v.number(),
+      currency: v.optional(v.string()),
+      status: v.optional(v.string()),
+      violetData: v.optional(v.any()),
+    }),
+  ),
   handler: async (ctx, { violetOrderId }) => {
     await assertAdmin(ctx);
 
@@ -197,6 +238,7 @@ export const getOrderDistributions = query({
  */
 export const getHealthData = query({
   args: { now: v.number() },
+  returns: v.any(),
   handler: async (ctx, { now }) => {
     await assertAdmin(ctx);
     return fetchHealthMetrics(ctx, now);
@@ -300,6 +342,19 @@ export const getRecentErrors = query({
     limit: v.optional(v.number()),
     source: v.optional(v.string()),
   },
+  returns: v.array(
+    v.object({
+      _id: v.id("errorLogs"),
+      _creationTime: v.number(),
+      source: v.string(),
+      errorType: v.string(),
+      message: v.string(),
+      stackTrace: v.optional(v.string()),
+      context: v.optional(v.any()),
+      userId: v.optional(v.string()),
+      sessionId: v.optional(v.string()),
+    }),
+  ),
   handler: async (ctx, { limit = 50, source }) => {
     await assertAdmin(ctx);
 
@@ -320,6 +375,18 @@ export const getRecentErrors = query({
  */
 export const getAlertRules = query({
   args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("alertRules"),
+      _creationTime: v.number(),
+      ruleName: v.string(),
+      description: v.optional(v.string()),
+      thresholdValue: v.number(),
+      timeWindowMinutes: v.number(),
+      enabled: v.boolean(),
+      lastTriggeredAt: v.optional(v.number()),
+    }),
+  ),
   handler: async (ctx) => {
     await assertAdmin(ctx);
     return await ctx.db.query("alertRules").take(100);
@@ -333,6 +400,18 @@ export const getAlertRules = query({
  */
 export const getMerchants = query({
   args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("merchants"),
+      _creationTime: v.number(),
+      violetMerchantId: v.number(),
+      name: v.string(),
+      domain: v.optional(v.string()),
+      countryCode: v.optional(v.string()),
+      status: v.optional(v.string()),
+      violetData: v.optional(v.any()),
+    }),
+  ),
   handler: async (ctx) => {
     await assertAdmin(ctx);
     return await ctx.db.query("merchants").take(500);
@@ -344,6 +423,18 @@ export const getMerchants = query({
  */
 export const getPayoutAccounts = query({
   args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("merchantPayoutAccounts"),
+      _creationTime: v.number(),
+      violetPayoutAccountId: v.number(),
+      merchantId: v.id("merchants"),
+      type: v.optional(v.string()),
+      status: v.string(),
+      requirements: v.optional(v.any()),
+      violetData: v.optional(v.any()),
+    }),
+  ),
   handler: async (ctx) => {
     await assertAdmin(ctx);
     return await ctx.db.query("merchantPayoutAccounts").take(500);

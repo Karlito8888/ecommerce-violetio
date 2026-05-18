@@ -24,11 +24,6 @@ export type {
 export type { OrderRefundRow } from "../types/orderPersistence.types.js";
 export { useTracking, getDedupKey } from "./useTracking.js";
 export {
-  useBrowsingHistory,
-  browsingHistoryKeys,
-  browsingHistoryQueryOptions,
-} from "./useBrowsingHistory.js";
-export {
   recentlyViewedQueryOptions,
   useRecentlyViewed,
   getRecentlyViewedFromStorage,

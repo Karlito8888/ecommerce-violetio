@@ -195,6 +195,7 @@ export const sendPushNotification = action({
     body: v.string(),
     data: v.optional(v.any()),
   },
+  returns: v.null(),
   handler: async (ctx, { expoPushToken, title, body, data }) => {
     const { sent } = await sendPushBatch(ctx, [
       { to: expoPushToken, title, body, data, sound: "default" },
