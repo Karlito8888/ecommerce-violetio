@@ -10,16 +10,16 @@ import { v } from "convex/values";
  * Public health check — confirms the Convex backend is running.
  */
 export const getStatus = query({
-  args: {},
+  args: { now: v.number() },
   returns: v.object({
     status: v.string(),
     timestamp: v.number(),
     backend: v.string(),
   }),
-  handler: async (_ctx) => {
+  handler: async (_ctx, { now }) => {
     return {
       status: "ok",
-      timestamp: Date.now(),
+      timestamp: now,
       backend: "convex-self-hosted",
     };
   },
@@ -30,21 +30,18 @@ export const getStatus = query({
  * Returns per-service status (Convex, Violet, Stripe).
  */
 export const runHealthCheck = query({
-  args: {},
-  handler: async (_ctx) => {
+  args: { now: v.number() },
+  handler: async (_ctx, { now }) => {
     const services: Record<string, { status: string; latency_ms?: number; error?: string }> = {};
 
     // Convex — always up if this query runs
     services.convex = { status: "up", latency_ms: 0 };
 
-    // Violet — test auth token fetch
-    const violetStart = Date.now();
+    // Violet — test auth token fetch (only env var check in query context)
     try {
-      // We can't use actions from queries, so we just check if we have env vars
       const hasVioletConfig = !!(process.env.VIOLET_APP_ID && process.env.VIOLET_APP_SECRET);
       services.violet = {
         status: hasVioletConfig ? "up" : "unknown",
-        latency_ms: Date.now() - violetStart,
       };
     } catch (err) {
       services.violet = {
@@ -63,7 +60,7 @@ export const runHealthCheck = query({
     return {
       overall_status: allUp ? "healthy" : "degraded",
       services,
-      checked_at: new Date().toISOString(),
+      checked_at: new Date(now).toISOString(),
       merchants: [], // Merchant health checked separately via admin queries
     };
   },

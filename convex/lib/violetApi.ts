@@ -15,11 +15,9 @@
 // Doc: https://docs.violet.io/concepts/overview/token-refresh-management
 //
 // ⚠️ This runs inside Convex actions only (not queries/mutations).
-// Each action invocation gets a fresh module scope — the token does NOT persist
-// across invocations. This is fine because:
-//   1. Actions are short-lived (single request)
-//   2. We do a login per action invocation (cached within the action's multiple API calls)
-//   3. The Violet token lasts 24 hours — sufficient for any single action
+// Convex actions preserve module scope within a single invocation, so the singleton
+// VioletTokenManager is reused across all violetFetch() calls in the same action.
+// Each action invocation gets a fresh module scope (token does NOT persist across invocations).
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
@@ -192,13 +190,32 @@ class VioletTokenManager {
  * - 401 retry with token invalidation
  * - Request timeout via AbortController
  *
- * Returns a standard Response object.
+ * The token manager is a module-level singleton — reused across all violetFetch()
+ * calls within a single Convex action invocation. This avoids duplicate login
+ * requests when an action makes multiple Violet API calls (e.g. fetch refunds +
+ * send notification).
+ *
+ * Doc: https://docs.convex.dev/functions/actions — module scope is preserved per invocation
  *
  * @param url  - Full Violet API URL
  * @param init - Standard fetch RequestInit (headers injected automatically)
  */
+let _manager: VioletTokenManager | null = null;
+
+function getManager(): VioletTokenManager {
+  if (!_manager) {
+    _manager = new VioletTokenManager();
+  }
+  return _manager;
+}
+
+/** Reset the singleton — for testing only. */
+export function _resetManager(): void {
+  _manager = null;
+}
+
 export async function violetFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const manager = new VioletTokenManager();
+  const manager = getManager();
 
   const buildHeaders = (authHeaders: Record<string, string>): Record<string, string> => ({
     ...authHeaders,

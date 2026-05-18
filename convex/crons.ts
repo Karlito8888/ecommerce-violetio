@@ -35,7 +35,7 @@ export const cleanupOldWebhooks = internalMutation({
       .take(500);
 
     for (const event of oldEvents) {
-      await ctx.db.delete(event._id);
+      await ctx.db.delete("webhookEvents", event._id);
     }
 
     if (oldEvents.length > 0) {
@@ -56,12 +56,14 @@ export const cleanupAbandonedCarts = internalMutation({
   handler: async (ctx) => {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
 
+    // Process in batches of 500 to avoid exceeding Convex function limits.
+    // Doc: https://docs.convex.dev/understanding/best-practices — avoid unbounded .collect()
     const abandonedCarts = await ctx.db
       .query("carts")
       .filter((q) =>
         q.and(q.eq(q.field("status"), "abandoned"), q.lt(q.field("_creationTime"), thirtyDaysAgo)),
       )
-      .collect();
+      .take(500);
 
     let deletedCarts = 0;
     for (const cart of abandonedCarts) {
@@ -72,10 +74,10 @@ export const cleanupAbandonedCarts = internalMutation({
         .collect();
 
       for (const item of items) {
-        await ctx.db.delete(item._id);
+        await ctx.db.delete("cartItems", item._id);
       }
 
-      await ctx.db.delete(cart._id);
+      await ctx.db.delete("carts", cart._id);
       deletedCarts++;
     }
 
@@ -105,7 +107,7 @@ export const retryStuckWebhooks = internalMutation({
       );
 
       for (const event of stuckEvents) {
-        await ctx.db.patch(event._id, {
+        await ctx.db.patch("webhookEvents", event._id, {
           status: "failed",
           errorMessage: "Auto-marked as failed after 1 hour in 'received' status",
           processedAt: Date.now(),

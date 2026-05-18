@@ -54,8 +54,9 @@ export const migrateAnonymousData = mutation({
           // Skip duplicates (product already in user's wishlist)
           const existingItem = await ctx.db
             .query("wishlistItems")
-            .withIndex("by_wishlistId", (q) => q.eq("wishlistId", existingWishlist._id))
-            .filter((q) => q.eq(q.field("productId"), item.productId))
+            .withIndex("by_wishlistId_productId", (q) =>
+              q.eq("wishlistId", existingWishlist._id).eq("productId", item.productId),
+            )
             .first();
 
           if (!existingItem) {
@@ -64,13 +65,13 @@ export const migrateAnonymousData = mutation({
               productId: item.productId,
             });
           }
-          await ctx.db.delete(item._id);
+          await ctx.db.delete("wishlistItems", item._id);
         }
         // Remove the empty anonymous wishlist
-        await ctx.db.delete(anonWishlist._id);
+        await ctx.db.delete("wishlists", anonWishlist._id);
       } else {
         // No existing wishlist — simply reassign ownership
-        await ctx.db.patch(anonWishlist._id, { userId });
+        await ctx.db.patch("wishlists", anonWishlist._id, { userId });
       }
     }
 
@@ -80,7 +81,7 @@ export const migrateAnonymousData = mutation({
       .withIndex("by_user_type", (q) => q.eq("userId", localId))
       .collect();
     for (const event of events) {
-      await ctx.db.patch(event._id, { userId });
+      await ctx.db.patch("userEvents", event._id, { userId });
     }
 
     // 3. Migrer les notification_preferences
@@ -89,7 +90,7 @@ export const migrateAnonymousData = mutation({
       .withIndex("by_userId_type", (q) => q.eq("userId", localId))
       .collect();
     for (const pref of prefs) {
-      await ctx.db.patch(pref._id, { userId });
+      await ctx.db.patch("notificationPreferences", pref._id, { userId });
     }
 
     // 4. Migrer les user_push_tokens
@@ -98,7 +99,7 @@ export const migrateAnonymousData = mutation({
       .withIndex("by_userId", (q) => q.eq("userId", localId))
       .collect();
     for (const token of tokens) {
-      await ctx.db.patch(token._id, { userId });
+      await ctx.db.patch("userPushTokens", token._id, { userId });
     }
 
     // 5. Migrer les carts actifs
@@ -108,7 +109,7 @@ export const migrateAnonymousData = mutation({
       .collect();
     for (const cart of carts) {
       if (cart.status === "active") {
-        await ctx.db.patch(cart._id, { userId });
+        await ctx.db.patch("carts", cart._id, { userId });
       }
     }
 
@@ -144,7 +145,7 @@ export const updateProfile = mutation({
 
     if (!profile) throw new Error("Profile not found");
 
-    await ctx.db.patch(profile._id, {
+    await ctx.db.patch("userProfiles", profile._id, {
       ...(args.displayName !== undefined && { displayName: args.displayName }),
       ...(args.avatarUrl !== undefined && { avatarUrl: args.avatarUrl }),
       ...(args.preferences !== undefined && { preferences: args.preferences }),
@@ -168,7 +169,7 @@ export const setBiometricPreference = mutation({
       .first();
 
     if (profile) {
-      await ctx.db.patch(profile._id, { biometricEnabled: enabled });
+      await ctx.db.patch("userProfiles", profile._id, { biometricEnabled: enabled });
     }
   },
 });

@@ -20,8 +20,8 @@ import { paginationOptsValidator } from "convex/server";
  * Returns null if not found or not published.
  */
 export const getContentPageBySlug = query({
-  args: { slug: v.string() },
-  handler: async (ctx, { slug }) => {
+  args: { slug: v.string(), now: v.number() },
+  handler: async (ctx, { slug, now }) => {
     const page = await ctx.db
       .query("contentPages")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
@@ -30,7 +30,8 @@ export const getContentPageBySlug = query({
     if (!page || page.status !== "published") return null;
 
     // Only show published pages with a valid publish date
-    if (page.publishedAt && page.publishedAt > Date.now()) return null;
+    // `now` is passed from client to avoid Date.now() in queries (Convex best practice)
+    if (page.publishedAt && page.publishedAt > now) return null;
 
     return page;
   },
@@ -45,8 +46,9 @@ export const getContentPages = query({
   args: {
     type: v.optional(v.string()),
     paginationOpts: paginationOptsValidator,
+    now: v.number(),
   },
-  handler: async (ctx, { type, paginationOpts }) => {
+  handler: async (ctx, { type, paginationOpts, now }) => {
     const results = await ctx.db
       .query("contentPages")
       .withIndex("by_status_published", (q) => q.eq("status", "published"))
@@ -55,7 +57,7 @@ export const getContentPages = query({
 
     // Filter: exclude 'legal' type from unfiltered listings, or filter by type
     const filtered = results.page.filter((page) => {
-      if (page.publishedAt && page.publishedAt > Date.now()) return false;
+      if (page.publishedAt && page.publishedAt > now) return false;
       if (type) return page.type === type;
       return page.type !== "legal";
     });
@@ -72,8 +74,8 @@ export const getContentPages = query({
  * Returns only published pages, sorted to match the input order (admin curation).
  */
 export const getRelatedContent = query({
-  args: { slugs: v.array(v.string()) },
-  handler: async (ctx, { slugs }) => {
+  args: { slugs: v.array(v.string()), now: v.number() },
+  handler: async (ctx, { slugs, now }) => {
     if (slugs.length === 0) return [];
 
     // Fetch all published pages matching the slugs
@@ -85,7 +87,7 @@ export const getRelatedContent = query({
 
     const slugSet = new Set(slugs);
     const matching = pages.filter(
-      (p) => slugSet.has(p.slug) && (!p.publishedAt || p.publishedAt <= Date.now()),
+      (p) => slugSet.has(p.slug) && (!p.publishedAt || p.publishedAt <= now),
     );
 
     // Re-sort to match the admin's intended order from relatedSlugs

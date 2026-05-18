@@ -44,7 +44,7 @@ export const updateInquiryStatus = mutation({
   },
   handler: async (ctx, { inquiryId, status }) => {
     await assertAdmin(ctx);
-    await ctx.db.patch(inquiryId, { status });
+    await ctx.db.patch("supportInquiries", inquiryId, { status });
   },
 });
 
@@ -58,6 +58,6 @@ export const updateInternalNotes = mutation({
   },
   handler: async (ctx, { inquiryId, notes }) => {
     await assertAdmin(ctx);
-    await ctx.db.patch(inquiryId, { internalNotes: notes });
+    await ctx.db.patch("supportInquiries", inquiryId, { internalNotes: notes });
   },
 });

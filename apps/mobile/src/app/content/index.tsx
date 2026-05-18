@@ -48,6 +48,7 @@ export default function ContentListScreen() {
   const result = useQuery(api.content.queries.getContentPages, {
     type: activeType,
     paginationOpts: { numItems: 12, cursor: null },
+    now: Date.now(),
   });
 
   const items: ContentListItem[] = (result?.page ?? []) as ContentListItem[];

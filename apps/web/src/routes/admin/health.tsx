@@ -180,13 +180,13 @@ function AdminHealthPage() {
   const navigate = useNavigate();
 
   // Health data — reactive Convex query
-  const healthData = useQuery(api.admin.queries.getHealthData);
+  const healthData = useQuery(api.admin.queries.getHealthData, { now: Date.now() });
 
   // Health check — on-demand Convex query (triggered by button)
   const [showHealthCheck, setShowHealthCheck] = useState(false);
   const healthCheckResult = useQuery(
     api.health.queries.runHealthCheck,
-    showHealthCheck ? {} : "skip",
+    showHealthCheck ? { now: Date.now() } : "skip",
   );
 
   // Auth redirect

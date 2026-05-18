@@ -33,7 +33,7 @@ export const upsertPushToken = mutation({
 
     if (existingByToken) {
       // Update the existing token entry
-      await ctx.db.patch(existingByToken._id, { userId, deviceId, platform });
+      await ctx.db.patch("userPushTokens", existingByToken._id, { userId, deviceId, platform });
       return;
     }
 
@@ -59,7 +59,7 @@ export const deletePushToken = mutation({
       .first();
 
     if (existing) {
-      await ctx.db.delete(existing._id);
+      await ctx.db.delete("userPushTokens", existing._id);
     }
   },
 });
@@ -83,7 +83,7 @@ export const upsertNotificationPreference = mutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { enabled });
+      await ctx.db.patch("notificationPreferences", existing._id, { enabled });
     } else {
       await ctx.db.insert("notificationPreferences", {
         userId,

@@ -41,7 +41,7 @@ export const getSupportInquiry = query({
   args: { inquiryId: v.id("supportInquiries") },
   handler: async (ctx, { inquiryId }) => {
     await assertAdmin(ctx);
-    return await ctx.db.get(inquiryId);
+    return await ctx.db.get("supportInquiries", inquiryId);
   },
 });
 
@@ -65,9 +65,9 @@ export const getLinkedOrder = query({
  * Returns the count of inquiries from the last hour.
  */
 export const countRecentInquiries = query({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+  args: { email: v.string(), now: v.number() },
+  handler: async (ctx, { email, now }) => {
+    const oneHourAgo = now - 60 * 60 * 1000;
     const inquiries = await ctx.db
       .query("supportInquiries")
       .withIndex("by_email", (q) => q.eq("email", email))

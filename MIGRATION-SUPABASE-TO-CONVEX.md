@@ -1395,6 +1395,42 @@ export async function assertAdmin(ctx: QueryCtx): Promise<void> {
 
 ## 8. Phase 3 — Fonctions Convex (queries, mutations, actions)
 
+> ✅ **Phase 3 TERMINÉE** (2026-05-18).
+>
+> Ce qui est fait :
+> - **Queries** : `orders`, `wishlists`, `tracking`, `notifications`, `content`, `support`, `admin`, `users`, `health` — toutes implémentées avec index composés, pas de `.filter()` sur DB queries
+> - **Mutations** : `wishlists`, `tracking`, `notifications`, `support`, `users` — upsert patterns, idempotent writes, cascade deletes applicatifs
+> - **Actions** : `lib/email.ts` (`sendEmail`, `sendRawEmail`, `escapeHtml`), `lib/push.ts`, `lib/violetApi.ts` (token manager singleton), `admin/mutations.ts` (`replyToSupportInquiry`, `evaluateAlerts`)
+> - **Cron jobs** : 4 jobs — cleanup webhooks (mensuel), cleanup abandoned carts (journalier), retry stuck webhooks (horaire), evaluate alerts (horaire)
+> - **Webhooks** : `webhooks/violet.ts` — HTTP action complet avec HMAC validation, idempotency, Zod validation, 30+ event types
+> - **HTTP routes** : `http.ts` — auth routes + webhook endpoint
+> - **Types** : `types.d.ts` — env vars typées, `webhookSchemas.ts` — Zod schemas pour tous les payloads Violet
+>
+> Audit Phase 3 (2026-05-18) — 9 corrections appliquées :
+>
+> **Convex Best Practices** (doc: https://docs.convex.dev/understanding/best-practices) :
+> - **`Date.now()` interdit dans queries** : 4 queries (`getContentPageBySlug`, `getContentPages`, `getDashboardData`, `getHealthData`) + 2 queries health (`getStatus`, `runHealthCheck`) + `countRecentInquiries` → paramètre `now: v.number()` passé par le client. Les internal queries appelées par crons utilisent `Date.now()` (exception officielle : les internal queries ne sont pas des subscriptions réactives). 6 callers web/mobile mis à jour.
+> - **`ctx.db.get/patch/delete` avec nom de table** (Convex 1.31+) : 37+ occurrences corrigées dans TOUS les fichiers convex (webhooks, users, wishlists, support, orders, notifications, crons, admin). Exemple : `ctx.db.get(id)` → `ctx.db.get("orders", id)`, `ctx.db.patch(id, data)` → `ctx.db.patch("userProfiles", id, data)`.
+> - **`.filter()` → `.withIndex()`** : `migrateAnonymousData` utilise l'index composé `by_wishlistId_productId` au lieu de `.filter()` pour le lookup de doublons.
+> - **`.collect()` borné** : `cleanupAbandonedCarts` utilise `.take(500)` au lieu de `.collect()` sans borne.
+>
+> **DRY (Don't Repeat Yourself)** :
+> - **`escapeHtml` centralisé** : 2 copies identiques (admin/mutations.ts + webhooks/violet.ts) → 1 seule source dans `lib/email.ts`, importée partout.
+> - **`sendRawEmail` centralisé** : 3 appels Resend duplicés (replyToSupportInquiry, evaluateAlerts, sendWebhookNotification) → 1 seul helper async dans `lib/email.ts`. `sendEmail` action délègue aussi à `sendRawEmail`.
+> - **`VioletTokenManager` singleton** : `violetFetch()` créait un nouveau manager par appel → module-level singleton `_manager` réutilisé entre appels au sein d'une même action (évite N logins Violet).
+>
+> **Webhook processing** :
+> - **`processOrderUpdated` : pas de bruit dans `errorLogs`** : Les webhooks ORDER_* arrivent souvent avant que le checkout soit persisté en DB. Remplacé `ctx.db.insert("errorLogs", ...)` par `console.log()` — ces événements sont normaux et ne doivent pas polluer le dashboard admin.
+>
+> Fichiers modifiés : `convex/content/queries.ts`, `convex/support/queries.ts`, `convex/admin/queries.ts`, `convex/health/queries.ts`, `convex/users/mutations.ts`, `convex/wishlists/mutations.ts`, `convex/orders/queries.ts`, `convex/support/mutations.ts`, `convex/notifications/mutations.ts`, `convex/crons.ts`, `convex/admin/mutations.ts`, `convex/lib/email.ts`, `convex/lib/violetApi.ts`, `convex/webhooks/violet.ts`, `apps/web/src/routes/admin/index.tsx`, `apps/web/src/routes/admin/health.tsx`, `apps/mobile/src/app/content/[slug].tsx`, `apps/mobile/src/app/content/index.tsx`
+>
+> Leçons apprises :
+> - **`Date.now()` invalide le cache Convex** — les queries réactives sont re-exécutées quand les données changent, pas quand le temps change. Toujours passer le temps en argument client.
+> - **`ctx.db.get/patch/delete` avec nom de table** est forward-compat depuis Convex 1.31 — requis pour custom ID generation futur. La version 1.39.1 du projet le supporte.
+> - **`violetFetch` singleton** — Convex actions preserve module scope within a single invocation. Un module-level singleton est la bonne abstraction.
+> - **`sendRawEmail` comme helper plain TS** — Convex recommande les helpers TS plutôt que `ctx.runAction()` quand on reste dans le même runtime. `sendRawEmail` est appelable depuis n'importe quelle action sans overhead.
+> - **Les webhooks ORDER_* précèdent parfois le checkout** — c'est un comportement normal de Violet (envoi eager). Ne pas les traiter comme des erreurs.
+
 ### 8.1 Principe de base
 
 Remplacer chaque accès Supabase par une fonction Convex :
@@ -1409,7 +1445,97 @@ Remplacer chaque accès Supabase par une fonction Convex :
 | Edge Function (fetch externe) | `action()` | Appel API externe |
 | HTTP endpoint | `httpAction()` | Webhook handler |
 
-### 8.2 Exemples de migration
+### 8.2 Best Practices Convex (obligatoires pour toutes les fonctions)
+
+> Source : https://docs.convex.dev/understanding/best-practices
+
+#### 8.2.1 Jamais `Date.now()` dans les queries
+
+Les queries Convex sont réactives — elles sont re-exécutées quand les données changent, pas quand le temps change. `Date.now()` invalide le cache inutilement.
+
+```typescript
+// ❌ INTERDIT dans query handlers
+export const getDashboardData = query({
+  args: { range: v.string() },
+  handler: async (ctx, { range }) => {
+    const now = Date.now(); // ← invalide le cache à chaque exécution
+
+// ✅ CORRECT — temps passé en argument par le client
+export const getDashboardData = query({
+  args: { range: v.string(), now: v.number() },
+  handler: async (ctx, { range, now }) => {
+    // `now` vient de Date.now() côté client
+```
+
+Exception : les `internalQuery` appelées par des crons/actions peuvent utiliser `Date.now()` car elles ne sont pas des subscriptions réactives.
+
+#### 8.2.2 Toujours utiliser le nom de table dans `ctx.db.*`
+
+Depuis Convex 1.31, les méthodes `ctx.db.get`, `ctx.db.patch`, `ctx.db.delete` acceptent un nom de table comme premier argument. C'est un safeguard forward-compat :
+
+```typescript
+// ❌ Sans nom de table (déprécié)
+await ctx.db.get(orderId);
+await ctx.db.patch(profile._id, { displayName: "Alice" });
+await ctx.db.delete(item._id);
+
+// ✅ Avec nom de table (requis)
+await ctx.db.get("orders", orderId);
+await ctx.db.patch("userProfiles", profile._id, { displayName: "Alice" });
+await ctx.db.delete("wishlistItems", item._id);
+```
+
+#### 8.2.3 Éviter `.filter()` sur les database queries
+
+Les `.filter()` sont équivalents à un filtrage en code mais moins lisibles. Préférer `.withIndex()` avec un index composé, ou filtrer en TypeScript :
+
+```typescript
+// ❌ .filter() scanne potentiellement toute la table
+const existing = await ctx.db
+  .query("wishlistItems")
+  .withIndex("by_wishlistId", (q) => q.eq("wishlistId", wishlistId))
+  .filter((q) => q.eq(q.field("productId"), productId))
+  .first();
+
+// ✅ Utiliser un index composé (O(1) lookup)
+const existing = await ctx.db
+  .query("wishlistItems")
+  .withIndex("by_wishlistId_productId", (q) =>
+    q.eq("wishlistId", wishlistId).eq("productId", productId)
+  )
+  .first();
+```
+
+#### 8.2.4 `.collect()` seulement pour de petits résultats
+
+Si le nombre de résultats est potentiellement grand (1000+), utiliser `.take(N)` ou la pagination :
+
+```typescript
+// ❌ Non borné — peut exploser en production
+const carts = await ctx.db.query("carts")
+  .filter(/* ... */)
+  .collect();
+
+// ✅ Borné à 500 max
+const carts = await ctx.db.query("carts")
+  .filter(/* ... */)
+  .take(500);
+```
+
+#### 8.2.5 Utiliser des helpers TypeScript (DRY)
+
+Préférer les fonctions TypeScript pures aux `ctx.runQuery/runMutation/runAction` pour le code partagé :
+
+```typescript
+// ✅ Helper centralisé dans convex/lib/email.ts
+export function escapeHtml(text: string): string { /* ... */ }
+export async function sendRawEmail(params: {...}): Promise<...> { /* ... */ }
+
+// Utilisable depuis n'importe quelle action sans ctx.runAction()
+import { sendRawEmail, escapeHtml } from "../lib/email";
+```
+
+### 8.3 Exemples de migration
 
 #### Wishlist (lecture)
 
@@ -1468,14 +1594,16 @@ export const addToWishlist = mutation({
 
     if (!wishlist) {
       const id = await ctx.db.insert("wishlists", { userId });
-      wishlist = { _id: id, userId };
+      wishlist = await ctx.db.get("wishlists", id);
+      if (!wishlist) throw new Error("Failed to create wishlist");
     }
 
-    // Vérifier si le produit est déjà dans la wishlist
+    // Vérifier si le produit est déjà dans la wishlist (index composé)
     const existing = await ctx.db
       .query("wishlistItems")
-      .withIndex("by_wishlistId", (q) => q.eq("wishlistId", wishlist._id))
-      .filter((q) => q.eq(q.field("productId"), productId))
+      .withIndex("by_wishlistId_productId", (q) =>
+        q.eq("wishlistId", wishlist._id).eq("productId", productId),
+      )
       .first();
 
     if (!existing) {
@@ -1518,7 +1646,7 @@ export const recordEvent = mutation({
 });
 ```
 
-#### Action — appel API externe (envoi email)
+#### Action — appel API externe (envoi email centralisé)
 
 **Avant (Edge Function)** :
 ```typescript
@@ -1526,78 +1654,159 @@ export const recordEvent = mutation({
 const response = await fetch("https://api.resend.com/emails", { ... });
 ```
 
-**Après (Convex Action)** :
+**Après (Convex — helpers centralisés DRY)** :
 ```typescript
-// convex/lib/email.ts
-import { action } from "../_generated/server";
-import { v } from "convex/values";
+// convex/lib/email.ts — helpers partagés par toutes les actions
 
+// Helper HTML escaping — utilisé par support reply, webhook notifications, alert emails
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Helper email raw fetch — utilisable depuis toute action sans ctx.runAction()
+export async function sendRawEmail(params: {
+  to: string | string[];
+  subject: string;
+  html: string;
+  text?: string;
+  fromName?: string;
+  idempotencyKey?: string;
+}): Promise<{ success: true; resendEmailId?: string } | { success: false; error: string }> {
+  // ... appelle Resend API avec gestion d'erreur centralisée
+}
+
+// Action publique — wrappe sendRawEmail pour les appels client
 export const sendEmail = action({
-  args: {
-    to: v.string(),
-    subject: v.string(),
-    html: v.string(),
-  },
-  handler: async (ctx, { to, subject, html }) => {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM_ADDRESS!,
-        to,
-        subject,
-        html,
-      }),
-    });
-    // ... gestion de la réponse
+  args: { to: v.string(), subject: v.string(), html: v.string(), text: v.optional(v.string()) },
+  handler: async (_ctx, { to, subject, html, text }) => {
+    const result = await sendRawEmail({ to, subject, html, text });
+    if (!result.success) throw new Error(`Failed to send email: ${result.error}`);
   },
 });
 ```
 
-### 8.3 Tables avec index composés — attention
+### 8.4 Tables avec index composés — attention
 
-Les index Convex sont préfixés. Exemple pour `orders` :
+Les index Convex sont préfixés. `_creationTime` est automatiquement ajouté à la fin de chaque index. Exemple pour `orders` :
 
 ```typescript
 // ✅ CORRECT — utilise l'index composé
 await ctx.db
   .query("orders")
-  .withIndex("by_userId_createdAt", (q) =>
-    q.eq("userId", userId) // eq sur le préfixe
-    // _creationTime est implicitement trié DESC
+  .withIndex("by_userId", (q) =>
+    q.eq("userId", userId)
+    // _creationTime est implicitement trié via l'index
   )
   .order("desc")
-  .collect();
+  .take(50); // Toujours borner les résultats
 
-// ❌ NE FONCTIONNE PAS — pas de filtre générique
+// ❌ NE FONCTIONNE PAS — scanne TOUTE la table
 await ctx.db
   .query("orders")
   .filter((q) => q.eq(q.field("userId"), userId))
-  // Ceci scanne TOUTE la table
 ```
 
-### 8.4 Pagination
+### 8.5 Pagination
 
 Remplacer `.range(from, to)` de Supabase par la pagination native Convex :
 
 ```typescript
-// Convex pagination avec curseur
+// Convex pagination avec curseur — le client passe now: Date.now()
 export const getContentPages = query({
   args: {
     type: v.optional(v.string()),
-    paginationOpts: v.optional(paginationOptsType),
+    paginationOpts: paginationOptsValidator,
+    now: v.number(), // Date.now() passé par le client
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { type, paginationOpts, now }) => {
     const results = await ctx.db
       .query("contentPages")
-      .withIndex("by_status_published")
-      .paginate(args.paginationOpts);
-    return results;
+      .withIndex("by_status_published", (q) => q.eq("status", "published"))
+      .order("desc")
+      .paginate(paginationOpts);
+
+    const filtered = results.page.filter((page) => {
+      if (page.publishedAt && page.publishedAt > now) return false;
+      if (type) return page.type === type;
+      return page.type !== "legal";
+    });
+
+    return { ...results, page: filtered };
   },
 });
+```
+
+### 8.6 Violet API — Token Manager Singleton
+
+`violetFetch()` utilise un module-level singleton pour réutiliser le token Violet au sein d'une même action :
+
+```typescript
+// convex/lib/violetApi.ts
+
+// Singleton par module scope — réutilisé entre appels dans la même action
+let _manager: VioletTokenManager | null = null;
+
+function getManager(): VioletTokenManager {
+  if (!_manager) {
+    _manager = new VioletTokenManager();
+  }
+  return _manager;
+}
+
+export async function violetFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const manager = getManager(); // Réutilise le même token
+  // ... retry logic, 401 refresh, 429 backoff
+}
+```
+
+Les actions Convex preserve le module scope au sein d'une invocation, donc le token est partagé entre tous les `violetFetch()` d'une même action (ex: fetch refunds + send notification). Le module scope est frais à chaque nouvelle invocation.
+
+### 8.7 Structure finale des fichiers Phase 3
+
+```
+convex/
+├── lib/
+│   ├── admin.ts              # assertAdmin(), assertAuthenticated()
+│   ├── email.ts              # sendEmail action, sendRawEmail helper, escapeHtml
+│   ├── errors.ts             # logError internal mutation
+│   ├── push.ts               # sendPushNotification action
+│   ├── resendOTP.ts          # Convex Auth OTP providers
+│   ├── violetApi.ts          # violetFetch + VioletTokenManager singleton
+│   └── webhookSchemas.ts     # Zod validation schemas
+├── users/
+│   ├── queries.ts            # getProfile, getIdentity, getBiometricPreference, getUserById
+│   └── mutations.ts          # updateProfile, setBiometricPreference, migrateAnonymousData
+├── orders/
+│   └── queries.ts            # getOrders, getOrderDetail, getGuestOrderByToken, getAllOrders
+├── wishlists/
+│   ├── queries.ts            # getWishlist, getWishlistProductIds
+│   └── mutations.ts          # addToWishlist, removeFromWishlist
+├── tracking/
+│   ├── queries.ts            # getUserEvents
+│   └── mutations.ts          # recordEvent
+├── content/
+│   └── queries.ts            # getContentPageBySlug, getContentPages, getRelatedContent, getFaqItems
+├── support/
+│   ├── queries.ts            # getSupportInquiries, getSupportInquiry, getLinkedOrder, countRecentInquiries
+│   └── mutations.ts          # insertSupportInquiry, updateInquiryStatus, updateInternalNotes
+├── notifications/
+│   ├── queries.ts            # getUserPushTokens, getNotificationPreferences
+│   └── mutations.ts          # upsertPushToken, deletePushToken, upsertNotificationPreference
+├── admin/
+│   ├── queries.ts            # getDashboardData, getHealthData, getRecentErrors, getMerchants, etc.
+│   └── mutations.ts          # replyToSupportInquiry, evaluateAlerts, updateAlertTriggerTime
+├── health/
+│   └── queries.ts            # getStatus, runHealthCheck
+├── webhooks/
+│   └── violet.ts             # handleVioletWebhook HTTP action + 30+ event processors
+├── crons.ts                  # 4 cron jobs
+├── http.ts                   # Auth routes + webhook endpoint
+└── types.d.ts                # Env vars TypeScript declarations
 ```
 
 ---
@@ -2477,7 +2686,7 @@ Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE
 - [x] **Phase 0 — Installation** : Convex installé (v1.39.1), backend local actif, dashboard accessible, TypeScript compile, `.env.example` mis à jour *(2026-05-15)*
 - [x] **Phase 1 — Schema** : `convex/schema.ts` complet — 23 tables, 44 indexes (2 redondants supprimés + 1 composé ajouté), déployé *(2026-05-15)*. Post-revue : `getUserById` sécurisé avec `assertAdmin()`. Audit 2026-05-18 : `violetBagId` uniformisé en string, index redondants supprimés, index wishlist composé ajouté, statuts Violet documentés.
 - [x] **Phase 2 — Auth** : Password + Resend OTP (verify + reset) + authTables + http.ts + ConvexAuthProvider web+mobile + localId + queries/mutations profils + admin utils *(2026-05-15)*. Post-revue : `getBiometricPreference` déplacé dans queries.ts, leçon `flow: "reset-verification"` documentée. OAuth Apple/Google en attente de credentials.
-- [x] **Phase 3 — Fonctions Convex** : 43 fonctions créées (queries, mutations, actions) dans `convex/` *(2026-05-15)*. Post-revue : `getAllOrders` borné avec `.take(100)`.
+- [x] **Phase 3 — Fonctions Convex** : 43+ fonctions créées (queries, mutations, actions) dans `convex/` *(2026-05-15)*. Post-revue : `getAllOrders` borné avec `.take(100)`. Audit 2026-05-18 : 9 corrections (Date.now→now arg, ctx.db table names, .filter→.withIndex, escapeHtml/sendRawEmail centralisés, VioletTokenManager singleton, cleanupAbandonedCarts borné, processOrderUpdated sans errorLogs bruit).
 - [x] **Phase 4 — Hooks shared** : Hooks Convex créés dans `packages/shared/src/hooks/convex/` (cohabitation avec hooks Supabase existants) *(2026-05-15)*
 - [x] **Phase 5 — Intégration Web** : Auth pages réécrites Convex Auth, account guard client-side, account pages migrées, CartContext sans Realtime, tracking migré, path alias `#convex/*`, types partagés, ownership check, password change complet *(2026-05-16)*. Post-revue : `flow: "reset-verification"` corrigé, `mapAuthError` DRY (6 copies → 1 partagée), `ConvexQueryClient` bridge inutilisé retiré, `getAllOrders` borné.
 - [x] **Phase 6 — Intégration Mobile** : `_layout.tsx` nettoyé, AuthContext réécrit, auth pages réécrites, orders/wishlist/profile/content/FAQ/support/tracking migrés Convex, biometric adapté *(2026-05-16)*. Post-revue : double migration anonymous supprimée (centralisée AuthContext), `mobileLocalId` utilise `crypto.randomUUID()`, `getBiometricPreference` Supabase remplacé, `flow: "reset-verification"` corrigé, fallback erreur `_layout.tsx` si URL manquante, `mapAuthError` DRY.

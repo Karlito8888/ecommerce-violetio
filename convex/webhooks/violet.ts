@@ -25,6 +25,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { GenericMutationCtx } from "convex/server";
+import { escapeHtml, sendRawEmail } from "../lib/email";
 import {
   violetOrderPayloadSchema,
   violetBagPayloadSchema,
@@ -242,7 +243,7 @@ export const markEventStatus = internalMutation({
       .first();
 
     if (event) {
-      await ctx.db.patch(event._id, {
+      await ctx.db.patch("webhookEvents", event._id, {
         status: status as "received" | "processing" | "processed" | "failed",
         errorMessage,
         processedAt: status === "processed" ? Date.now() : undefined,
@@ -433,7 +434,7 @@ export const processEvent = internalMutation({
           .withIndex("by_eventId", (q) => q.eq("eventId", eventId))
           .first();
         if (event) {
-          await ctx.db.patch(event._id, {
+          await ctx.db.patch("webhookEvents", event._id, {
             status: "failed",
             errorMessage: validation.error,
           });
@@ -589,7 +590,7 @@ export const processEvent = internalMutation({
         .first();
 
       if (event) {
-        await ctx.db.patch(event._id, {
+        await ctx.db.patch("webhookEvents", event._id, {
           status: "failed",
           errorMessage: message,
         });
@@ -608,7 +609,7 @@ async function markProcessed(ctx: MutationCtx, eventId: string): Promise<void> {
     .first();
 
   if (event) {
-    await ctx.db.patch(event._id, {
+    await ctx.db.patch("webhookEvents", event._id, {
       status: "processed",
       processedAt: Date.now(),
     });
@@ -631,16 +632,13 @@ async function processOrderUpdated(
     .first();
 
   if (order) {
-    await ctx.db.patch(order._id, { status });
+    await ctx.db.patch("orders", order._id, { status });
   } else {
-    // Log to errorLogs for admin visibility — commandes non persistées
-    // indiquent un problème potentiel (webhook arrivé avant checkout, etc.)
-    await ctx.db.insert("errorLogs", {
-      source: "webhook",
-      errorType: "ORDER_NOT_FOUND",
-      message: `ORDER_* event for Violet order ${violetOrderId} — order not found in DB (may arrive before cart submit)`,
-      context: { violetOrderId, status, eventType: payload.status },
-    });
+    // Order not yet persisted — webhook arrived before checkout completed.
+    // This is normal (Violet sends webhooks eagerly). No error log — just acknowledge.
+    console.log(
+      `[order] ORDER_* event for Violet order ${violetOrderId} — order not in DB yet (will be persisted on checkout)`,
+    );
   }
 
   await markProcessed(ctx, eventId);
@@ -674,7 +672,7 @@ async function processBagUpdated(
     updateData.fulfillmentStatus = String(payload.fulfillment_status);
   }
 
-  await ctx.db.patch(bag._id, updateData);
+  await ctx.db.patch("orderBags", bag._id, updateData);
   await deriveAndUpdateOrderStatus(ctx, bag.orderId);
 
   // On BAG_COMPLETED: schedule delivery email + push notification
@@ -718,7 +716,7 @@ async function processBagShipped(
   if (payload.tracking_url) updateData.trackingUrl = String(payload.tracking_url);
   if (payload.carrier) updateData.carrier = String(payload.carrier);
 
-  await ctx.db.patch(bag._id, updateData);
+  await ctx.db.patch("orderBags", bag._id, updateData);
   await deriveAndUpdateOrderStatus(ctx, bag.orderId);
 
   // Schedule shipping notification email + push
@@ -756,7 +754,7 @@ async function processBagRefunded(
   if (payload.fulfillment_status) {
     updateData.fulfillmentStatus = String(payload.fulfillment_status);
   }
-  await ctx.db.patch(bag._id, updateData);
+  await ctx.db.patch("orderBags", bag._id, updateData);
   await deriveAndUpdateOrderStatus(ctx, bag.orderId);
   await markProcessed(ctx, eventId);
 
@@ -771,7 +769,7 @@ async function processBagRefunded(
 // ─── Order Status Derivation ─────────────────────────────────────────────────
 
 async function deriveAndUpdateOrderStatus(ctx: MutationCtx, orderId: Id<"orders">): Promise<void> {
-  const order = await ctx.db.get(orderId);
+  const order = await ctx.db.get("orders", orderId);
   if (!order) return;
 
   const bags = await ctx.db
@@ -796,7 +794,7 @@ async function deriveAndUpdateOrderStatus(ctx: MutationCtx, orderId: Id<"orders"
   }
 
   if (order.status !== derivedStatus) {
-    await ctx.db.patch(orderId, { status: derivedStatus });
+    await ctx.db.patch("orders", orderId, { status: derivedStatus });
   }
 }
 
@@ -821,7 +819,7 @@ async function processMerchantConnected(
     .first();
 
   if (existing) {
-    await ctx.db.patch(existing._id, {
+    await ctx.db.patch("merchants", existing._id, {
       name: merchantName,
       status: "CONNECTED",
       violetData: payload,
@@ -864,7 +862,7 @@ async function processMerchantDisconnected(
     .first();
 
   if (existing) {
-    await ctx.db.patch(existing._id, { status: "DISCONNECTED" });
+    await ctx.db.patch("merchants", existing._id, { status: "DISCONNECTED" });
   }
 
   await ctx.db.insert("errorLogs", {
@@ -894,7 +892,7 @@ async function processMerchantStatusChange(
     .first();
 
   if (existing) {
-    await ctx.db.patch(existing._id, { status: isEnabled ? "ENABLED" : "DISABLED" });
+    await ctx.db.patch("merchants", existing._id, { status: isEnabled ? "ENABLED" : "DISABLED" });
   }
 
   await ctx.db.insert("errorLogs", {
@@ -932,7 +930,7 @@ async function upsertTransfer(ctx: MutationCtx, payload: Record<string, unknown>
     .first();
 
   if (existing) {
-    await ctx.db.patch(existing._id, row);
+    await ctx.db.patch("orderTransfers", existing._id, row);
   } else {
     await ctx.db.insert("orderTransfers", row);
   }
@@ -1045,7 +1043,7 @@ async function upsertPayoutAccount(
   };
 
   if (existing) {
-    await ctx.db.patch(existing._id, row);
+    await ctx.db.patch("merchantPayoutAccounts", existing._id, row);
   } else {
     await ctx.db.insert("merchantPayoutAccounts", row);
   }
@@ -1155,7 +1153,7 @@ async function processPayoutAccountDeleted(
     .first();
 
   if (existing) {
-    await ctx.db.patch(existing._id, { status: "deleted" });
+    await ctx.db.patch("merchantPayoutAccounts", existing._id, { status: "deleted" });
   }
 
   await markProcessed(ctx, eventId);
@@ -1187,7 +1185,7 @@ async function processPayoutAccountActivated(
       const ppaId = Number(payload.id);
       for (const ppa of otherPpas) {
         if (ppa.violetPayoutAccountId !== ppaId) {
-          await ctx.db.patch(ppa._id, { status: "inactive" });
+          await ctx.db.patch("merchantPayoutAccounts", ppa._id, { status: "inactive" });
         }
       }
 
@@ -1312,7 +1310,7 @@ export const upsertRefund = internalMutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      await ctx.db.patch("orderRefunds", existing._id, {
         amount: args.amount,
         reason: args.reason,
         currency: args.currency,
@@ -1425,7 +1423,7 @@ export const upsertDistribution = internalMutation({
         .first();
 
       if (existing) {
-        await ctx.db.patch(existing._id, {
+        await ctx.db.patch("orderDistributions", existing._id, {
           amount: args.amount,
           channelAmount: args.channelAmount,
           stripeFee: args.stripeFee,
@@ -1453,8 +1451,7 @@ export const sendWebhookNotification = internalAction({
     notificationType: v.string(),
   },
   handler: async (ctx, { violetOrderId, notificationType }) => {
-    const RESEND_API_KEY = process.env.AUTH_RESEND_KEY;
-    if (!RESEND_API_KEY) {
+    if (!process.env.AUTH_RESEND_KEY) {
       console.warn("[send-notification] AUTH_RESEND_KEY not configured — skipping email");
       return;
     }
@@ -1481,49 +1478,33 @@ export const sendWebhookNotification = internalAction({
 
     const idempotencyKey = `${order._id}-${notificationType}`;
 
-    try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-          "Idempotency-Key": idempotencyKey,
-        },
-        body: JSON.stringify({
-          from: `Maison Émile <${process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev"}>`,
-          to: [order.email],
-          subject,
-          html,
-        }),
-      });
+    const result = await sendRawEmail({
+      to: order.email,
+      subject,
+      html,
+      idempotencyKey,
+    });
 
-      if (res.ok) {
-        const { id: resendEmailId } = (await res.json()) as { id: string };
-        await ctx.runMutation(internal.webhooks.violet.logNotificationSend, {
-          orderId: order._id,
-          notificationType,
-          recipientEmail: order.email,
-          status: "sent",
-          resendEmailId,
-        });
-        await ctx.runMutation(internal.webhooks.violet.markOrderEmailSent, {
-          orderId: order._id,
-        });
-      } else {
-        const errorBody = await res.text();
-        console.error(`[send-notification] Resend API error ${res.status}: ${errorBody}`);
-        await ctx.runMutation(internal.webhooks.violet.logNotificationSend, {
-          orderId: order._id,
-          notificationType,
-          recipientEmail: order.email,
-          status: "failed",
-          errorMessage: `${res.status}: ${errorBody}`,
-        });
-      }
-    } catch (err) {
-      console.error(
-        `[send-notification] Network error: ${err instanceof Error ? err.message : "Unknown"}`,
-      );
+    if (result.success) {
+      await ctx.runMutation(internal.webhooks.violet.logNotificationSend, {
+        orderId: order._id,
+        notificationType,
+        recipientEmail: order.email,
+        status: "sent",
+        resendEmailId: result.resendEmailId,
+      });
+      await ctx.runMutation(internal.webhooks.violet.markOrderEmailSent, {
+        orderId: order._id,
+      });
+    } else {
+      console.error(`[send-notification] Resend API error: ${result.error}`);
+      await ctx.runMutation(internal.webhooks.violet.logNotificationSend, {
+        orderId: order._id,
+        notificationType,
+        recipientEmail: order.email,
+        status: "failed",
+        errorMessage: result.error,
+      });
     }
   },
 });
@@ -1657,9 +1638,9 @@ export const logNotificationSend = internalMutation({
 export const markOrderEmailSent = internalMutation({
   args: { orderId: v.id("orders") },
   handler: async (ctx, { orderId }) => {
-    const order = await ctx.db.get(orderId);
+    const order = await ctx.db.get("orders", orderId);
     if (order && !order.emailSent) {
-      await ctx.db.patch(orderId, { emailSent: true });
+      await ctx.db.patch("orders", orderId, { emailSent: true });
     }
   },
 });
@@ -1672,16 +1653,6 @@ const SUCCESS_COLOR = "#27ae60";
 const BG_COLOR = "#f8f9fa";
 const TEXT_COLOR = "#2d3436";
 const MUTED_COLOR = "#636e72";
-
-/** Escape HTML special characters to prevent XSS in email templates */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 /** Format integer cents as “$X.XX” */
 function formatCents(cents: number, currency = "USD"): string {

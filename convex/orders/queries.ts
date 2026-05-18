@@ -67,7 +67,7 @@ export const getOrders = query({
 export const getOrderDetail = query({
   args: { orderId: v.id("orders") },
   handler: async (ctx, { orderId }) => {
-    const order = await ctx.db.get(orderId);
+    const order = await ctx.db.get("orders", orderId);
     if (!order) return null;
 
     // Ownership check — allow access if owner, admin, or guest order (no userId)

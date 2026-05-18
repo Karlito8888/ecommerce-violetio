@@ -29,7 +29,7 @@ export const addToWishlist = mutation({
 
     if (!wishlist) {
       const id = await ctx.db.insert("wishlists", { userId });
-      wishlist = await ctx.db.get(id);
+      wishlist = await ctx.db.get("wishlists", id);
       if (!wishlist) throw new Error("Failed to create wishlist");
     }
 
@@ -72,7 +72,7 @@ export const removeFromWishlist = mutation({
       .first();
 
     if (item) {
-      await ctx.db.delete(item._id);
+      await ctx.db.delete("wishlistItems", item._id);
     }
   },
 });

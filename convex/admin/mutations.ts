@@ -8,6 +8,7 @@
 import { internalMutation, internalAction, action } from "../_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
+import { escapeHtml, sendRawEmail } from "../lib/email";
 
 // ─── Support Management ─────────────────────────────────────────────
 
@@ -34,29 +35,19 @@ export const replyToSupportInquiry = action({
     const inquiry = await ctx.runQuery(api.support.queries.getSupportInquiry, { inquiryId });
     if (!inquiry) throw new Error("Inquiry not found");
 
-    // Send reply email via Resend
-    const RESEND_KEY = process.env.AUTH_RESEND_KEY;
-    const FROM = process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev";
-
-    if (RESEND_KEY) {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${RESEND_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: `Maison Émile Support <${FROM}>`,
-          to: [inquiry.email],
-          subject: `Re: ${inquiry.subject}`,
-          html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+    // Send reply email via centralized email helper (DRY)
+    if (process.env.AUTH_RESEND_KEY) {
+      await sendRawEmail({
+        to: inquiry.email,
+        subject: `Re: ${inquiry.subject}`,
+        html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
   <p>Hi ${escapeHtml(inquiry.name)},</p>
   <p>${escapeHtml(replyMessage).replace(/\n/g, "<br>")}</p>
   <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
   <p style="color: #888; font-size: 13px;">Maison Émile — <a href="https://maisonemile.com">maisonemile.com</a></p>
 </div>`,
-          text: `Hi ${inquiry.name},\n\n${replyMessage}\n\n— Maison Émile`,
-        }),
+        text: `Hi ${inquiry.name},\n\n${replyMessage}\n\n— Maison Émile`,
+        fromName: "Maison Émile Support",
       });
     }
 
@@ -85,11 +76,9 @@ export const evaluateAlerts = internalAction({
     const healthData = await ctx.runQuery(internal.admin.queries.getHealthDataInternal, {});
     const { metrics, alertRules } = healthData;
 
-    const RESEND_KEY = process.env.AUTH_RESEND_KEY;
     const ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL;
-    const FROM = process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev";
 
-    if (!RESEND_KEY || !ADMIN_EMAIL) return;
+    if (!process.env.AUTH_RESEND_KEY || !ADMIN_EMAIL) return;
 
     const now = Date.now();
 
@@ -127,20 +116,14 @@ export const evaluateAlerts = internalAction({
 
       if (!breached) continue;
 
-      // Send alert email
+      // Send alert email via centralized helper (DRY)
       try {
-        await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${RESEND_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: `Maison Émile Alerts <${FROM}>`,
-            to: [ADMIN_EMAIL],
-            subject: `[Alert] ${rule.ruleName.replace(/_/g, " ")}`,
-            text: `Platform health alert triggered.\n\nRule: ${rule.ruleName}\n${detail}\nTime: ${new Date(now).toISOString()}`,
-          }),
+        await sendRawEmail({
+          to: ADMIN_EMAIL,
+          subject: `[Alert] ${rule.ruleName.replace(/_/g, " ")}`,
+          text: `Platform health alert triggered.\n\nRule: ${rule.ruleName}\n${detail}\nTime: ${new Date(now).toISOString()}`,
+          html: `<p>Platform health alert triggered.</p><p><strong>Rule:</strong> ${escapeHtml(rule.ruleName)}<br>${escapeHtml(detail)}<br><em>Time: ${new Date(now).toISOString()}</em></p>`,
+          fromName: "Maison Émile Alerts",
         });
       } catch {
         // Email failure should not break evaluation
@@ -171,17 +154,10 @@ export const updateAlertTriggerTime = internalMutation({
       .first();
 
     if (rule) {
-      await ctx.db.patch(rule._id, { lastTriggeredAt: triggeredAt });
+      await ctx.db.patch("alertRules", rule._id, { lastTriggeredAt: triggeredAt });
     }
   },
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+// escapeHtml is imported from ../lib/email (DRY)

@@ -51,14 +51,14 @@ export default function ContentDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
 
-  const content = useQuery(api.content.queries.getContentPageBySlug, { slug }) as
+  const content = useQuery(api.content.queries.getContentPageBySlug, { slug, now: Date.now() }) as
     | ContentPage
     | null
     | undefined;
 
   const relatedItems = useQuery(
     api.content.queries.getRelatedContent,
-    content?.relatedSlugs?.length ? { slugs: content.relatedSlugs } : "skip",
+    content?.relatedSlugs?.length ? { slugs: content.relatedSlugs, now: Date.now() } : "skip",
   ) as RelatedContentItem[] | undefined;
 
   const loading = content === undefined;

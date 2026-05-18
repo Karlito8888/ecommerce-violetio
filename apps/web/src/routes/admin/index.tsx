@@ -55,7 +55,10 @@ function AdminDashboardPage() {
   const [distributionsOrderId, setDistributionsOrderId] = useState<string | null>(null);
 
   // Dashboard data — reactive Convex query (admin-only, assertAdmin in handler)
-  const dashboardData = useQuery(api.admin.queries.getDashboardData, { range: selectedRange });
+  const dashboardData = useQuery(api.admin.queries.getDashboardData, {
+    range: selectedRange,
+    now: Date.now(),
+  });
 
   // Distributions for a specific order
   const distributions = useQuery(

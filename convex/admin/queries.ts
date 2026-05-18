@@ -42,11 +42,13 @@ export const checkIsAdmin = internalQuery({
  * Health data for alert evaluation cron. No auth check — cron has no user context.
  * Extracted from public getHealthData to avoid assertAdmin in scheduled context.
  *
+ * Uses Date.now() intentionally — internal queries called from actions/crons are NOT
+ * reactive subscriptions (Convex best practice exception).
  * Doc: https://docs.convex.dev/scheduling/cron-jobs
  */
 export const getHealthDataInternal = internalQuery({
   args: {},
-  handler: async (ctx) => fetchHealthMetrics(ctx),
+  handler: async (ctx) => fetchHealthMetrics(ctx, Date.now()),
 });
 
 // ─── Dashboard Metrics ─────────────────────────────────────────────
@@ -63,11 +65,11 @@ export const getHealthDataInternal = internalQuery({
 export const getDashboardData = query({
   args: {
     range: v.string(), // "today" | "7d" | "30d"
+    now: v.number(),
   },
-  handler: async (ctx, { range }) => {
+  handler: async (ctx, { range, now }) => {
     await assertAdmin(ctx);
 
-    const now = Date.now();
     let since: number;
     switch (range) {
       case "today":
@@ -190,10 +192,10 @@ export const getOrderDistributions = query({
  * Replaces getAdminHealthHandler.
  */
 export const getHealthData = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { now: v.number() },
+  handler: async (ctx, { now }) => {
     await assertAdmin(ctx);
-    return fetchHealthMetrics(ctx);
+    return fetchHealthMetrics(ctx, now);
   },
 });
 
@@ -206,8 +208,7 @@ export const getHealthData = query({
  *
  * Doc: https://docs.convex.dev/understanding/best-practices — avoid .collect() on large tables
  */
-async function fetchHealthMetrics(ctx: QueryCtx) {
-  const now = Date.now();
+async function fetchHealthMetrics(ctx: QueryCtx, now: number) {
   const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
 
   // ── Error metrics — take(1000) for accurate 24h counts (was take(20) — sampling bias) ──
