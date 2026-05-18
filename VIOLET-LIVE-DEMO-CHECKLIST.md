@@ -592,11 +592,11 @@ Si le demo est réussi :
 |-----------|-------|--------|
 | **Code & Architecture** | 🟡 70% | Stripe Elements + 3DS ✅ — MAIS checkout web dépend de Supabase (`checkout.ts`, `cartActions.ts`) |
 | **Convex Backend** | 🟢 95% | 24 tables, queries, mutations, webhook handler complet, env vars configurés |
-| **Configuration Stripe** | 🟢 90% | Platform account, Connect, restricted keys Test+Live, credentials partagés. Webhook endpoint Stripe à créer |
-| **Configuration Violet** | 🟡 70% | Dashboard, Violet Connect, credentials envoyés. Webhooks à créer dans le Dashboard |
-| **Test end-to-end** | 🔴 0% | `.env.local` + env vars Convex corrigés le 18 mai. Bloqué par la dépendance Supabase du checkout web |
+| **Configuration Stripe** | 🟢 95% | Platform account, Connect, restricted keys Test+Live, credentials partagés. Webhook endpoint créé (`we_1TYS11...`), secret dans `.env.local` |
+| **Configuration Violet** | 🟢 90% | Dashboard, Violet Connect, credentials envoyés. 48 webhooks créés et actifs, tunnel configuré |
+| **Test end-to-end** | 🔴 0% | Env vars Convex configurés, tunnel actif, webhooks en place. Bloqué par la dépendance Supabase du checkout web |
 
-**Verdict** : Le backend Convex et la config Stripe/Violet sont **prêts**. Le blocker principal est la **dépendance Supabase du checkout web** — soit lancer Supabase local (`supabase start`), soit migrer le checkout vers Convex. Ensuite : créer les webhooks + tunnel + test E2E.
+**Verdict** : L'infrastructure est **complète** (tunnel + webhooks Violet 48/48 + webhook Stripe + env vars Convex). Le seul blocker restant est la **dépendance Supabase du checkout web** — en cours de migration par Charles.
 
 ---
 

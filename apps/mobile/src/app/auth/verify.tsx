@@ -34,9 +34,7 @@ export default function VerifyScreen() {
   const { signIn } = useAuthActions();
 
   // Load pending signup data from SecureStore (encrypted, not plain memory)
-  const [pendingData, setPendingData] = useState<{ email: string; password: string } | null>(
-    null,
-  );
+  const [pendingData, setPendingData] = useState<{ email: string; password: string } | null>(null);
   const [isLoadingPending, setIsLoadingPending] = useState(true);
 
   useEffect(() => {
