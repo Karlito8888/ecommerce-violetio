@@ -365,15 +365,15 @@ La doc Convex Best Practices dit d'éviter `.filter()` sur les DB queries — un
 
 ## 5. Cohérence Guide de migration ↔ Code réel
 
-### 5.1 Incohérences détectées 🔴
+### 5.1 Incohérences détectées (historique)
 
-| # | Section guide | Guide dit | Code fait | Sévérité |
+| # | Section guide | Guide disait | Code faisait | Statut |
 |---|-------------|-----------|----------|----------|
-| 1 | §12.3 — HTTP Action webhook | `request.headers.get("X-Violet-Signature")` | `request.headers.get("x-violet-hmac")` | 🔴 Doc trompeuse |
-| 2 | §12.3 — HTTP Action webhook | `request.headers.get("X-Violet-Event-Type")` | `request.headers.get("x-violet-topic")` | 🔴 Doc trompeuse |
-| 3 | §6.1 — webhookEvents.status | 3 statuts : received / processed / failed | 4 statuts : received / processing / processed / failed | 🔴 Doc incomplète |
-| 4 | §6.1 — Index nom `by_type_date` | `.index("by_type_date", ["eventType", "_creationTime"])` | `.index("by_eventType", ["eventType"])` (équivalent car `_creationTime` est auto-ajouté) | 🟡 Nom différent, résultat identique |
-| 5 | §6.1 — Index nom `by_userId_createdAt` | `.index("by_userId_createdAt", ["userId", "_creationTime"])` | `.index("by_userId", ["userId"])` (équivalent) | 🟡 Nom différent, résultat identique |
+| 1 | §12.3 — HTTP Action webhook | `request.headers.get("X-Violet-Signature")` | `request.headers.get("x-violet-hmac")` | ✅ Corrigé (S2) |
+| 2 | §12.3 — HTTP Action webhook | `request.headers.get("X-Violet-Event-Type")` | `request.headers.get("x-violet-topic")` | ✅ Corrigé (S2) |
+| 3 | §6.1 — webhookEvents.status | 3 statuts : received / processed / failed | 4 statuts : received / processing / processed / failed | ✅ Corrigé (S3) |
+| 4 | §6.1 — Index nom `by_type_date` | `.index("by_type_date", ["eventType", "_creationTime"])` | `.index("by_eventType", ["eventType"])` | ✅ Corrigé (guide aligné) |
+| 5 | §6.1 — Index nom `by_userId_createdAt` | `.index("by_userId_createdAt", ["userId", "_creationTime"])` | `.index("by_userId", ["userId"])` | ✅ Corrigé (guide aligné) |
 | 6 | §6.1 — `userProfiles.preferences` | `v.object({})` | `v.record(v.string(), v.any())` | ✅ Code est meilleur |
 
 ### 5.2 Code meilleur que le guide ✅
@@ -389,23 +389,18 @@ La doc Convex Best Practices dit d'éviter `.filter()` sur les DB queries — un
 
 ## 6. Synthèse des actions
 
-### 🔴 À corriger — 3 actions
+### ✅ Corrigé — 8 actions (commit `b8f6054`)
 
-| # | Action | Fichier | Priorité |
-|---|--------|---------|----------|
-| **S1** | Changer `orderTransfers.violetBagId` de `v.optional(v.number())` en `v.optional(v.string())` | `convex/schema.ts` | Haute — incohérence de type pour le même concept |
-| **S2** | Corriger les noms de headers webhook dans le guide : `X-Violet-Signature` → `X-Violet-Hmac`, `X-Violet-Event-Type` → `X-Violet-Topic` | `MIGRATION-SUPABASE-TO-CONVEX.md` §12.3 | Haute — guide trompeur |
-| **S3** | Ajouter le statut `processing` dans la liste des webhookEvents.status du guide | `MIGRATION-SUPABASE-TO-CONVEX.md` §6.1 | Haute — doc incomplète |
-
-### 🟡 À améliorer — 5 actions
-
-| # | Action | Fichier | Priorité |
-|---|--------|---------|----------|
-| **S4** | Supprimer l'index redondant `cartItems.by_cartId` (préfixe de `by_cart_sku`) | `convex/schema.ts` | Moyenne — best practice Convex |
-| **S5** | Supprimer l'index redondant `notificationPreferences.by_userId` (préfixe de `by_userId_type`) | `convex/schema.ts` | Moyenne — best practice Convex |
-| **S6** | Ajouter l'index composé `wishlistItems.by_wishlistId_productId` | `convex/schema.ts` | Moyenne — élimine un `.filter()` |
-| **S7** | Retirer `@convex-dev/react-query` des dependencies web + shared | `apps/web/package.json`, `packages/shared/package.json` | Basse — package mort |
-| **S8** | Ajouter un commentaire dans le schema listant les valeurs officielles des statuts Violet (orders, bags, distributions, transfers) | `convex/schema.ts` | Basse — documentation |
+| # | Action | Fichier | Commit |
+|---|--------|---------|--------|
+| **S1** | Changé `orderTransfers.violetBagId` de `v.optional(v.number())` en `v.optional(v.string())` | `convex/schema.ts` | `dcced8b` |
+| **S2** | Corrigé les noms de headers webhook : `X-Violet-Signature` → `X-Violet-Hmac`, `X-Violet-Event-Type` → `X-Violet-Topic` | `MIGRATION-SUPABASE-TO-CONVEX.md` §12.3 | `dcced8b` |
+| **S3** | Ajouté le statut `processing` dans la liste webhookEvents.status | `MIGRATION-SUPABASE-TO-CONVEX.md` §6.1 | `dcced8b` |
+| **S4** | Supprimé l'index redondant `cartItems.by_cartId` + mis à jour `convex/crons.ts` | `convex/schema.ts`, `convex/crons.ts` | `b8f6054` |
+| **S5** | Supprimé l'index redondant `notificationPreferences.by_userId` + mis à jour queries/mutations | `convex/schema.ts`, `convex/notifications/queries.ts`, `convex/users/mutations.ts` | `b8f6054` |
+| **S6** | Ajouté l'index composé `wishlistItems.by_wishlistId_productId` + éliminé 2 `.filter()` | `convex/schema.ts`, `convex/wishlists/mutations.ts` | `b8f6054` |
+| **S7** | Retiré `@convex-dev/react-query` des dependencies | `apps/web/package.json`, `packages/shared/package.json` | `b8f6054` |
+| **S8** | Documenté les statuts officiels Violet.io dans le schema | `convex/schema.ts` | `b8f6054` |
 
 ### ✅ Validé — Aucune action requise
 
@@ -420,4 +415,6 @@ La doc Convex Best Practices dit d'éviter `.filter()` sur les DB queries — un
 
 ---
 
-> **Prochaine étape** : Corriger S1–S3 (bloquants), puis S4–S8 (améliorations) avant de passer à l'audit des phases 2–9.
+> **Statut** : Les 8 actions (S1–S8) sont **toutes résolues**. Les phases 0 et 1 sont conformes aux docs officielles Convex + Violet.io.
+>
+> **Prochaine étape** : Audit des phases 2–9.

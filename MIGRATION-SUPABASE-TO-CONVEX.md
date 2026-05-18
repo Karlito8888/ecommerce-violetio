@@ -138,7 +138,7 @@ cd apps/mobile && npx expo start
 | RLS | Row Level Security (Postgres policies) | Convex functions avec `ctx.auth` + filtres applicatifs |
 | Stockage fichiers | Supabase Storage | Convex File Storage |
 | Migrations SQL | 47 fichiers `.sql` dans `supabase/migrations/` | `convex/schema.ts` (schema déclaratif, versionné par Convex) |
-| Clients | `@supabase/supabase-js`, `@supabase/ssr` | `convex/react`, `@convex-dev/react-query` |
+| Clients | `@supabase/supabase-js`, `@supabase/ssr` | `convex/react`, `@convex-dev/auth/react` |
 | Env vars | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | `CONVEX_URL` (URL du backend self-hosted) |
 | Dashboard | Supabase Studio (local ou cloud) | Dashboard statique (9.5 MB) servi par Caddy/Nginx |
 
@@ -149,7 +149,7 @@ cd apps/mobile && npx expo start
 - **Stripe** : Payment processing via Violet (inchangé)
 - **Frontend Web** : TanStack Start, TanStack Router, Vanilla CSS + BEM
 - **Frontend Mobile** : Expo SDK 55, expo-router
-- **TanStack Query** : Conservation via `@convex-dev/react-query` (intégration native)
+- **TanStack Query** : Conservation via `@tanstack/react-query` pour les appels Violet API uniquement
 - **Design** : CSS, composants UI, pages — aucun changement visuel
 
 ---
@@ -659,15 +659,14 @@ const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
 cd /home/charles/Bureau/E-commerce
 bun add convex                    # → convex@1.39.1
 
-# Packages/shared — Convex + Auth + TanStack Query bridge
-cd packages/shared
-bun add convex @convex-dev/auth @convex-dev/react-query
-# → convex@1.39.1, @convex-dev/auth@0.0.92, @convex-dev/react-query@0.1.0
+# Packages/shared — Convex + Auth
+bun add convex @convex-dev/auth
+# → convex@1.39.1, @convex-dev/auth@0.0.92
 
-# Web app — Convex + Auth + TanStack Query bridge
+# Web app — Convex + Auth
 cd apps/web
-bun add convex @convex-dev/auth @convex-dev/react-query
-# → convex@1.39.1, @convex-dev/auth@0.0.92, @convex-dev/react-query@0.1.0
+bun add convex @convex-dev/auth
+# → convex@1.39.1, @convex-dev/auth@0.0.92
 
 # Mobile app — Convex + Auth
 cd apps/mobile
@@ -786,7 +785,7 @@ Variables à configurer :
 ### 5.5 Validation Phase 0 (2026-05-15)
 
 ```
-✅ Dépendances : convex@1.39.1, @convex-dev/auth@0.0.92, @convex-dev/react-query@0.1.0
+✅ Dépendances : convex@1.39.1, @convex-dev/auth@0.0.92
 ✅ Structure convex/ : 13 dossiers créés + tsconfig.json
 ✅ Backend local : 127.0.0.1:3210 (binaire Rust auto-téléchargé)
 ✅ Dashboard : http://127.0.0.1:6790 (HTTP 200)
@@ -810,6 +809,15 @@ Variables à configurer :
 >
 > Corrections post-revue (2026-05-16) :
 > - `getUserById` : ajout de `assertAdmin(ctx)` — tout utilisateur pouvait lire le profil de n'importe qui via userId
+>
+> Audit Phase 0–1 (2026-05-18) — 8 corrections appliquées (voir `AUDIT-PHASES-0-1.md`) :
+> - `orderTransfers.violetBagId` : `v.number()` → `v.string()` (cohérence avec `orderBags`)
+> - Index redondants supprimés : `cartItems.by_cartId`, `notificationPreferences.by_userId`
+> - Index composé ajouté : `wishlistItems.by_wishlistId_productId` (élimine `.filter()`)
+> - `@convex-dev/react-query` retiré des deps (package mort)
+> - Statuts officiels Violet.io documentés dans le schema (`orders.status`, `orderBags.status`)
+> - Headers webhook corrigés dans ce guide : `X-Violet-Hmac` (pas Signature), `X-Violet-Topic` (pas Event-Type)
+> - `webhookEvents.status` : 4 statuts (received/processing/processed/failed)
 
 ### 6.1 `convex/schema.ts` — 23 tables déployées
 
@@ -847,7 +855,7 @@ export default defineSchema({
     processedAt: v.optional(v.number()),
   })
     .index("by_eventId", ["eventId"])
-    .index("by_type_date", ["eventType", "_creationTime"])
+    .index("by_eventType", ["eventType"])
     .index("by_status", ["status"]),
 
   // ─── Carts ────────────────────────────────────────────────────
@@ -874,8 +882,7 @@ export default defineSchema({
     productName: v.optional(v.string()),
     thumbnailUrl: v.optional(v.string()),
   })
-    .index("by_cart_sku", ["cartId", "skuId"])
-    .index("by_cartId", ["cartId"]),
+    .index("by_cart_sku", ["cartId", "skuId"]),
 
   // ─── Orders ───────────────────────────────────────────────────
   orders: defineTable({
@@ -883,7 +890,7 @@ export default defineSchema({
     userId: v.optional(v.string()),
     sessionId: v.optional(v.string()),
     email: v.string(),
-    status: v.string(), // PROCESSING, COMPLETED, CANCELED, REFUNDED, etc.
+    status: v.string(), // Violet Order States: IN_PROGRESS | PROCESSING | ACCEPTED | REJECTED | COMPLETED | CANCELED | REQUIRES_ACTION
     subtotal: v.number(),
     shippingTotal: v.number(),
     taxTotal: v.number(),
@@ -894,7 +901,6 @@ export default defineSchema({
   })
     .index("by_violetOrderId", ["violetOrderId"])
     .index("by_userId", ["userId"])
-    .index("by_userId_createdAt", ["userId", "_creationTime"])
     .index("by_sessionId", ["sessionId"])
     .index("by_email", ["email"])
     .index("by_lookupToken", ["orderLookupTokenHash"])
@@ -954,7 +960,7 @@ export default defineSchema({
   orderTransfers: defineTable({
     violetTransferId: v.optional(v.string()),
     violetOrderId: v.string(),
-    violetBagId: v.optional(v.number()),
+    violetBagId: v.optional(v.string()), // Integer Violet stocké en string (cohérent avec orderBags)
     type: v.string(),
     status: v.string(),
     amount: v.optional(v.number()),
@@ -997,6 +1003,7 @@ export default defineSchema({
     productId: v.string(),
   })
     .index("by_wishlistId", ["wishlistId"])
+    .index("by_wishlistId_productId", ["wishlistId", "productId"]) // Dedup lookup
     .index("by_productId", ["productId"]),
 
   // ─── User Events (tracking) ───────────────────────────────────
@@ -1062,7 +1069,6 @@ export default defineSchema({
     notificationType: v.string(),
     enabled: v.boolean(),
   })
-    .index("by_userId", ["userId"])
     .index("by_userId_type", ["userId", "notificationType"]),
 
   notificationLogs: defineTable({
@@ -1601,27 +1607,14 @@ Le package `@ecommerce/shared` doit être refactoré pour remplacer tous les app
 
 ### 9.2 Remplacement des hooks
 
-Les hooks dans `packages/shared/src/hooks/` utilisent actuellement TanStack Query avec des fonctions fetch custom. Avec Convex, deux options :
+Les hooks dans `packages/shared/src/hooks/` utilisent actuellement TanStack Query avec des fonctions fetch custom. L'approche retenue après la migration est **direct Convex** — les hooks utilisent `convex/react` directement, sans bridge `@convex-dev/react-query`.
 
-**Option A — Convex + TanStack Query** (recommandé pour transition progressive) :
+Le package `@convex-dev/react-query` a été retiré car aucun hook n'appelait `convexQuery()`. Les hooks Convex utilisent `convex/react` (`useQuery`, `useMutation`), les hooks Violet API utilisent `@tanstack/react-query` directement. Les deux systèmes sont indépendants.
+
 ```typescript
-// packages/shared/src/hooks/useWishlist.ts
-import { useQuery } from "@tanstack/react-query";
-import { convexQuery } from "@convex-dev/react-query";
-import { api } from "../../convex/_generated/api";
-
-export function useWishlist(userId: string | undefined) {
-  return useQuery(
-    convexQuery(api.wishlists.queries.getWishlist, { userId: userId ?? "" },
-    { enabled: !!userId }
-  );
-}
-```
-
-**Option B — Convex hooks natifs** (plus simple mais plus de refactor) :
-```typescript
-import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+// Pattern retenu (convex/react direct)
+import { useQuery, useMutation } from "convex/react";
+import { api } from "#convex/_generated/api";
 
 export function useWishlist(userId: string | undefined) {
   return useQuery(
@@ -1655,7 +1648,7 @@ export function useWishlist(userId: string | undefined) {
 |------|-----------|
 | `useOrders.ts` | Remplacer Supabase Realtime par réactivité Convex native. Supprimer `createOrdersRealtimeChannel()`. Les queries Convex sont auto-réactives. |
 | `useCart.ts` | Remplacer les fetchFn par des appels Convex. Garder la structure d'optimistic updates TanStack Query si utilisation de l'Option A. |
-| `useWishlist.ts` | Remplacer les appels directs Supabase par `convexQuery()` ou `useQuery(api.wishlists...)`. |
+| `useWishlist.ts` | Remplacer les appels directs Supabase par `useQuery(api.wishlists...)` (convex/react direct). |
 | `useAuth.ts` | Remplacer par les hooks `@convex-dev/auth/react`. |
 | `useCartSync.ts` | **Supprimer entièrement** — Convex est réactif par défaut, pas besoin de subscription Realtime séparée. |
 | `useRecentlyViewed.ts` | Partiellement adapté : chemin anonyme (localStorage) inchangé, chemin authentifié utilise Convex query. |
@@ -1671,7 +1664,6 @@ export function useWishlist(userId: string | undefined) {
 -   "@supabase/supabase-js": "^2.100.1",
 +   "convex": "^1.x",
 +   "@convex-dev/auth": "^0.x",
-+   "@convex-dev/react-query": "^0.x",
     "zod": "^4.3.6"
   }
 }
@@ -2476,7 +2468,7 @@ Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE
 ### 📋 Checklist de migration
 
 - [x] **Phase 0 — Installation** : Convex installé (v1.39.1), backend local actif, dashboard accessible, TypeScript compile, `.env.example` mis à jour *(2026-05-15)*
-- [x] **Phase 1 — Schema** : `convex/schema.ts` complet — 23 tables, 46 indexes, déployé *(2026-05-15)*. Post-revue : `getUserById` sécurisé avec `assertAdmin()`.
+- [x] **Phase 1 — Schema** : `convex/schema.ts` complet — 23 tables, 44 indexes (2 redondants supprimés + 1 composé ajouté), déployé *(2026-05-15)*. Post-revue : `getUserById` sécurisé avec `assertAdmin()`. Audit 2026-05-18 : `violetBagId` uniformisé en string, index redondants supprimés, index wishlist composé ajouté, statuts Violet documentés.
 - [x] **Phase 2 — Auth** : Password + Resend OTP (verify + reset) + authTables + http.ts + ConvexAuthProvider web+mobile + localId + queries/mutations profils + admin utils *(2026-05-15)*. Post-revue : `getBiometricPreference` déplacé dans queries.ts, leçon `flow: "reset-verification"` documentée. OAuth Apple/Google en attente de credentials.
 - [x] **Phase 3 — Fonctions Convex** : 43 fonctions créées (queries, mutations, actions) dans `convex/` *(2026-05-15)*. Post-revue : `getAllOrders` borné avec `.take(100)`.
 - [x] **Phase 4 — Hooks shared** : Hooks Convex créés dans `packages/shared/src/hooks/convex/` (cohabitation avec hooks Supabase existants) *(2026-05-15)*
