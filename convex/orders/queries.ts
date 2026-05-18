@@ -4,16 +4,59 @@
 // Replaces apps/web/src/server/orders.ts + guestOrders.ts (Supabase).
 //
 // Doc: https://docs.convex.dev/database/reading-data
+// Best practices: https://docs.convex.dev/understanding/best-practices
+// - Use Promise.all() to parallelize independent reads
+// - Always pass table name as first arg to ctx.db.get/patch/delete
+// - Use .take() to bound query results
 
 import { query } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
+import type { Doc } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { assertAdmin } from "../lib/admin";
+
+type EnrichedOrder = Doc<"orders"> & {
+  bags: (Doc<"orderBags"> & {
+    items: Doc<"orderItems">[];
+    refunds: Doc<"orderRefunds">[];
+  })[];
+};
+
+/**
+ * Enriches a single order with its bags, items, and refunds.
+ * Uses Promise.all() to parallelize independent reads per bag.
+ */
+async function enrichOrderWithBags(ctx: QueryCtx, order: Doc<"orders">): Promise<EnrichedOrder> {
+  const bags = await ctx.db
+    .query("orderBags")
+    .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
+    .collect();
+
+  // Parallelize: fetch items + refunds for each bag concurrently
+  const bagsWithItems = await Promise.all(
+    bags.map(async (bag) => {
+      const [items, refunds] = await Promise.all([
+        ctx.db
+          .query("orderItems")
+          .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
+          .collect(),
+        ctx.db
+          .query("orderRefunds")
+          .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
+          .collect(),
+      ]);
+      return { ...bag, items, refunds };
+    }),
+  );
+
+  return { ...order, bags: bagsWithItems };
+}
 
 /**
  * Get orders for a user (authenticated), newest first.
  * Includes bags, items, and refunds for each order.
  *
- * Uses .take(limit) to bound the number of orders and avoid N+1 explosion.
+ * Uses .take(limit) to bound the number of orders and avoid unbounded reads.
  * Default limit of 50 covers realistic usage; clients can paginate if needed.
  */
 export const getOrders = query({
@@ -26,33 +69,8 @@ export const getOrders = query({
       .order("desc")
       .take(maxOrders);
 
-    // Enrich each order with bags + items
-    const enriched = [];
-    for (const order of orders) {
-      const bags = await ctx.db
-        .query("orderBags")
-        .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
-        .collect();
-
-      const bagsWithItems = [];
-      for (const bag of bags) {
-        const items = await ctx.db
-          .query("orderItems")
-          .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
-          .collect();
-
-        const refunds = await ctx.db
-          .query("orderRefunds")
-          .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
-          .collect();
-
-        bagsWithItems.push({ ...bag, items, refunds });
-      }
-
-      enriched.push({ ...order, bags: bagsWithItems });
-    }
-
-    return enriched;
+    // Parallelize enrichment of all orders
+    return Promise.all(orders.map((order) => enrichOrderWithBags(ctx, order)));
   },
 });
 
@@ -83,27 +101,7 @@ export const getOrderDetail = query({
       }
     }
 
-    const bags = await ctx.db
-      .query("orderBags")
-      .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
-      .collect();
-
-    const bagsWithItems = [];
-    for (const bag of bags) {
-      const items = await ctx.db
-        .query("orderItems")
-        .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
-        .collect();
-
-      const refunds = await ctx.db
-        .query("orderRefunds")
-        .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
-        .collect();
-
-      bagsWithItems.push({ ...bag, items, refunds });
-    }
-
-    return { ...order, bags: bagsWithItems };
+    return enrichOrderWithBags(ctx, order);
   },
 });
 
@@ -126,15 +124,16 @@ export const getGuestOrderByToken = query({
       .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
       .collect();
 
-    const bagsWithItems = [];
-    for (const bag of bags) {
-      const items = await ctx.db
-        .query("orderItems")
-        .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
-        .collect();
-
-      bagsWithItems.push({ ...bag, items });
-    }
+    // Parallelize: fetch items for each bag concurrently
+    const bagsWithItems = await Promise.all(
+      bags.map(async (bag) => {
+        const items = await ctx.db
+          .query("orderItems")
+          .withIndex("by_orderBagId", (q) => q.eq("orderBagId", bag._id))
+          .collect();
+        return { ...bag, items };
+      }),
+    );
 
     return { ...order, bags: bagsWithItems };
   },

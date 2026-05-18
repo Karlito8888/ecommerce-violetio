@@ -89,14 +89,14 @@ export const getDashboardData = query({
     const recentCompleted = await ctx.db
       .query("orders")
       .withIndex("by_status", (q) => q.eq("status", "COMPLETED").gte("_creationTime", since))
-      .collect();
+      .collect(); // Bounded by index range — only completed orders since `since`
     const totalOrders = recentCompleted.length;
     const grossRevenueCents = recentCompleted.reduce((sum, o) => sum + o.total, 0);
 
     // ── Commission via distributions ──
-    // TODO: Pre-compute via cron for scale. Currently collects all and filters by time.
+    // TODO: Pre-compute via cron for scale. Currently bounded to 5000 for safety.
     // orderDistributions has no time-based index — would need schema change for optimal queries.
-    const distributions = await ctx.db.query("orderDistributions").collect();
+    const distributions = await ctx.db.query("orderDistributions").take(5000);
     const recentDistributions = distributions.filter((d) => d._creationTime >= since);
     const commissionEstimateCents = recentDistributions
       .filter((d) => d.type === "PAYMENT")
@@ -107,6 +107,9 @@ export const getDashboardData = query({
       (d) => d.type === "PAYMENT" && d.violetBagId,
     );
 
+    // Safety: cap bag lookups to avoid unbounded parallel queries
+    const cappedPaymentDistributions = paymentDistributions.slice(0, 200);
+
     const merchantTotals = new Map<
       string,
       { name: string; grossSubtotalCents: number; commissionCents: number; bagCount: number }
@@ -115,7 +118,7 @@ export const getDashboardData = query({
     // Parallel lookups — O(N) queries but run concurrently
     // Doc: https://docs.convex.dev/database/reading-data#join
     const bagResults = await Promise.all(
-      paymentDistributions.map(async (dist) => {
+      cappedPaymentDistributions.map(async (dist) => {
         const bag = await ctx.db
           .query("orderBags")
           .withIndex("by_violetBagId", (q) => q.eq("violetBagId", dist.violetBagId!))
@@ -147,7 +150,8 @@ export const getDashboardData = query({
 
     // ── Visitors / conversion ──
     // TODO: Pre-compute unique visitors via cron for scale
-    const allEvents = await ctx.db.query("userEvents").order("desc").take(5000);
+    // Bound to 1000 — Convex best practice: keep under 1000 for reactive queries
+    const allEvents = await ctx.db.query("userEvents").order("desc").take(1000);
     const recentEvents = allEvents.filter((e) => e._creationTime >= since);
     const totalVisitors = new Set(recentEvents.map((e) => e.userId)).size;
     const conversionRate = totalVisitors > 0 ? (totalOrders / totalVisitors) * 100 : 0;
@@ -258,7 +262,7 @@ async function fetchHealthMetrics(ctx: QueryCtx, now: number) {
   }
 
   // ── Alert rules ──
-  const alertRules = await ctx.db.query("alertRules").collect();
+  const alertRules = await ctx.db.query("alertRules").take(100);
 
   return {
     metrics: {
@@ -318,7 +322,7 @@ export const getAlertRules = query({
   args: {},
   handler: async (ctx) => {
     await assertAdmin(ctx);
-    return await ctx.db.query("alertRules").collect();
+    return await ctx.db.query("alertRules").take(100);
   },
 });
 
@@ -331,7 +335,7 @@ export const getMerchants = query({
   args: {},
   handler: async (ctx) => {
     await assertAdmin(ctx);
-    return await ctx.db.query("merchants").collect();
+    return await ctx.db.query("merchants").take(500);
   },
 });
 
@@ -342,6 +346,6 @@ export const getPayoutAccounts = query({
   args: {},
   handler: async (ctx) => {
     await assertAdmin(ctx);
-    return await ctx.db.query("merchantPayoutAccounts").collect();
+    return await ctx.db.query("merchantPayoutAccounts").take(500);
   },
 });

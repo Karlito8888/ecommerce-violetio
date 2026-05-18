@@ -28,6 +28,8 @@ export const cleanupOldWebhooks = internalMutation({
 
     // Process in batches of 500 to avoid exceeding Convex function limits.
     // Convex enforces limits on reads/writes per function invocation.
+    // Uses .filter() intentionally — no index on _creationTime alone exists.
+    // The .take(500) bound makes this acceptable.
     // Doc: https://docs.convex.dev/understanding/best-practices — avoid unbounded .collect()
     const oldEvents = await ctx.db
       .query("webhookEvents")
@@ -56,8 +58,9 @@ export const cleanupAbandonedCarts = internalMutation({
   handler: async (ctx) => {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
 
-    // Process in batches of 500 to avoid exceeding Convex function limits.
-    // Doc: https://docs.convex.dev/understanding/best-practices — avoid unbounded .collect()
+    // No by_status index on carts — .filter() is the correct approach here.
+    // The .take(500) bound makes this safe.
+    // Doc: https://docs.convex.dev/understanding/best-practices — avoid .filter() unless no index available
     const abandonedCarts = await ctx.db
       .query("carts")
       .filter((q) =>
@@ -94,10 +97,11 @@ export const retryStuckWebhooks = internalMutation({
   handler: async (ctx) => {
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
 
+    // Uses withIndex on by_status ["status", _creationTime] for efficient lookup.
+    // Doc: https://docs.convex.dev/understanding/best-practices — avoid .filter() on database queries
     const stuckEvents = await ctx.db
       .query("webhookEvents")
-      .withIndex("by_status", (q) => q.eq("status", "received"))
-      .filter((q) => q.lt(q.field("_creationTime"), oneHourAgo))
+      .withIndex("by_status", (q) => q.eq("status", "received").lt("_creationTime", oneHourAgo))
       .take(50);
 
     if (stuckEvents.length > 0) {
@@ -142,7 +146,9 @@ export const triggerEvaluateAlerts = internalMutation({
   args: {},
   handler: async (ctx) => {
     // Schedule the action to run immediately (fire-and-forget from cron's perspective)
-    ctx.scheduler.runAfter(0, internal.admin.mutations.evaluateAlerts, {});
+    // Await per Convex best practice: "Await all Promises"
+    // Doc: https://docs.convex.dev/understanding/best-practices#await-all-promises
+    await ctx.scheduler.runAfter(0, internal.admin.mutations.evaluateAlerts, {});
   },
 });
 

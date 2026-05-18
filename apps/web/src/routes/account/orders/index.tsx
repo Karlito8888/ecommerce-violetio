@@ -70,7 +70,11 @@ function OrdersPage() {
   const orders = useQuery(api.orders.queries.getOrders, userId ? { userId } : "skip");
 
   const isLoading = orders === undefined;
-  const isError = orders instanceof Error;
+
+  // Note: Convex useQuery returns `undefined` while loading, then the data.
+  // Errors are thrown (caught by ErrorBoundary), never returned as a value.
+  // So `orders instanceof Error` is always false — we don't check for it.
+  // See: https://docs.convex.dev/client/react
 
   return (
     <div className="page-wrap">
@@ -79,15 +83,7 @@ function OrdersPage() {
 
         {isLoading && <OrderListSkeleton />}
 
-        {isError && (
-          <div className="orders__error">
-            <p className="orders__error-text">
-              We couldn&apos;t load your orders. Please try again.
-            </p>
-          </div>
-        )}
-
-        {!isLoading && !isError && orders && (
+        {!isLoading && orders && (
           <>
             {orders.length === 0 ? (
               <div className="orders__empty">

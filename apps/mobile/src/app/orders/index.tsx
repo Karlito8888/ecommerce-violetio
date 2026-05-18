@@ -16,23 +16,13 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
-import { ORDER_STATUS_LABELS, formatPrice, formatDate } from "@ecommerce/shared";
+import { ORDER_STATUS_LABELS, formatPrice, formatDate, type ConvexOrder } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import { colors } from "@ecommerce/ui";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "#convex/_generated/api";
-
-interface ConvexOrder {
-  _id: string;
-  _creationTime: number;
-  violetOrderId: string;
-  status: string;
-  total: number;
-  currency: string;
-  bags: { _id: string; merchantName: string; status: string; total: number }[];
-}
 
 function OrderCard({ order }: { order: ConvexOrder }) {
   const dateStr = formatDate(new Date(order._creationTime).toISOString(), "short");
@@ -88,10 +78,12 @@ export default function OrdersScreen() {
   const orders = useQuery(api.orders.queries.getOrders, userId ? { userId } : "skip");
 
   const isLoading = orders === undefined;
-  const isError = orders instanceof Error;
 
-  // Pull-to-refresh: Convex queries auto-update, but we can force a refetch
-  // by briefly unmounting (not needed with Convex reactivity).
+  // Note: Convex useQuery returns `undefined` while loading, then the data.
+  // Errors are thrown (caught by ErrorBoundary), never returned as a value.
+  // See: https://docs.convex.dev/client/react
+
+  // Pull-to-refresh: Convex queries auto-update, but we can show a spinner.
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -120,15 +112,7 @@ export default function OrdersScreen() {
 
       {isLoading && <ActivityIndicator size="large" color={colors.gold} style={styles.loader} />}
 
-      {isError && (
-        <View style={styles.errorContainer}>
-          <ThemedText themeColor="textSecondary" style={styles.errorText}>
-            We couldn&apos;t load your orders. Please try again.
-          </ThemedText>
-        </View>
-      )}
-
-      {!isLoading && !isError && orders && (
+      {!isLoading && orders && (
         <>
           {orders.length === 0 ? (
             <View style={styles.emptyContainer}>

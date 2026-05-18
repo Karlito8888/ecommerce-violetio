@@ -2457,7 +2457,7 @@ export default crons;
 
 ## 13. Phase 8 — Realtime et synchronisation
 
-> ✅ **Phase 8 TERMINÉE** (2026-05-16).
+> ✅ **Phase 8 TERMINÉE** (2026-05-16). Réaudit strict (2026-05-18) : 6 corrections appliquées.
 >
 > Ce qui est fait :
 > - `packages/shared/src/hooks/useCartSync.ts` — **Supprimé** : hook Supabase Realtime pour le panier, remplacé par la réactivité native Convex.
@@ -2477,6 +2477,22 @@ export default crons;
 > - **`CartContext.tsx` commentaire ambigu** : La phrase `"Realtime when userId is set"` mélangeait l'ancien modèle Supabase et le nouveau modèle Convex. Simplifié en une seule phrase claire.
 > - **`CartSyncEvent` type mort** : Le type `CartSyncEvent` dans `cart.types.ts` est exporté mais jamais importé/consommé. Documenté pour suppression en Phase 11 (nettoyage global des types Supabase).
 > - **Références Realtime résiduelles** : Uniquement dans des commentaires (JSDoc, notes de migration) et le dossier `supabase/` legacy. Aucune dans du code exécutable. Nettoyage complet prévu en Phase 11.
+
+#### Réaudit strict (2026-05-18) — 7 corrections appliquées
+
+Sources auditées : docs.convex.dev (Realtime, React client, React Native, TanStack Start, TanStack Query, Best Practices) + docs.violet.io + tanstack.com/llms.txt + docs.expo.dev/llms.txt + reactnative.dev/llms.txt.
+
+| # | Problème | Correction | Fichiers modifiés | Impact |
+|---|----------|------------|-------------------|--------|
+| 1 | **DRY : Types ConvexOrder dupliqués** — web et mobile avaient des interfaces inline séparées, légèrement incompatibles | Créé `packages/shared/src/types/convexOrder.types.ts` (source unique). Web re-exporte. Mobile importe depuis `@ecommerce/shared` | `packages/shared/src/types/convexOrder.types.ts` (nouveau), `packages/shared/src/types/index.ts`, `apps/web/src/types/convexOrders.ts`, `apps/mobile/src/app/orders/index.tsx`, `apps/mobile/src/app/orders/[orderId].tsx` | Web + Mobile |
+| 2 | **CartSyncEvent type mort** — exporté mais jamais importé, référençant encore Supabase Realtime | Supprimé le type + son export. Remplacé par un commentaire explicatif | `packages/shared/src/types/cart.types.ts`, `packages/shared/src/types/index.ts` | Shared |
+| 3 | **N+1 Convex queries** — lectures séquentielles (`for...of`) pour bags/items/refunds | Refactorisé avec helper `enrichOrderWithBags()` utilisant `Promise.all()` à 2 niveaux : bags parallèles + items/refunds parallèles par bag | `convex/orders/queries.ts` | Backend |
+| 4 | **`instanceof Error` anti-pattern** — `useQuery` ne retourne JAMAIS une erreur comme valeur (Convex docs). Les erreurs sont throw → ErrorBoundary | Supprimé `isError` + blocs d'affichage d'erreur associés. Ajout commentaires explicatifs | `apps/web/src/routes/account/orders/index.tsx`, `apps/mobile/src/app/orders/index.tsx`, `apps/mobile/src/app/orders/[orderId].tsx` | Web + Mobile |
+| 5 | **Commentaires Supabase résiduels** — JSDoc disait "Order from Supabase", "Supabase order UUID", "Supabase Edge Function call" | Mis à jour tous les JSDoc pour refléter le modèle Convex | `packages/shared/src/hooks/useOrders.ts` | Shared |
+| 6 | **TanStack Query factories orphelines + commentaire obsolète** — `ordersQueryOptions`/`orderDetailQueryOptions` jamais appelées en production. Le JSDoc de `confirmation.tsx` recommandait de les utiliser | Documenté le statut "retained for backward compatibility" dans les factories. Corrigé le commentaire mobile pour pointer vers Convex `useQuery` | `packages/shared/src/hooks/useOrders.ts`, `apps/mobile/src/app/order/[orderId]/confirmation.tsx` | Shared + Mobile |
+| 7 | **`ctx.db.get` sans nom de table** — Convex best practice (v1.31.0+) recommande `ctx.db.get("orders", id)` | Mis à jour `getOrderDetail`. Audit complet : les 5 occurrences `ctx.db.get()` dans `convex/` utilisent toutes le nom de table | `convex/orders/queries.ts` | Backend |
+
+Validation : `bun run check` (format + lint + typecheck + build) ✅ + `bun run test` (958 tests : 514 web + 376 shared + 68 mobile) ✅
 
 ### 13.1 Le plus gros avantage de Convex : la réactivité native
 

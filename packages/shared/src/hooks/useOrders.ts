@@ -37,15 +37,15 @@ import { queryKeys } from "../utils/constants.js";
 
 // ─── Composite Types ──────────────────────────────────────────────────────────
 
-/** Order from Supabase with merchant bag count for list display */
+/** Order with merchant bag count for list display */
 export type OrderWithBagCount = OrderRow & { bag_count: number };
 
 /**
  * Order bag with its line items and refunds for the detail view.
  *
- * `order_refunds` is always an array (never null) — Supabase nested selects
- * return `[]` when no related rows exist. CANCELED bags without a refund
- * will always have `order_refunds: []`, so no refund UI renders for them.
+ * `order_refunds` is always an array (never null) — related rows return `[]`
+ * when none exist. CANCELED bags without a refund will always have
+ * `order_refunds: []`, so no refund UI renders for them.
  * This aligns with Violet's distinction: CANCELED ≠ REFUNDED.
  *
  * @see https://docs.violet.io/prism/checkout-guides/guides/order-and-bag-states.md
@@ -55,7 +55,7 @@ export type OrderBagWithItems = OrderBagRow & {
   order_refunds: OrderRefundRow[];
 };
 
-/** Full order from Supabase with nested bags and items for detail display */
+/** Full order with nested bags, items, and refunds for detail display */
 export type OrderWithBagsAndItems = OrderRow & { order_bags: OrderBagWithItems[] };
 
 // ─── Platform-Agnostic Fetch Function Types ───────────────────────────────────
@@ -65,7 +65,11 @@ export type OrderWithBagsAndItems = OrderRow & { order_bags: OrderBagWithItems[]
  *
  * Platform-specific implementations:
  * - **Web**: passes a TanStack Start Server Function (`getOrdersFn`)
- * - **Mobile**: will pass a Supabase Edge Function call (future story)
+ * - **Mobile**: Convex `useQuery` is used directly instead
+ *
+ * **Note**: These factories are retained for backward compatibility with
+ * checkout/confirmation flows that still use TanStack Query. For new code,
+ * prefer Convex `useQuery(api.orders.queries.getOrders, ...)` directly.
  */
 export type OrdersFetchFn = () => Promise<OrderWithBagCount[]>;
 
@@ -73,6 +77,7 @@ export type OrdersFetchFn = () => Promise<OrderWithBagCount[]>;
  * Function signature for fetching a single order with bags and items.
  *
  * Same platform-agnostic pattern as {@link OrdersFetchFn}.
+ * Retained for backward compatibility — prefer Convex `useQuery` for new code.
  */
 export type OrderDetailFetchFn = (orderId: string) => Promise<OrderWithBagsAndItems | null>;
 
@@ -80,6 +85,11 @@ export type OrderDetailFetchFn = (orderId: string) => Promise<OrderWithBagsAndIt
 
 /**
  * Creates TanStack Query options for the authenticated user's order list.
+ *
+ * **Status**: Retained for backward compatibility with checkout/confirmation flows
+ * that still use TanStack Query for order data. For new order list pages, prefer
+ * Convex `useQuery(api.orders.queries.getOrders, ...)` directly — it's reactive
+ * by default with no manual cache management needed.
  *
  * Returns a `queryOptions` object (not a hook) so it can be used in both:
  * - Route loaders for SSR prefetching (`context.queryClient.ensureQueryData(...)`)
@@ -99,9 +109,12 @@ export function ordersQueryOptions(fetchFn: OrdersFetchFn) {
 /**
  * Creates TanStack Query options for a single order detail page.
  *
+ * **Status**: Same as `ordersQueryOptions` — retained for backward compatibility.
+ * For new detail pages, prefer Convex `useQuery(api.orders.queries.getOrderDetail, ...)`.
+ *
  * Query key: `['orders', 'detail', orderId]`
  *
- * @param orderId - Supabase order UUID
+ * @param orderId - Order ID string
  * @param fetchFn - Platform-specific fetch function
  */
 export function orderDetailQueryOptions(orderId: string, fetchFn: OrderDetailFetchFn) {

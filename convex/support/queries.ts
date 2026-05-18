@@ -30,7 +30,7 @@ export const getSupportInquiries = query({
         .collect();
     }
 
-    return await ctx.db.query("supportInquiries").order("desc").collect();
+    return await ctx.db.query("supportInquiries").order("desc").take(500);
   },
 });
 
@@ -68,11 +68,13 @@ export const countRecentInquiries = query({
   args: { email: v.string(), now: v.number() },
   handler: async (ctx, { email, now }) => {
     const oneHourAgo = now - 60 * 60 * 1000;
+    // Use index range on by_email ["email", _creationTime] — avoids loading all inquiries
+    // Doc: https://docs.convex.dev/database/reading-data/indexes
     const inquiries = await ctx.db
       .query("supportInquiries")
-      .withIndex("by_email", (q) => q.eq("email", email))
+      .withIndex("by_email", (q) => q.eq("email", email).gte("_creationTime", oneHourAgo))
       .collect();
 
-    return inquiries.filter((i) => i._creationTime >= oneHourAgo).length;
+    return inquiries.length;
   },
 });

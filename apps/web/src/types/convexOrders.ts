@@ -1,49 +1,13 @@
 // apps/web/src/types/convexOrders.ts
 //
-// Shared Convex order types used by orders list and detail pages.
-// Extracted to avoid duplication between index.tsx and $orderId.tsx.
+// Re-export from shared package — single source of truth for
+// Convex order types used by both web and mobile.
+//
+// Convex queries are reactive by default. No manual Realtime needed.
 
-export interface ConvexOrderItem {
-  _id: string;
-  name: string;
-  quantity: number;
-  price: number;
-  linePrice: number;
-  thumbnail?: string;
-}
-
-export interface ConvexOrderRefund {
-  _id: string;
-  amount: number;
-  reason?: string;
-  status: string;
-}
-
-export interface ConvexOrderBag {
-  _id: string;
-  _creationTime: number;
-  merchantName: string;
-  status: string;
-  total: number;
-  shippingMethod?: string;
-  trackingUrl?: string;
-  trackingNumber?: string;
-  carrier?: string;
-  items: ConvexOrderItem[];
-  refunds: ConvexOrderRefund[];
-}
-
-export interface ConvexOrder {
-  _id: string;
-  _creationTime: number;
-  violetOrderId: string;
-  userId?: string;
-  email: string;
-  status: string;
-  subtotal: number;
-  shippingTotal: number;
-  taxTotal: number;
-  total: number;
-  currency: string;
-  bags: ConvexOrderBag[];
-}
+export type {
+  ConvexOrder,
+  ConvexOrderBag,
+  ConvexOrderItem,
+  ConvexOrderRefund,
+} from "@ecommerce/shared";

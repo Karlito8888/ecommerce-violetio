@@ -16,7 +16,7 @@
  * Phase 9: migrated from Supabase server functions to Convex queries.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "#convex/_generated/api";
@@ -54,10 +54,15 @@ function AdminDashboardPage() {
   const [selectedRange, setSelectedRange] = useState<TimeRange>("30d");
   const [distributionsOrderId, setDistributionsOrderId] = useState<string | null>(null);
 
+  // Stabilize `now` — only recalculate when range changes.
+  // Raw Date.now() in useQuery args creates a new value every render,
+  // causing Convex React to re-subscribe on every render (JSON.stringify args comparison).
+  const now = useMemo(() => Date.now(), [selectedRange]);
+
   // Dashboard data — reactive Convex query (admin-only, assertAdmin in handler)
   const dashboardData = useQuery(api.admin.queries.getDashboardData, {
     range: selectedRange,
-    now: Date.now(),
+    now,
   });
 
   // Distributions for a specific order

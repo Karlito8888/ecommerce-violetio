@@ -13,7 +13,7 @@
  * Post-review fixes: ErrorBoundary, useNavigate, Convex-based health check.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "#convex/_generated/api";
@@ -179,14 +179,19 @@ function AdminHealthPage() {
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const navigate = useNavigate();
 
+  // Stabilize `now` — Date.now() in useQuery args creates a new value every render,
+  // causing Convex React to re-subscribe each time (JSON.stringify args comparison).
+  const now = useMemo(() => Date.now(), []);
+
   // Health data — reactive Convex query
-  const healthData = useQuery(api.admin.queries.getHealthData, { now: Date.now() });
+  const healthData = useQuery(api.admin.queries.getHealthData, { now });
 
   // Health check — on-demand Convex query (triggered by button)
   const [showHealthCheck, setShowHealthCheck] = useState(false);
+  const healthCheckNow = useMemo(() => Date.now(), [showHealthCheck]);
   const healthCheckResult = useQuery(
     api.health.queries.runHealthCheck,
-    showHealthCheck ? { now: Date.now() } : "skip",
+    showHealthCheck ? { now: healthCheckNow } : "skip",
   );
 
   // Auth redirect

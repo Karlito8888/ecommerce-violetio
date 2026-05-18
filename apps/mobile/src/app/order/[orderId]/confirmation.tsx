@@ -33,7 +33,7 @@
  * 3. The data shape (`OrderDetail`) comes from the Violet proxy, not Supabase tables
  *
  * When a dedicated order detail screen is added (Story 5.3 mobile), it should use
- * `orderDetailQueryOptions()` from `useOrders.ts` with a mobile-specific fetch function.
+ * Convex `useQuery(api.orders.queries.getOrderDetail, ...)` directly.
  *
  * ## Architecture differences from web
  * - **Web**: Uses TanStack Start loader for SSR prefetching of order data

@@ -42,7 +42,6 @@ export type {
   ShippingMethodsAvailable,
   ShippingAddressInput,
   SetShippingMethodInput,
-  CartSyncEvent,
 } from "./cart.types.js";
 export type {
   Order,
@@ -90,6 +89,12 @@ export type {
 } from "./biometric.types.js";
 export { BiometricType } from "./biometric.types.js";
 export type { CheckoutError, CartHealthStatus, ErrorLogEntry } from "./error.types.js";
+export type {
+  ConvexOrder,
+  ConvexOrderBag,
+  ConvexOrderItem,
+  ConvexOrderRefund,
+} from "./convexOrder.types.js";
 export type {
   Distribution,
   DistributionRow,

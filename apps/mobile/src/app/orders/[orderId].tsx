@@ -24,6 +24,7 @@ import {
   formatPrice,
   formatDate,
   getBagStatusSummary,
+  type ConvexOrderBag,
 } from "@ecommerce/shared";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -31,26 +32,6 @@ import { Spacing } from "@/constants/theme";
 import { colors } from "@ecommerce/ui";
 import { api } from "#convex/_generated/api";
 import type { Id } from "#convex/_generated/dataModel";
-
-interface ConvexOrderBag {
-  _id: string;
-  merchantName: string;
-  status: string;
-  total: number;
-  shippingMethod?: string;
-  trackingUrl?: string;
-  trackingNumber?: string;
-  carrier?: string;
-  items: {
-    _id: string;
-    name: string;
-    quantity: number;
-    price: number;
-    linePrice: number;
-    thumbnail?: string;
-  }[];
-  refunds: { _id: string; amount: number; reason?: string; status: string }[];
-}
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
@@ -181,7 +162,10 @@ export default function OrderDetailScreen() {
   });
 
   const isLoading = order === undefined;
-  const isError = order instanceof Error;
+
+  // Note: Convex useQuery returns `undefined` while loading, then the data.
+  // Errors are thrown (caught by ErrorBoundary), never returned as a value.
+  // See: https://docs.convex.dev/client/react
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -196,7 +180,7 @@ export default function OrderDetailScreen() {
     );
   }
 
-  if (isError || !order) {
+  if (!order) {
     return (
       <ThemedView style={styles.container}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
