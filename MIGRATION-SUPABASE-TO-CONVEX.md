@@ -1148,6 +1148,13 @@ export default defineSchema({
 > - `getBiometricPreference` déplacé de `convex/users/mutations.ts` vers `convex/users/queries.ts` (une query n'a rien à faire dans un fichier de mutations)
 > - `getUserById` : ajout de `assertAdmin(ctx)` — tout utilisateur pouvait lire le profil de n'importe qui via userId
 >
+> Audit Phase 2 (2026-05-18) — 5 corrections appliquées :
+> - `getAuthUserId(ctx)` remplace `identity.subject` partout (backend) — pattern officiel Convex Auth (`@convex-dev/auth/server`). Le `.d.ts` déprécie explicitement l'ancien `getUserId`.
+> - Ajout `validatePasswordRequirements` sur le Password provider : 8+ chars, 1 majuscule, 1 minuscule, 1 chiffre
+> - Ajout validation email dans `profile()` via check `includes("@")` — bloque les emails vides ou invalides côté serveur
+> - `mobileLocalId.ts` web fallback corrigé : `crypto.randomUUID()` au lieu de `web-${Date.now()}-${Math.random()}`
+> - Fichiers modifiés : `convex/auth.ts`, `convex/lib/admin.ts`, `convex/users/queries.ts`, `convex/users/mutations.ts`, `apps/mobile/src/utils/mobileLocalId.ts`
+>
 > À activer plus tard (env vars nécessaires) :
 > - Google OAuth : `AUTH_GOOGLE_ID` + `AUTH_GOOGLE_SECRET` (décommenter `Google` dans `convex/auth.ts`)
 > - Apple OAuth : `AUTH_APPLE_ID` + `AUTH_APPLE_SECRET` (décommenter `Apple` dans `convex/auth.ts`)

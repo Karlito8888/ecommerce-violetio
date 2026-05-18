@@ -23,8 +23,9 @@ const LOCAL_ID_KEY = "maison_emile_local_id";
  */
 export async function getOrCreateLocalIdMobile(): Promise<string> {
   if (Platform.OS === "web") {
-    // Web fallback — shouldn't normally be called on mobile
-    return `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Web fallback — shouldn't normally be called on mobile.
+    // Use crypto.randomUUID() for consistency with native path.
+    return crypto.randomUUID();
   }
 
   let id = await SecureStore.getItemAsync(LOCAL_ID_KEY);

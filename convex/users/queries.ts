@@ -4,21 +4,23 @@
 // - getProfile : profil de l'utilisateur connecté
 // - getUserById : profil par userId (admin)
 // - getIdentity : debug — retourne l'identité Convex Auth
+// - getBiometricPreference : flag biometricEnabled pour le mobile
 
 import { query } from "../_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { assertAdmin } from "../lib/admin";
 
-/** Retourne le profil de l'utilisateur connecté. */
+/** Retourne le profil de l'utilisateur connecté. Uses getAuthUserId(). */
 export const getProfile = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
 
     return await ctx.db
       .query("userProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
   },
 });
@@ -35,7 +37,12 @@ export const getUserById = query({
   },
 });
 
-/** Debug — retourne l'identité Convex Auth du caller. */
+/**
+ * Debug — retourne l'identité Convex Auth du caller.
+ * This query intentionally uses ctx.auth.getUserIdentity() instead of
+ * getAuthUserId() because it returns raw identity fields (email, name, etc.)
+ * that the client needs for display purposes.
+ */
 export const getIdentity = query({
   args: {},
   handler: async (ctx) => {
@@ -57,12 +64,12 @@ export const getIdentity = query({
 export const getBiometricPreference = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return false;
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return false;
 
     const profile = await ctx.db
       .query("userProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
 
     return profile?.biometricEnabled ?? false;

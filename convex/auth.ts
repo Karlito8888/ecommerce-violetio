@@ -26,6 +26,7 @@ import { convexAuth } from "@convex-dev/auth/server";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { ResendOTP } from "./lib/resendOTP";
 import { ResendOTPPasswordReset } from "./lib/resendOTP";
+import { ConvexError } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 
 // ─── OAuth imports (décommenter quand les credentials sont disponibles) ──────
@@ -43,10 +44,30 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // Flow: "forgot" → enter email → receive code → enter code + new password.
       reset: ResendOTPPasswordReset,
 
-      // Extract display name from sign-up form data.
+      // Server-side password validation.
+      // Doc: https://labs.convex.dev/auth/config/passwords
+      validatePasswordRequirements(password: string) {
+        if (
+          password.length < 8 ||
+          !/\d/.test(password) ||
+          !/[a-z]/.test(password) ||
+          !/[A-Z]/.test(password)
+        ) {
+          throw new ConvexError(
+            "Password must be at least 8 characters with uppercase, lowercase, and a digit.",
+          );
+        }
+      },
+
+      // Extract + validate display name and email from sign-up form data.
+      // Doc: https://labs.convex.dev/auth/config/passwords ("Email address validation")
       profile(params) {
+        const email = params.email as string;
+        if (!email || typeof email !== "string" || !email.includes("@")) {
+          throw new ConvexError("Please provide a valid email address.");
+        }
         return {
-          email: params.email as string,
+          email,
           name: params.name as string,
         };
       },

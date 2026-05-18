@@ -7,6 +7,7 @@
 
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
  * Migre les données associées à un localId vers un userId Convex Auth.
@@ -24,11 +25,10 @@ export const migrateAnonymousData = mutation({
     localId: v.string(),
   },
   handler: async (ctx, { localId }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       throw new Error("Not authenticated — cannot migrate anonymous data");
     }
-    const userId = identity.subject;
 
     // 1. Migrate the wishlist
     const anonWishlist = await ctx.db
@@ -134,12 +134,12 @@ export const updateProfile = mutation({
     preferences: v.optional(v.record(v.string(), v.any())),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
 
     const profile = await ctx.db
       .query("userProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
 
     if (!profile) throw new Error("Profile not found");
@@ -159,12 +159,12 @@ export const updateProfile = mutation({
 export const setBiometricPreference = mutation({
   args: { enabled: v.boolean() },
   handler: async (ctx, { enabled }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
 
     const profile = await ctx.db
       .query("userProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
 
     if (profile) {
