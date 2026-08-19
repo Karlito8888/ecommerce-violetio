@@ -1,0 +1,14 @@
+# Périmètre du graphe graphify — reprise du marqueur graphify-out/.graphify_scope.
+# Voie documentée (README « Ignoring files ») : fusionnée avec .gitignore, évaluée
+# en dernier. Sans elle, un rebuild à la racine avale docs/ et artefacts d'outils.
+*
+!apps/
+!apps/**
+!packages/
+!packages/**
+!convex/
+!convex/**
+!supabase/
+!supabase/**
+!scripts/
+!scripts/**
