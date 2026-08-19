@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "gate": "bun run check",
     "dev": "bun --env-file=.env.local --cwd=apps/web run dev",
     "dev:mobile": "bun --cwd=apps/mobile run start",
     "dev:android": "bun --cwd=apps/mobile run android",
