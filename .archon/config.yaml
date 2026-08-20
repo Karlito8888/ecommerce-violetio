@@ -1,0 +1,15 @@
+# Copié dans chaque worktree qu'Archon crée. Les deux graphes sont gitignorés, donc
+# absents d'un worktree neuf — et `loadRepoConfig` ne lit QUE ce fichier
+# (config-loader.ts:319) : aucune déclaration au niveau utilisateur ne vaudrait pour
+# tous les dépôts. D'où un fichier par dépôt.
+#
+# `.archon` est ajouté d'office (worktree-sync.ts:48), inutile de le lister. Une entrée
+# absente du dépôt est ignorée sans faire échouer la création du worktree, donc
+# `.codegraph` reste listé même là où `codegraph init` n'a pas encore tourné.
+#
+# Le graphe copié décrit HEAD. Il ne remplace pas une vérification sur disque : c'est un
+# raccourci de navigation, pas une source de vérité.
+worktree:
+  copyFiles:
+    - graphify-out
+    - .codegraph
