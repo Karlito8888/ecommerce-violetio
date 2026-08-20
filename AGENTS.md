@@ -1,194 +1,130 @@
-# CLAUDE.md
+# AGENTS.md — E-commerce
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Plateforme e-commerce multi-marchand (web TanStack Start + mobile Expo Router) branchée sur
+l'API affiliation **Violet.io**, backend **Convex self-hosted** (binaire Rust). Migration en
+cours depuis Supabase.
 
-## Project Overview
+## Ce qui n'est PAS ici
 
-E-commerce monorepo for a curated shopping platform powered by Violet.io (multi-merchant affiliate commerce API). Dual-platform: web (TanStack Start) + mobile (Expo Router), sharing a **single backend** (TanStack Start API Routes + Convex self-hosted). Convex provides the reactive database, auth, functions, and webhook processing — all self-hosted via the precompiled Rust binary (no Docker, no cloud).
+| Quoi                                                                                                                                                      | Où                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Règles de travail générales — vérifier avant d'affirmer, DRY/KISS/YAGNI, périmètre, échelle de doc officielle, outils obligatoires, git, accord explicite | `~/.omp/agent/RULES.md`           |
+| Le poste, les graphes de code, les workflows                                                                                                              | `~/.omp/agent/AGENTS.md`          |
+| Faits durables du projet — versions, gate mesuré, dettes, points ouverts                                                                                  | `~/.omp/agent/bank/E-commerce.md` |
 
-> **Migration en cours** : Le projet migre de Supabase vers Convex. Le guide complet est dans [`MIGRATION-SUPABASE-TO-CONVEX.md`](./MIGRATION-SUPABASE-TO-CONVEX.md). Consulter ce fichier **avant** toute modification du backend.
-
-## Commands
-
-```bash
-# Development
-bun run dev              # Start web app (TanStack Start on port 3000)
-bun run dev:mobile       # Start Expo mobile app
-bun run build            # Build web app
-
-# Convex
-npx convex dev           # Start Convex backend (local, binaire Rust auto-téléchargé)
-npx convex deploy        # Deploy Convex functions to self-hosted backend
-npx convex dashboard     # Open Convex dashboard in browser
-npx convex env set KEY VALUE  # Set environment variable
-
-# Quality checks
-bun run check           # Full gate: format + lint + typecheck + test (run before committing)
-bun run fix-all          # Prettier format + ESLint fix + TypeScript check (auto-fix + verify)
-bun run lint             # ESLint only (--max-warnings 0)
-bun run lint:fix         # ESLint with auto-fix
-bun run format           # Prettier check only
-bun run format:fix       # Prettier write
-bun run typecheck        # TypeScript check (web + mobile)
-
-# Tests (web + shared)
-bun run test             # Run all vitest suites
-bun --cwd=apps/web run test    # Web tests only
-bun --cwd=packages/shared run test  # Shared tests only
-```
-
-## Architecture
-
-### Monorepo Structure (Bun workspaces)
+## Structure (Bun workspaces)
 
 ```
 apps/
-  web/          # TanStack Start (Vite-based SSR), file-based routing
-  mobile/       # Expo SDK 55, expo-router, React Native 0.83.6
+  web/          # TanStack Start (Vite), file-based routing
+  mobile/       # Expo Router, React Native
 packages/
-  shared/       # @ecommerce/shared — business logic, types, hooks
-  ui/           # @ecommerce/ui — design tokens, cross-platform components
-  config/       # @ecommerce/config — shared configuration
-convex/         # Convex backend — schema, functions, auth, webhooks, crons
+  shared/       # @ecommerce/shared — logique métier, types, hooks
+  ui/           # @ecommerce/ui — design tokens, composants cross-platform
+  config/       # @ecommerce/config — configuration partagée
+convex/         # backend Convex — schema, functions, auth, webhooks, crons
+supabase/       # legacy — migrations SQL + Edge Functions, à supprimer en fin de migration
 ```
 
-Packages are consumed as `workspace:*` dependencies with direct TypeScript source imports (no build step for packages).
+Packages consommés en `workspace:*`, imports TypeScript source directs (pas de build de package).
 
-### Web App (apps/web)
+## Stack (versions lues dans les `package.json`)
 
-- **Framework**: TanStack Start v1 with `tanstackStart()` Vite plugin (NOT Vinxi)
-- **Routing**: File-based via `@tanstack/react-router`. Route tree auto-generated in `routeTree.gen.ts`
-- **Router config**: `src/router.tsx` — scroll restoration, intent-based preloading, ConvexProvider + ConvexQueryClient
-- **Root layout**: `src/routes/__root.tsx` — HTML shell, theme init script, Header/Footer, ConvexAuthProvider
-- **Path aliases**: `#/*` and `@/*` both resolve to `./src/*`
-- **Styling**: Vanilla CSS + BEM naming (NO Tailwind, NO CSS-in-JS). One allowed external library for badges/notifications only
+Expo `~55.0.17` · React Native `0.83.6` · React `19.2.0` (pin racine, ne jamais bumper seul) ·
+Vite `^7.3.1` · TanStack Router `^1.166.2` + Query `^5.90.21` · Convex `^1.39.1` +
+`@convex-dev/auth` `^0.0.92` · Supabase `^2.100.1` (encore une dépendance active, cf. migration
+ci-dessous).
 
-### CSS Architecture (apps/web/src/styles/)
+**`vitest` désaligné entre workspaces** : racine et `packages/shared` sont sur `^4.x`,
+`apps/web` est resté sur `^3.0.5`. `vite-tsconfig-paths` est resté sur `^5.1.4` (v6 dispo, pas
+bumpé). Bump non fait volontairement — vérifier avant de le faire en aveugle.
 
+## Commandes
+
+```bash
+bun run dev              # web (TanStack Start, port 3000)
+bun run dev:mobile       # Expo mobile
+npx convex dev           # backend Convex local (binaire Rust auto-téléchargé)
+npx convex deploy        # déploie les fonctions Convex
+bun run gate             # = bun run check, gate complet
 ```
-index.css          # Entry point — ordered @imports
-tokens.css         # Design tokens (CSS custom properties), fonts, dark theme
-base.css           # Reset, body styles, decorative pseudo-elements
-utilities.css      # .sr-only, .page-wrap, .display-title, animations
-components/*.css   # BEM blocks: header, footer, chip, island, nav-link, etc.
-pages/*.css        # Page-specific BEM blocks: home, about, etc.
-```
 
-Import order matters: tokens -> base -> utilities -> components -> pages.
+`bun run check` (le gate) enchaîne, dans cet ordre, **5 étapes déjà agrégées** dans
+`package.json` racine — rien à recomposer : `format` (prettier --check) → `lint` (eslint
+`apps/ packages/ convex/` `--max-warnings 0`) → `typecheck` (web + mobile) → `test` (vitest :
+web → shared → mobile → convex, dans cet ordre) → `build` (web).
 
-BEM convention: `.block__element--modifier` (e.g., `.site-header__nav`, `.hero__title--accent`).
+⚠️ **`node_modules` est absent de ce dépôt.** Le gate n'a jamais été lancé ici — statut réel
+inconnu, rien de ce qui suit n'a été éprouvé par l'exécution, seulement vérifié par lecture du
+code.
 
-### Mobile App (apps/mobile)
+## Migration Supabase → Convex — état réel vérifié dans le code
 
-- **Framework**: Expo SDK 55, expo-router ~55.0.13
-- **Navigation**: File-based with `_layout.tsx` pattern, tab navigation
-- **Key constraint**: Expo pins exact versions for react (19.2.0), react-native (0.83.6), reanimated (4.2.1) — never bump these independently of the SDK
-- **Root overrides**: react/react-dom pinned to 19.2.0 at monorepo root to prevent Bun from resolving mismatched versions
-- **Path alias**: `@/*` resolves to `./src/*`, `@/assets/*` to `./assets/*`
-- **API calls**: E-commerce data (orders, wishlist, profile, etc.) goes through Convex client directly. Violet API calls (products, cart, checkout) still go through web backend API Routes via `EXPO_PUBLIC_API_URL`.
+Le guide complet est `MIGRATION-SUPABASE-TO-CONVEX.md` (2926 lignes) — à lire avant tout
+changement backend. Son propre suivi de phases dit : phases 0 à 9 **terminées**, phase 10
+(tests Convex) **P0/P1/P2 terminés, P3 restant** (webhooks + notifications, non bloquant),
+phase 11 (nettoyage) **en cours**, 6/8 findings corrigés.
 
-### Shared TypeScript Config
+Ce qui reste, vérifié par lecture directe du code (pas seulement par la doc, qui a des
+affirmations obsolètes — ex. son F4 dit « 28 fichiers clients Supabase morts » ;
+`packages/shared/src/clients/` n'en contient plus que 2 aujourd'hui) :
 
-`tsconfig.base.json` at root: strict mode, ESNext modules, bundler resolution, ES2022 target. Both apps extend it.
+- **`apps/web/src/server/supabaseServer.ts`** — encore le client Supabase actif, consommé par
+  8 fichiers (`orderHandlers.ts`, `cartSync.ts`, `guestOrderHandlers.ts`, `cartActions.ts`,
+  `checkout.ts` + les 3 routes ci-dessous).
+- **3 routes API web valident encore un JWT Supabase** au lieu de Convex Auth :
+  `routes/api/cart/user.ts`, `routes/api/cart/claim.ts`, `routes/api/guest-order-lookup.ts`.
+- **`scripts/generate-sitemap.ts`**, **`packages/shared/src/utils/orderPersistence.ts`**,
+  **`errorLogger.ts`**, **`packages/shared/src/types/auth.types.ts`** importent encore
+  `@supabase/supabase-js` ou `@supabase/ssr`.
+- **`supabase/`** (79 fichiers — migrations SQL + Edge Functions) toujours présent, à
+  supprimer une fois les données exportées vers Convex (`npx convex import`).
+- `@supabase/supabase-js` + `@supabase/ssr` toujours dans `apps/web/package.json` et
+  `packages/shared/package.json`.
+- `.env.example` porte encore les variables `SUPABASE_*` / `VITE_SUPABASE_*` /
+  `EXPO_PUBLIC_SUPABASE_*` en clair (à côté des `CONVEX_*` commentées, auto-configurées par
+  `npx convex dev`) — les deux backends coexistent tant que la migration n'est pas finie.
 
-### Backend Architecture (Convex Self-Hosted + TanStack Start)
+Comparer à `myggv`, où la même migration est terminée et vérifiée — les mentions « Supabase »
+qui y restent sont uniquement du JSDoc historique.
 
-The backend has two complementary layers:
+## Architecture backend
 
-1. **Convex** (self-hosted, binaire Rust) — database, auth, reactive queries, mutations, actions, HTTP actions (webhooks), cron jobs, file storage
-2. **TanStack Start Server Functions** — Violet API calls requiring secrets (`VIOLET_APP_SECRET`), product catalog, cart/checkout orchestration, Stripe payment flows
+- **Un seul backend pour les deux plateformes** : web et mobile partagent le même Convex
+  self-hosted. Web = Convex client + TanStack Start server functions (API Violet, secrets
+  `VIOLET_APP_SECRET`). Mobile = Convex client direct + `EXPO_PUBLIC_API_URL` → routes web
+  uniquement pour Violet.
+- **Self-hosted only** — binaire Rust précompilé, pas de cloud, pas de Docker.
+  `skipConvexDeploymentUrlCheck: true` obligatoire sur `ConvexReactClient` (URL non standard).
+- **Auth** : `@convex-dev/auth` (email/password, OAuth Google/Apple) + modèle **localId**
+  (`crypto.randomUUID()` en localStorage/SecureStore) pour les visiteurs anonymes — pas de
+  session serveur, migré vers le userId via `migrateAnonymousData()` à l'inscription. Admin :
+  `userProfiles.isAdmin` vérifié dans chaque query/mutation via `assertAdmin()`.
+- **Webhooks Violet** traités par une HTTP Action Convex (`convex/webhooks/violet.ts`),
+  persistés dans les tables Convex — queries réactives par défaut, pas de WebSocket manuel.
 
-Both web and mobile share the **same Convex backend** — no separate mobile API layer.
+## Contraintes de code
 
-- **Web frontend** → Convex client (reactive queries) + TanStack Start server functions (Violet API)
-- **Mobile app** → Convex client (reactive queries) + `EXPO_PUBLIC_API_URL` → TanStack Start API Routes (Violet API only)
+- **Pas de Tailwind** — CSS vanilla + BEM (`.block__element--modifier`) exclusivement.
+  `apps/web/src/styles/` : ordre d'import obligatoire
+  `tokens → base → utilities → components → pages`.
+- **Pin Expo** : `react` (19.2.0), `react-native` (0.83.6), `reanimated` (4.2.1) ne se bumpent
+  jamais indépendamment d'une montée de SDK Expo.
+- **Alias de chemins** : web `#/*` et `@/*` → `./src/*`, `#convex/*` → `../../convex/*` ;
+  mobile `@/*` → `./src/*`, `@/assets/*` → `./assets/*`, `#convex/*` idem.
+- **Prettier** : guillemets doubles, points-virgules, trailing commas, largeur 100.
+- **ESLint** (flat config) : `no-console: warn`, `no-debugger: error`, var inutilisée préfixée
+  `_` pour être ignorée. Exception mobile : `@typescript-eslint/no-require-imports` désactivé.
 
-### Convex Self-Hosted
+## Variables d'environnement
 
-- **Pas de cloud, pas de Docker** — le backend Convex tourne via le binaire Rust précompilé (`convex-local-backend`), téléchargé automatiquement par `npx convex dev`
-- **Dev** : `npx convex dev` → backend sur `localhost:3210`, dashboard auto
-- **Prod** : binaire Rust + systemd + Caddy (reverse proxy + TLS + dashboard statique)
-- **Dashboard** : build statique Next.js (9.5 MB) servi par Caddy sur `dash.maisonemile.com`
-- **Configuration client** : `skipConvexDeploymentUrlCheck: true` requis (URL non-standard)
-- **Guide complet** : `MIGRATION-SUPABASE-TO-CONVEX.md` §4
+Source unique : `.env.example` à la racine → copier en `.env.local`, ne jamais créer d'autre
+fichier `.env.*.example`. Web lit `VITE_*`, mobile lit `EXPO_PUBLIC_*`, le backend Convex lit
+ses propres vars via `npx convex env set` (jamais commitées).
 
-### Auth Architecture (Convex Auth + localId)
+## Documentation locale
 
-- **Convex Auth** (`@convex-dev/auth`) : email/password, Google OAuth, Apple OAuth
-- **Visiteurs anonymes** : modèle **localId** — `crypto.randomUUID()` dans localStorage/SecureStore. Pas de session serveur. Les données (wishlist, tracking) sont associées au localId, migrées vers le userId Convex Auth à l'inscription via `migrateAnonymousData()`.
-- **Admin** : `userProfiles.isAdmin` vérifié applicativement dans chaque query/mutation admin via `assertAdmin()`
-- **Violet.io** : aucun concept d'utilisateur côté Channel — le panier et le checkout fonctionnent sans identité utilisateur
-
-### Realtime & Webhook Data Flow
-
-All Violet webhook events are processed by a **Convex HTTP Action** (`convex/webhooks/violet.ts`), which persists results in Convex tables (orders, order_bags, order_items, order_refunds, merchants, order_distributions, order_transfers, merchant_payout_accounts). Both platforms read from the **same Convex tables**.
-
-**Realtime** : Convex queries are **reactive by default** — no manual WebSocket subscriptions needed. When data changes (via mutation), all connected clients are notified automatically.
-
-- **Web**: `useQuery(api.orders.queries.getOrders)` — auto-reactive, no Realtime setup
-- **Mobile**: Same Convex queries — auto-reactive
-
-Guest order tracking (`/order/lookup`) remains one-shot fetch (transient lookup by token/email, no Realtime needed).
-
-### External Services
-
-- **Violet.io**: Multi-merchant commerce API (products, cart, checkout, orders) — called exclusively from server-side (TanStack Start server functions or Convex actions) via `VioletTokenManager` + `violetAdapter`
-- **Convex**: Reactive database + Auth (Convex Auth + localId) + Functions (queries/mutations/actions) + HTTP Actions (webhook processing) + Cron Jobs + File Storage — **self-hosted via binaire Rust**
-- **Stripe**: Payment processing via Violet-provided payment intents
-
-## Documentation Access
-
-### Priorité de consultation (ordre obligatoire)
-
-1. **`/home/charles/Documents/Documentations Officielles`** — dossier local de docs officielles. **Toujours consulter en premier** avant toute autre source.
-2. **Skill `crawl4ai`** (`/home/charles/.agents/skills/crawl4ai/SKILL.md`) — utiliser ce skill pour explorer les docs officielles locales en profondeur avant toute implémentation.
-3. **Skill `find-docs`** (`/home/charles/.agents/skills/find-docs/SKILL.md`) — utiliser ce skill pour localiser et récupérer des docs externes si la doc locale est absente ou insuffisante.
-
-### Violet.io (API principale)
-
-**Documentation locale** : `/home/charles/Documents/Documentations Officielles/violet-io.md`
-
-Ne jamais coder contre l'API Violet sans avoir consulté ce fichier.
-
-### Convex (backend)
-
-**Documentation locale** : `docs/convex.md`
-
-Contient : schema, queries, mutations, actions, auth, HTTP actions, self-hosting, TanStack Start, React Native, File Storage, Cron, Tests.
-
-**Toujours consulter** avant d'implémenter une fonction Convex, modifier le schéma, configurer l'auth, etc.
-
-### Guide de migration
-
-**`MIGRATION-SUPABASE-TO-CONVEX.md`** (à la racine) — guide complet de la migration Supabase → Convex self-hosted. Contient : vue d'ensemble, résolutions Violet.io, architecture self-hosted, 11 phases détaillées, cartographie Supabase→Convex, risques.
-
-### Environment Variables
-
-Single source of truth: `.env.example` at repo root. Copy to `.env.local` and fill in values.
-Do NOT create additional `.env.*.example` files.
-
-Key env vars by app:
-- **Web** (`apps/web`): `VITE_CONVEX_URL` (Convex backend URL), `VIOLET_APP_ID`, `VIOLET_APP_SECRET`, `VIOLET_USERNAME`, `VIOLET_PASSWORD`, `VIOLET_API_BASE`, Stripe keys
-- **Mobile** (`apps/mobile`): `EXPO_PUBLIC_CONVEX_URL` (Convex backend URL — `http://10.0.2.2:3210` Android emulator, `http://localhost:3210` iOS, `https://api.maisonemile.com` prod), `EXPO_PUBLIC_API_URL` (web backend for Violet API — `http://10.0.2.2:3000` Android, `http://localhost:3000` iOS)
-- **Convex** (env vars dans le backend): `VIOLET_APP_ID`, `VIOLET_APP_SECRET`, `VIOLET_USERNAME`, `VIOLET_PASSWORD`, `VIOLET_API_BASE`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `SUPPORT_EMAIL`, `WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`
-
-Convex env vars are set via `npx convex env set KEY VALUE` or the local dashboard.
-
-## Code Style
-
-- **Prettier**: double quotes, semicolons, trailing commas, 100 char width
-- **ESLint**: flat config (eslint.config.js), typescript-eslint recommended, `no-console: warn`, `no-debugger: error`
-- **Unused vars**: prefix with `_` to suppress warnings (both args and vars)
-- **Mobile exception**: `@typescript-eslint/no-require-imports` is off for `apps/mobile/`
-
-## Key Constraints
-
-- **No Tailwind CSS** — architectural decision. Use Vanilla CSS + BEM exclusively
-- **Expo version pinning** — never update react, react-native, or reanimated versions without an Expo SDK upgrade
-- Deferred major bumps: `vite-tsconfig-paths` v5->v6, `vitest` v3->v4 (need dedicated testing)
-- **Single backend for both platforms** — mobile uses Convex client directly for data, TanStack Start API Routes for Violet API calls only
-- **Convex self-hosted only** — never use Convex Cloud or Docker. Binaire Rust + systemd + Caddy for production
-- **skipConvexDeploymentUrlCheck** — always set to `true` on ConvexReactClient (self-hosted URL)
-- **DRY/KISS** — Convex eliminates Supabase complexity (no RLS, no SQL migrations, no manual Realtime). Don't reintroduce it. Factor patterns in `convex/lib/`.
-- **Web + Mobile + Tests per phase** — each migration phase must be validated on both platforms with passing tests before moving to the next. See `MIGRATION-SUPABASE-TO-CONVEX.md` methodology section.
-- All commits use conventional format with `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+- Violet.io : `/home/charles/Documents/Documentations Officielles/violet-io.md` — ne jamais
+  coder contre son API sans l'avoir consultée.
+- Convex : `docs/convex.md` — schema, queries/mutations/actions, auth, HTTP actions,
+  self-hosting, React Native, tests.
