@@ -2776,9 +2776,9 @@ bun remove @supabase/supabase-js @supabase/ssr
 # (supprimer les scripts dev:functions, dev:all, dev:web qui référencent supabase)
 ```
 
-### 16.5 Mise à jour de CLAUDE.md
+### 16.5 Mise à jour de AGENTS.md
 
-Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE.md`.
+Remplacer toutes les références à Supabase par Convex dans le fichier `AGENTS.md`.
 
 ### 16.6 Mise à jour des scripts dans `package.json` root
 
@@ -2915,7 +2915,7 @@ Remplacer toutes les références à Supabase par Convex dans le fichier `CLAUDE
   - [ ] Supprimer `@supabase/*` des `package.json`
   - [ ] Supprimer les server functions Supabase orphelines
 - [ ] **Nettoyage** : Supprimer `supabase/`, les dépendances `@supabase/*`, les vars d'env Supabase
-- [ ] **Docs** : Mettre à jour `CLAUDE.md`, `.env.example`, les `package.json` *(CLAUDE.md déjà fait)*
+- [ ] **Docs** : Mettre à jour `AGENTS.md`, `.env.example`, les `package.json` *(CLAUDE.md déjà fait)*
 - [ ] **Validation** : Tests de bout en bout sur le backend self-hosted local
 - [ ] **Production** : Déployer le binaire Rust sur le VPS + Caddy TLS + backups pg_dump
 
